@@ -1,0 +1,180 @@
+
+============================================================
+  FAAS — FILE AS A SERVICE
+  Architecture V1
+============================================================
+
+project/
+│
+├── server/                         → Backend Node.js + Express
+│   │
+│   ├── index.js                    → Point d'entrée du serveur
+│   │
+│   ├── routes/                     → Endpoints de l'API
+│   │   ├── upload.js               → POST /upload
+│   │   ├── download.js             → GET /download/:id
+│   │   ├── convert.js              → POST /convert
+│   │   └── expire.js               → DELETE /expire/:id
+│   │
+│   ├── middlewares/                → Logique intermédiaire
+│   │   └── fileHandler.js          → Validation des fichiers
+│   │
+│   ├── services/                   → Logique métier
+│   │   ├── supabase.js             → Connexion et opérations Supabase
+│   │   └── converter.js            → Logique de conversion .pages/.key → PDF
+│   │
+│   └── config/
+│       └── env.js                  → Variables d'environnement
+│
+└── mobile/                         → App React Native + Expo
+    │
+    ├── app/                        → Écrans de l'application
+    │   ├── index.jsx               → Écran d'accueil
+    │   ├── send.jsx                → Écran d'envoi de fichier
+    │   └── receive.jsx             → Écran de réception (optionnel)
+    │
+    ├── components/                 → Composants réutilisables
+    │   ├── FileSelector.jsx        → Sélection du fichier depuis le téléphone
+    │   ├── QRDisplay.jsx           → Affichage du QR code
+    │   ├── LinkDisplay.jsx         → Affichage + bouton copier le lien
+    │   └── Progress.jsx            → Barre de progression de l'upload
+    │
+    └── services/
+        └── api.js                  → Appels vers le serveur Express
+
+
+============================================================
+  API ENDPOINTS
+============================================================
+
+  POST   /upload          → Reçoit le fichier, stocke dans Supabase,
+                            retourne un id unique
+
+  GET    /download/:id    → Récupère le fichier depuis Supabase,
+                            déclenche le téléchargement
+
+  POST   /convert         → Reçoit un fichier .pages ou .key,
+                            retourne le fichier converti en PDF
+
+  DELETE /expire/:id      → Supprime le fichier de Supabase
+                            et les métadonnées de la DB
+
+
+============================================================
+  BASE DE DONNÉES — Supabase
+============================================================
+
+  Table: transfers
+  ┌─────────────┬────────────────────────────────────────┐
+  │ Colonne     │ Description                            │
+  ├─────────────┼────────────────────────────────────────┤
+  │ id          │ Identifiant unique du transfert        │
+  │ file_name   │ Nom original du fichier                │
+  │ file_url    │ URL du fichier dans Supabase Storage   │
+  │ expires_at  │ Date d'expiration du lien              │
+  │ downloaded  │ Boolean — a-t-il été téléchargé ?      │
+  │ created_at  │ Date de création                       │
+  └─────────────┴────────────────────────────────────────┘
+
+
+============================================================
+  FLUX COMPLET END-TO-END
+============================================================
+
+  1. Sender ouvre l'app → sélectionne un fichier
+         ↓
+  2. App envoie POST /upload au serveur Express
+         ↓
+  3. Serveur stocke le fichier dans Supabase Storage
+         ↓
+  4. Serveur crée une entrée dans la table transfers
+         ↓
+  5. Serveur retourne l'id unique à l'app
+         ↓
+  6. App affiche deux options :
+       ├── QR code  →  "Scannez si vous êtes proches"
+       └── Lien     →  "Copiez si vous êtes éloignés"
+         ↓
+  7. Receiver scanne le QR ou clique le lien
+         ↓
+  8. Navigateur → GET /download/:id
+         ↓
+  9. Serveur récupère le fichier depuis Supabase → téléchargement
+         ↓
+  10. Fichier marqué downloaded = true → suppression automatique
+
+
+============================================================
+  STACK TECHNOLOGIQUE
+============================================================
+
+  App Mobile   →  React Native + Expo
+  Serveur      →  Node.js + Express (localhost / ngrok pour tests)
+  Stockage     →  Supabase Storage
+  Base données →  Supabase Database (PostgreSQL)
+  Tunnel       →  ngrok (pour tester à distance en développement)
+
+
+============================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ INIZIO  !!!
+
+
+
+
+
+
+
+
+
+
+I. Construire le serveur Express
+
+
+============================================================
+
+Parfait. Voilà ce qu'on veut faire et comment on va s'y prendre.
+
+Ce qu'on veut faire aujourd'hui
+Construire le serveur Express qui peut :
+
+Recevoir un fichier depuis une requête HTTP
+Le stocker dans Supabase Storage
+Retourner un id unique
+Permettre de télécharger le fichier via cet id
+
+
+Comment on va s'y prendre — étape par étape
+Étape 1 → Créer la structure des dossiers
+Étape 2 → Initialiser le projet Node.js + installer les packages
+Étape 3 → Créer le fichier .env avec tes clés Supabase
+Étape 4 → Connecter Supabase
+Étape 5 → Créer le serveur Express de base
+Étape 6 → Créer l'endpoint /upload
+Étape 7 → Créer l'endpoint /download/:id
+Étape 8 → Tester avec Thunder Client ou Postman
+
+============================================================
+
+
+
