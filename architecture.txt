@@ -253,7 +253,6 @@ Comment on va s'y prendre — étape par étape
 
 
 
-
 II. Structure App
 
 
@@ -297,5 +296,33 @@ Tab bar (barre en bas)
         ├── Qualité transfert (original / compressé)
         └── Supprimer l'historique
 
-============================================================
 
+
+
+1.Écran Send — 4 étapes :
+
+
+ÉTAPE 1 — Sélection catégorie
+  ├── 🖼️ Photos
+  ├── 🎵 Audio  
+  ├── 🎬 Vidéos
+  ├── 📄 Documents
+  ├── ⬇️ Téléchargements
+  └── 📁 Fichiers
+
+ÉTAPE 2 — Sélection fichier
+  └── Liste des fichiers de la catégorie choisie
+      └── Bouton "Envoyer" en bas
+
+ÉTAPE 3 — Upload
+  └── Barre de progression
+      └── "Transfert en cours..."
+
+ÉTAPE 4 — Résultat
+  ├── ✅ "Transfert effectué"
+  ├── QR code
+  ├── Lien à copier
+  └── "Envoyez ce lien au destinataire"
+
+
+  ============================================================
