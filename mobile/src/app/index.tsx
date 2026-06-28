@@ -1,98 +1,238 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+/**
+ * app/index.tsx
+ *
+ * Écran d'accueil de l'application FaaS Transfer.
+ * Layout : menu vertical à gauche + contenu principal à droite
+ * Tab bar en bas pour les actions essentielles.
+ */
+
+import { View, Text, Pressable, ScrollView, StyleSheet, Dimensions } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+// On détecte la taille de l'écran
+const { width } = Dimensions.get('window');
+const isTablet = width >= 768;
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+
+// Items du menu gauche
+const MENU_ITEMS = [
+  { icon: 'send-outline', label: 'Envoyer', route: '/send' },
+  { icon: 'download-outline', label: 'Recevoir', route: '/receive' },
+  { icon: 'repeat-outline', label: 'Convertir', route: '/convert' },
+  { icon: 'time-outline', label: 'Récents', route: '/history' },
+  { icon: 'settings-outline', label: 'Paramètres', route: '/settings' },
+];
 
 export default function HomeScreen() {
+  const router = useRouter();
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.layout}>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+        {/* ── Menu gauche — visible seulement sur web/tablette ── */}
+        {isTablet && (
+          <View style={styles.sidebar}>
+            <Text style={styles.sidebarTitle}>Menu</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {MENU_ITEMS.map((item) => (
+                <Pressable
+                  key={item.route}
+                  style={({ pressed }) => [
+                    styles.menuItem,
+                    pressed && styles.menuItemPressed,
+                  ]}
+                  onPress={() => router.push(item.route)}>
+                  <Ionicons name={item.icon as any} size={22} color="#aaaaaa" />
+                  <Text style={styles.menuLabel}>{item.label}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+        {/* ── Contenu principal ── */}
+        <View style={styles.main}>
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+          {/* Nom de l'app */}
+          <View style={styles.hero}>
+            <Text style={styles.appName}>FaaS</Text>
+            <Text style={styles.appNameAccent}>Transfer</Text>
+            <Text style={styles.appTagline}>
+              Transférez et convertissez{'\n'}vos fichiers sans limites
+            </Text>
+          </View>
+
+          {/* Stats rapides */}
+          <View style={styles.statsContainer}>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statLabel}>Envoyés</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statLabel}>Reçus</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statLabel}>Convertis</Text>
+            </View>
+          </View>
+
+          {/* Message fichiers récents */}
+          <View style={styles.recentContainer}>
+            <Text style={styles.recentTitle}>Fichiers récents</Text>
+            <Text style={styles.emptyText}>Aucun fichier récent</Text>
+          </View>
+
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+
   container: {
     flex: 1,
-    justifyContent: 'center',
+    backgroundColor: '#0a0a0a',
+  },
+
+  // Layout principal — sidebar gauche + contenu droite
+  layout: {
+    flex: 1,
     flexDirection: 'row',
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+
+  // ── Sidebar gauche ──
+  sidebar: {
+    width: 110,
+    backgroundColor: '#111111',
+    paddingTop: 24,
+    paddingHorizontal: 8,
+    borderRightWidth: 1,
+    borderRightColor: '#222222',
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+
+  sidebarTitle: {
+    color: '#555555',
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 16,
+    paddingHorizontal: 8,
   },
-  title: {
+
+  menuItem: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    marginBottom: 4,
+    gap: 6,
+  },
+
+  menuItemPressed: {
+    backgroundColor: '#222222',
+  },
+
+  menuIcon: {
+    fontSize: 22,
+  },
+
+  menuLabel: {
+    color: '#aaaaaa',
+    fontSize: 11,
+    fontWeight: '500',
     textAlign: 'center',
   },
-  code: {
-    textTransform: 'uppercase',
+
+  // ── Contenu principal ──
+  main: {
+    flex: 1,
+    padding: 24,
+    gap: 24,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+
+  // Hero section
+  hero: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
   },
+
+  appName: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: -2,
+  },
+
+  appNameAccent: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: '#4a9eff',
+    letterSpacing: -2,
+    marginTop: -16,
+  },
+
+  appTagline: {
+    fontSize: 13,
+    color: '#666666',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginTop: 8,
+  },
+
+  // Stats
+  statsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+
+  statCard: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    gap: 4,
+  },
+
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#4a9eff',
+  },
+
+  statLabel: {
+    fontSize: 11,
+    color: '#666666',
+  },
+
+  // Fichiers récents
+  recentContainer: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    padding: 20,
+    gap: 12,
+  },
+
+  recentTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+
+  emptyText: {
+    color: '#444444',
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: 16,
+  },
+
 });

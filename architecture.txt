@@ -1,4 +1,3 @@
-
 ============================================================
   FAAS — FILE AS A SERVICE
   Architecture V1
@@ -6,58 +5,96 @@
 
 project/
 │
-├── server/                         → Backend Node.js + Express
+├── server/                                    → Backend Node.js + Express
 │   │
-│   ├── index.js                    → Point d'entrée du serveur
+│   ├── index.js                               → Point d'entrée du serveur
 │   │
-│   ├── routes/                     → Endpoints de l'API
-│   │   ├── upload.js               → POST /upload
-│   │   ├── download.js             → GET /download/:id
-│   │   ├── convert.js              → POST /convert
-│   │   └── expire.js               → DELETE /expire/:id
+│   ├── routes/                                → Endpoints de l'API
+│   │   ├── upload.js                          → POST /upload
+│   │   ├── download.js                        → GET /download/:id
+│   │   ├── convert.js                         → POST /convert/*
+│   │   └── expire.js                          → DELETE /expire/:id
 │   │
-│   ├── middlewares/                → Logique intermédiaire
-│   │   └── fileHandler.js          → Validation des fichiers
+│   ├── middlewares/                           → Logique intermédiaire
+│   │   └── fileHandler.js                     → Validation des fichiers
 │   │
-│   ├── services/                   → Logique métier
-│   │   ├── supabase.js             → Connexion et opérations Supabase
-│   │   └── converter.js            → Logique de conversion .pages/.key → PDF
+│   ├── services/                              → Logique métier
+│   │   ├── supabase.js                        → Connexion et opérations Supabase
+│   │   ├── converter.js                       → Logique de conversion .pages/.key → PDF
+│   │   └── cleanup.js                         → Job automatique nettoyage fichiers expirés
 │   │
 │   └── config/
-│       └── env.js                  → Variables d'environnement
+│       └── env.js                             → Variables d'environnement
 │
-└── mobile/                         → App React Native + Expo
+└── mobile/                                    → App React Native + Expo
     │
-    ├── app/                        → Écrans de l'application
-    │   ├── index.jsx               → Écran d'accueil
-    │   ├── send.jsx                → Écran d'envoi de fichier
-    │   └── receive.jsx             → Écran de réception (optionnel)
+    ├── src/
+    │   ├── app/                               → Écrans de l'application (Expo Router)
+    │   │   ├── _layout.tsx                    → Layout global + navigation tab bar
+    │   │   ├── index.tsx                      → Écran d'accueil
+    │   │   ├── send.jsx                       → Écran d'envoi de fichier
+    │   │   ├── receive.jsx                    → Écran de réception
+    │   │   ├── convert.jsx                    → Écran de conversion
+    │   │   ├── history.jsx                    → Écran historique
+    │   │   └── settings.jsx                   → Écran paramètres
+    │   │
+    │   ├── components/                        → Composants réutilisables
+    │   │   ├── FileSelector.jsx               → Sélection du fichier depuis le téléphone
+    │   │   ├── QRDisplay.jsx                  → Affichage du QR code
+    │   │   ├── LinkDisplay.jsx                → Affichage + bouton copier le lien
+    │   │   ├── Progress.jsx                   → Barre de progression de l'upload
+    │   │   ├── animated-icon.module.css       → styles CSS pour l'animation de l'icône
+    │   │   ├── animated-icon.tsx              → icône animée (splash screen)
+    │   │   ├── animated-icon.web.tsx          → version web de l'icône animée
+    │   │   ├── app-tabs.tsx                   → tab bar navigation (mobile)
+    │   │   ├── app-tabs.web.tsx               → tab bar navigation (web)
+    │   │   ├── external-link.tsx              → composant lien externe
+    │   │   ├── hint-row.tsx                   → composant ligne d'indice/aide
+    │   │   ├── themed-text.tsx                → composant texte avec thème clair/sombre
+    │   │   ├── themed-view.tsx                → composant vue avec thème clair/sombre
+    │   │   ├── web-badge.tsx                  → badge "web" affiché sur la version web
+    │   │   │
+    │   │   ├── ui/
+    │   │   └── collapsible.tsx                → composant accordéon (section dépliable)
+    │   │
+    │   ├── hooks/                             → Hooks générés par Expo
+    │   │   ├── use-color-scheme.ts
+    │   │   └── use-theme.ts
+    │   │
+    │   ├── constants/                         → Constantes globales
+    │   │   └── theme.ts                       → Couleurs et thème de l'app
+    │   │
+    │   └── services/
+    │       └── api.js                         → Appels vers le serveur Express
     │
-    ├── components/                 → Composants réutilisables
-    │   ├── FileSelector.jsx        → Sélection du fichier depuis le téléphone
-    │   ├── QRDisplay.jsx           → Affichage du QR code
-    │   ├── LinkDisplay.jsx         → Affichage + bouton copier le lien
-    │   └── Progress.jsx            → Barre de progression de l'upload
-    │
-    └── services/
-        └── api.js                  → Appels vers le serveur Express
+    ├── assets/                                → Images, icônes, polices
+    ├── app.json                               → Configuration Expo
+    └── package.json
 
 
 ============================================================
   API ENDPOINTS
 ============================================================
 
-  POST   /upload          → Reçoit le fichier, stocke dans Supabase,
-                            retourne un id unique
+  TRANSFERT
+  ─────────────────────────────────────────────────────────
+  POST   /upload            → Reçoit le fichier, stocke dans Supabase,
+                              retourne un id unique + lien + code 6 chiffres
 
-  GET    /download/:id    → Récupère le fichier depuis Supabase,
-                            déclenche le téléchargement
+  GET    /download/:id      → Récupère le fichier depuis Supabase,
+                              déclenche le téléchargement
 
-  POST   /convert         → Reçoit un fichier .pages ou .key,
-                            retourne le fichier converti en PDF
+  DELETE /expire/:id        → Supprime le fichier de Supabase
+                              et les métadonnées de la DB
 
-  DELETE /expire/:id      → Supprime le fichier de Supabase
-                            et les métadonnées de la DB
+  CONVERSION
+  ─────────────────────────────────────────────────────────
+  POST   /convert/word-to-pdf     → Word (.docx/.doc) → PDF        ✅ V1
+  POST   /convert/pdf-to-image    → PDF → JPG / PNG                ⬜ V1
+  POST   /convert/image-to-pdf    → JPG / PNG → PDF                ⬜ V1
+  POST   /convert/pdf-to-pptx     → PDF → PowerPoint               ⬜ V1
+  POST   /convert/pages-to-pdf    → .pages → PDF (Apple)           ⬜ V2
+  POST   /convert/key-to-pdf      → .key → PDF (Apple Keynote)     ⬜ V2
 
 
 ============================================================
@@ -81,27 +118,46 @@ project/
   FLUX COMPLET END-TO-END
 ============================================================
 
-  1. Sender ouvre l'app → sélectionne un fichier
+  TRANSFERT
+  ─────────────────────────────────────────────────────────
+  1. Sender ouvre l'app → sélectionne un fichier par catégorie
          ↓
-  2. App envoie POST /upload au serveur Express
+  2. App propose conversion optionnelle avant envoi
          ↓
-  3. Serveur stocke le fichier dans Supabase Storage
+  3. App envoie POST /upload au serveur Express
          ↓
-  4. Serveur crée une entrée dans la table transfers
+  4. Serveur stocke le fichier dans Supabase Storage
          ↓
-  5. Serveur retourne l'id unique à l'app
+  5. Serveur crée une entrée dans la table transfers
          ↓
-  6. App affiche deux options :
-       ├── QR code  →  "Scannez si vous êtes proches"
-       └── Lien     →  "Copiez si vous êtes éloignés"
+  6. Serveur retourne l'id unique à l'app
          ↓
-  7. Receiver scanne le QR ou clique le lien
+  7. App affiche trois options :
+       ├── QR code        → "Scannez si vous êtes proches"
+       ├── Lien           → "Copiez si vous êtes éloignés"
+       └── Code 6 chiffres → "Entrez le code dans l'app"
          ↓
-  8. Navigateur → GET /download/:id
+  8. Receiver scanne / clique le lien / entre le code
          ↓
-  9. Serveur récupère le fichier depuis Supabase → téléchargement
+  9. Navigateur ou app → GET /download/:id
          ↓
-  10. Fichier marqué downloaded = true → suppression automatique
+  10. Serveur récupère le fichier depuis Supabase → téléchargement
+         ↓
+  11. Fichier marqué downloaded = true → suppression après 10s
+
+  CONVERSION
+  ─────────────────────────────────────────────────────────
+  1. Utilisateur sélectionne un fichier dans l'onglet Convertir
+         ↓
+  2. App propose les conversions disponibles selon le type du fichier
+         ↓
+  3. App envoie POST /convert/[type] au serveur
+         ↓
+  4. Serveur convertit via LibreOffice
+         ↓
+  5. Serveur retourne le fichier converti
+         ↓
+  6. App propose de télécharger ou d'envoyer directement
 
 
 ============================================================
@@ -113,36 +169,54 @@ project/
   Stockage     →  Supabase Storage
   Base données →  Supabase Database (PostgreSQL)
   Tunnel       →  ngrok (pour tester à distance en développement)
+  Déploiement  →  GitHub + Vercel
 
 
 ============================================================
 
 
+CONVERSIONS
+──────────────────────────────────────────────
+PDF ↔ Word        → LibreOffice      ✅ déjà fait
+PDF ↔ Excel       → LibreOffice      ⬜
+PDF ↔ PowerPoint  → LibreOffice      ⬜ (pptx→pdf fait)
+PDF → Image       → poppler-utils    ✅ déjà fait
+Image → PDF       → ImageMagick      ✅ déjà fait
 
+MANIPULATION PDF
+──────────────────────────────────────────────
+Fusionner PDFs    → pdf-lib          ⬜
+Diviser PDF       → pdf-lib          ⬜
+Compresser PDF    → Ghostscript      ⬜
+Extraire pages    → pdf-lib          ⬜
+Supprimer pages   → pdf-lib          ⬜
+Pivoter pages     → pdf-lib          ⬜
+Rogner pages      → pdf-lib          ⬜
+Numéroter pages   → pdf-lib          ⬜
+Filigrane         → pdf-lib          ⬜
+Protéger/chiffrer → pdf-lib          ⬜
+Déverrouiller     → pdf-lib          ⬜
+Aplatir           → Ghostscript      ⬜
 
+ANNOTATIONS / ÉDITION
+──────────────────────────────────────────────
+Annoter           → pdf-lib          ⬜
+Modifier texte    → pdf-lib          ⬜
+Biffer (redact)   → pdf-lib          ⬜
+Signer            → pdf-lib          ⬜
 
+OCR
+──────────────────────────────────────────────
+PDF OCR           → Tesseract        ⬜
 
+AVANCÉ
+──────────────────────────────────────────────
+Résumer PDF       → IA (Claude API)  ⬜ V2
+Traduire PDF      → IA (Claude API)  ⬜ V2
+Discuter avec PDF → IA (Claude API)  ⬜ V2
+Demander signatures → service externe ⬜ V2
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- INIZIO  !!!
-
-
-
-
-
+============================================================
 
 
 
@@ -177,4 +251,51 @@ Comment on va s'y prendre — étape par étape
 ============================================================
 
 
+
+
+
+II. Structure App
+
+
+============================================================
+
+Tab bar (barre en bas)
+  ├── 🏠 Accueil
+  │     ├── Actions rapides
+  │     │     ├── 📤 Envoyer
+  │     │     ├── 📥 Recevoir
+  │     │     └── 🔄 Convertir
+  │     └── Fichiers récents
+  │
+  ├── 📤 Envoyer
+  │     ├── Catégories → Photos, Vidéos, Audio, Documents, Autres
+  │     ├── Conversion optionnelle avant envoi
+  │     ├── Barre de progression upload
+  │     └── Résultat → QR code + Lien + Code 6 chiffres
+  │
+  ├── 📥 Recevoir
+  │     ├── Scanner QR code
+  │     ├── Entrer code 6 chiffres
+  │     └── Coller un lien
+  │
+  ├── 🔄 Convertir
+  │     ├── PDF → JPG / PNG
+  │     ├── JPG / PNG → PDF
+  │     ├── PDF → PowerPoint
+  │     ├── Word → PDF
+  │     ├── .pages → PDF
+  │     └── .key → PDF
+  │
+  ├── 🕐 Historique
+  │     ├── Fichiers envoyés
+  │     │     └── Statut : téléchargé / en attente / expiré
+  │     └── Fichiers reçus
+  │
+  └── ⚙️ Paramètres
+        ├── Langue
+        ├── Durée d'expiration (1h / 24h / 72h)
+        ├── Qualité transfert (original / compressé)
+        └── Supprimer l'historique
+
+============================================================
 

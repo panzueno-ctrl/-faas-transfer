@@ -1,32 +1,111 @@
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { useColorScheme } from 'react-native';
+/**
+ * components/app-tabs.tsx
+ *
+ * Définit la navigation tab bar de l'application.
+ * 6 onglets : Accueil, Envoyer, Recevoir, Convertir, Historique, Paramètres
+ * S'adapte automatiquement au mode clair/sombre du téléphone.
+ */
 
+import { Tabs } from 'expo-router';
+import { useColorScheme } from 'react-native';
 import { Colors } from '@/constants/theme';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function AppTabs() {
+  // On détecte si l'utilisateur est en mode clair ou sombre
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
 
   return (
-    <NativeTabs
-      backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}>
-      <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/home.png')}
-          renderingMode="template"
-        />
-      </NativeTabs.Trigger>
+    <Tabs
+      screenOptions={{
+        // Couleur de l'onglet actif
+        tabBarActiveTintColor: colors.text,
+        // Couleur de fond de la tab bar
+        tabBarStyle: { backgroundColor: colors.background },
+        // On cache le header en haut — chaque écran gère son propre titre
+        headerShown: false,
+      }}>
 
-      <NativeTabs.Trigger name="explore">
-        <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/explore.png')}
-          renderingMode="template"
-        />
-      </NativeTabs.Trigger>
-    </NativeTabs>
+      {/* Onglet Accueil → src/app/index.tsx */}
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Accueil',
+          tabBarLabel: 'Accueil',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* Onglet Envoyer → src/app/send.jsx */}
+      <Tabs.Screen
+        name="send"
+        options={{
+          title: 'Envoyer',
+          tabBarLabel: 'Envoyer',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="send-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* Onglet Recevoir → src/app/receive.jsx */}
+      <Tabs.Screen
+        name="receive"
+        options={{
+          title: 'Recevoir',
+          tabBarLabel: 'Recevoir',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="download-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* Onglet Convertir → src/app/convert.jsx */}
+      <Tabs.Screen
+        name="convert"
+        options={{
+          title: 'Convertir',
+          tabBarLabel: 'Convertir',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="repeat-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* Onglet Historique → src/app/history.jsx */}
+      <Tabs.Screen
+        name="history"
+        options={{
+          title: 'Historique',
+          tabBarLabel: 'Historique',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="time-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* Onglet Paramètres → src/app/settings.jsx */}
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Paramètres',
+          tabBarLabel: 'Paramètres',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="settings-outline" size={size} color={color} />
+          ),
+        }}
+      />
+    </Tabs>
   );
 }
+
+
+
+
+
+
+
+
