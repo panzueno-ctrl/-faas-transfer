@@ -98,7 +98,8 @@ router.post('/', upload.single('file'), validateFile, async (req, res) => {
             file_url: urlData.publicUrl,
             expires_at: expiresAt,
             downloaded: false
-        });
+        })
+        .select();
 
     console.log('dbData:', dbData);
     console.log('dbError:', dbError);
@@ -183,7 +184,8 @@ router.post('/multiple', upload.array('files'), async (req, res) => {
                 file_url: urlData.publicUrl,
                 expires_at: expiresAt,
                 downloaded: false
-            });
+            })
+            .select();
 
         console.log('dbData:', dbData);
         console.log('dbError:', dbError);
