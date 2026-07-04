@@ -345,3 +345,13 @@ Tab bar (barre en bas)
 
 
   ============================================================
+
+   Utilisateur ouvre faas-transfer.vercel.app
+        ↓
+   App Expo (Vercel)
+        ↓
+   Requêtes HTTP vers ton serveur Express (Railway)
+        ↓
+   Supabase (base de données + stockage)
+
+  ============================================================
