@@ -102,9 +102,10 @@ router.post('/', upload.single('file'), validateFile, async (req, res) => {
 
     // Si la sauvegarde en DB échoue on retourne une erreur
     if (dbError) {
-        console.log('dbError:', dbError)
+        console.log('dbError:', dbError);
         return res.status(500).json({ error: 'Erreur lors de la sauvegarde des métadonnées' });
     }
+    console.log('Insert réussi, id:', fileId);
 
     // Tout s'est bien passé — on retourne l'id et le lien de téléchargement
     res.status(201).json({
@@ -183,8 +184,10 @@ router.post('/multiple', upload.array('files'), async (req, res) => {
             });
 
         if (dbError) {
-            return res.status(500).json({ message: 'Erreur lors de la sauvegarde des métadonnées.' });
+            console.log('dbError:', dbError);
+            return res.status(500).json({ error: 'Erreur lors de la sauvegarde des métadonnées' });
         }
+        console.log('Insert réussi, id:', fileId);
 
         // On supprime les fichiers temporaires
         tempFiles.forEach(f => fs.unlinkSync(f));
