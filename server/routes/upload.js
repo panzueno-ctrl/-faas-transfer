@@ -109,7 +109,7 @@ router.post('/', upload.single('file'), validateFile, async (req, res) => {
     // Tout s'est bien passé — on retourne l'id et le lien de téléchargement
     res.status(201).json({
         id: fileId,
-        downloadUrl: `${req.protocol}://${req.get('host')}/download/${fileId}`
+        downloadUrl: `https://faas-transfer-production.up.railway.app/download/${fileId}`
     });
 
 });
@@ -193,7 +193,7 @@ router.post('/multiple', upload.array('files'), async (req, res) => {
         // On retourne l'id et le lien de téléchargement
         res.status(201).json({
             id: fileId,
-            downloadUrl: `${req.protocol}://${req.get('host')}/download/${fileId}`,
+            downloadUrl: `https://faas-transfer-production.up.railway.app/download/${fileId}`,
             fileCount: req.files.length,
         });
 
