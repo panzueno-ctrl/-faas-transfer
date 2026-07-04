@@ -21,8 +21,8 @@ export default function AppTabs() {
       screenOptions={{
         // Couleur de l'onglet actif
         tabBarActiveTintColor: colors.text,
-        // Couleur de fond de la tab bar
-        tabBarStyle: { backgroundColor: colors.background },
+        // On cache complètement la tab bar — navigation via le menu gauche
+        tabBarStyle: { display: 'none' },
         // On cache le header en haut — chaque écran gère son propre titre
         headerShown: false,
       }}>
