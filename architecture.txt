@@ -355,3 +355,31 @@ Tab bar (barre en bas)
    Supabase (base de données + stockage)
 
   ============================================================
+
+      (PROBLEME RENCONTRER LORS DU DEPLOIEMENT)
+  Exactement, tu as bien résumé. Voilà ce qui s'est passé :
+
+
+Problème 1 — Expo Go
+
+ Expo Go sur ton téléphone était en SDK 57 mais ton projet était en SDK 56.
+ Les deux versions ne sont pas compatibles. 
+ Et le réseau WSL ne permettait pas à ton téléphone d'accéder directement au serveur Expo.
+
+Problème 2 — Railway Node.js
+
+Railway utilisait par défaut Node.js 18 pour faire tourner ton serveur Express. 
+Mais le package @supabase/supabase-js dans sa version récente nécessite Node.js 20 minimum
+ — il utilise des APIs WebSocket natives qui n'existent pas dans Node.js 18.
+En ajoutant "engines": { "node": ">=20.0.0" } dans package.json,
+ on a forcé Railway à utiliser Node.js 20 — et là tout a fonctionné.
+
+Résumé simple :
+Railway (Node 18) + Supabase récent = incompatible ❌
+Railway (Node 20) + Supabase récent = compatible  ✅
+C'est un problème classique en déploiement 
+— l'environnement de production est différent de l'environnement de développement.
+ Sur ton PC tu avais Node.js 24 donc pas de problème, 
+ mais Railway avait une version plus ancienne par défaut.
+
+============================================================

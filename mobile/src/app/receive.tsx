@@ -25,7 +25,7 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
 // Adresse du serveur
-const SERVER_URL = 'http://localhost:3000';
+const SERVER_URL = 'https://faas-transfer-production.up.railway.app';
 
 export default function ReceiveScreen() {
 
