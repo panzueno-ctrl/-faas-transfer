@@ -26,11 +26,13 @@ const MENU_ITEMS = [
   { icon: 'settings-outline', label: 'Paramètres', route: '/settings' },
 ];
 
-// Contrôle l'ouverture du menu hamburger sur mobile
-const [menuOpen, setMenuOpen] = useState(false);
 
 export default function HomeScreen() {
+
   const router = useRouter();
+
+  // Contrôle l'ouverture du menu hamburger sur mobile
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <SafeAreaView style={styles.container}>
