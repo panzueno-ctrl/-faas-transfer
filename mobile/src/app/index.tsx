@@ -10,6 +10,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet, Dimensions } from 'react
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useState } from 'react';
 
 // On détecte la taille de l'écran
 const { width } = Dimensions.get('window');
@@ -25,12 +26,24 @@ const MENU_ITEMS = [
   { icon: 'settings-outline', label: 'Paramètres', route: '/settings' },
 ];
 
+// Contrôle l'ouverture du menu hamburger sur mobile
+const [menuOpen, setMenuOpen] = useState(false);
+
 export default function HomeScreen() {
   const router = useRouter();
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.layout}>
+
+        {/* Bouton hamburger — visible uniquement sur mobile */}
+        {!isTablet && (
+          <Pressable
+            style={styles.hamburgerButton}
+            onPress={() => setMenuOpen(true)}>
+            <Ionicons name="menu-outline" size={28} color="#ffffff" />
+          </Pressable>
+        )}
 
         {/* ── Menu gauche — visible seulement sur web/tablette ── */}
         {isTablet && (
@@ -44,7 +57,7 @@ export default function HomeScreen() {
                     styles.menuItem,
                     pressed && styles.menuItemPressed,
                   ]}
-                  onPress={() => router.push(item.route)}>
+                  onPress={() => router.push(item.route as any)}>
                   <Ionicons name={item.icon as any} size={22} color="#aaaaaa" />
                   <Text style={styles.menuLabel}>{item.label}</Text>
                 </Pressable>
@@ -88,6 +101,29 @@ export default function HomeScreen() {
           </View>
 
         </View>
+
+        {/* Menu overlay — visible sur mobile quand hamburger est cliqué */}
+        {!isTablet && menuOpen && (
+          <Pressable
+            style={styles.overlay}
+            onPress={() => setMenuOpen(false)}>
+            <View style={styles.mobileMenu}>
+              <Text style={styles.sidebarTitle}>Menu</Text>
+              {MENU_ITEMS.map((item) => (
+                <Pressable
+                  key={item.route}
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setMenuOpen(false);
+                    router.push(item.route as any);
+                  }}>
+                  <Ionicons name={item.icon as any} size={22} color="#aaaaaa" />
+                  <Text style={styles.menuLabel}>{item.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </Pressable>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -148,6 +184,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
     textAlign: 'center',
+  },
+
+  hamburgerButton: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    zIndex: 10,
+    padding: 8,
   },
 
   // ── Contenu principal ──
@@ -233,6 +277,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     paddingVertical: 16,
+  },
+
+  // Overlay sombre derrière le menu mobile
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    zIndex: 100,
+    flexDirection: 'row',
+  },
+
+  // Menu mobile qui s'ouvre depuis la gauche
+  mobileMenu: {
+    width: 200,
+    backgroundColor: '#111111',
+    padding: 24,
+    paddingTop: 48,
+    gap: 8,
   },
 
 });
