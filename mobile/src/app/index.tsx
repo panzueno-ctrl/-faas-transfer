@@ -21,7 +21,7 @@ const MENU_ITEMS = [
   { icon: 'send-outline', label: 'Envoyer', route: '/send' },
   { icon: 'download-outline', label: 'Recevoir', route: '/receive' },
   { icon: 'repeat-outline', label: 'Convertir', route: '/convert' },
-  { icon: 'time-outline', label: 'Récents', route: '/history' },
+  { icon: 'time-outline', label: 'Historique', route: '/history' },
   { icon: 'settings-outline', label: 'Paramètres', route: '/settings' },
 ];
 

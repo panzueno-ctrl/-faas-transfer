@@ -27,6 +27,9 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
+// On importe AsyncStorage pour sauvegarder l'historique des envois
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 // On importe QRCode pour générer le QR code du lien de téléchargement
 import QRCode from 'react-native-qrcode-svg';
 
@@ -103,16 +106,22 @@ export default function SendScreen() {
             const res = await DocumentPicker.getDocumentAsync({
                 type: mimeTypes,
                 copyToCacheDirectory: true,
+                // On autorise la sélection de plusieurs fichiers
+                multiple: true,
             });
 
-            // Si l'utilisateur a annulé la sélection on ne fait rien
             if (res.canceled) return;
 
-            const file = res.assets[0];
-            setSelectedFile(file);
+            const files = res.assets;
+            setSelectedFile(files[0]);
 
-            // On démarre l'upload immédiatement après la sélection
-            await uploadFile(file);
+            // Si un seul fichier → endpoint normal
+            // Si plusieurs fichiers → endpoint multiple
+            if (files.length === 1) {
+                await uploadFile(files[0]);
+            } else {
+                await uploadMultipleFiles(files);
+            }
 
         } catch (error) {
             Alert.alert('Erreur', 'Impossible de sélectionner le fichier.');
@@ -166,10 +175,107 @@ export default function SendScreen() {
             // On récupère l'id unique et le lien de téléchargement
             const data = await response.json();
             setResult(data);
+
+            // On sauvegarde le transfert dans l'historique local
+            const transfer = {
+                id: data.id,
+                fileName: file.name,
+                downloadUrl: data.downloadUrl,
+                sentAt: new Date().toLocaleDateString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                }),
+                status: 'pending',
+            };
+
+            // On récupère l'historique existant et on ajoute le nouveau transfert en tête
+            const existing = await AsyncStorage.getItem('faas_history');
+            const history = existing ? JSON.parse(existing) : [];
+            history.unshift(transfer);
+            await AsyncStorage.setItem('faas_history', JSON.stringify(history));
+
             setStep('done');
 
         } catch (error) {
             // Message d'erreur simple pour l'utilisateur
+            Alert.alert(
+                'Erreur',
+                'Le transfert a échoué. Vérifiez votre connexion et réessayez.'
+            );
+            setStep('category');
+        }
+    };
+
+    // Envoie plusieurs fichiers vers le serveur qui les zippe
+    const uploadMultipleFiles = async (files: any[]) => {
+        setStep('uploading');
+        setProgress(0);
+
+        try {
+            // On crée un FormData avec tous les fichiers
+            const formData = new FormData();
+
+            // On convertit chaque fichier en Blob et on l'ajoute au FormData
+            for (const file of files) {
+                const response_file = await fetch(file.uri);
+                const blob = await response_file.blob();
+                formData.append('files', blob, file.name);
+            }
+
+            // Simulation de progression
+            const progressInterval = setInterval(() => {
+                setProgress(prev => {
+                    if (prev >= 90) {
+                        clearInterval(progressInterval);
+                        return 90;
+                    }
+                    return prev + 10;
+                });
+            }, 200);
+
+            // Envoi vers le nouvel endpoint multiple
+            const response = await fetch(`${SERVER_URL}/upload/multiple`, {
+                method: 'POST',
+                body: formData,
+            });
+
+            clearInterval(progressInterval);
+            setProgress(100);
+
+            if (!response.ok) {
+                throw new Error('Erreur serveur');
+            }
+
+            // On récupère l'id et le lien du ZIP
+            const data = await response.json();
+            setResult(data);
+
+            // On sauvegarde dans l'historique
+            const transfer = {
+                id: data.id,
+                fileName: `${files.length} fichiers envoyés`,
+                downloadUrl: data.downloadUrl,
+                sentAt: new Date().toLocaleDateString('fr-FR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                }),
+                status: 'pending',
+            };
+
+            const existing = await AsyncStorage.getItem('faas_history');
+            const history = existing ? JSON.parse(existing) : [];
+            history.unshift(transfer);
+            await AsyncStorage.setItem('faas_history', JSON.stringify(history));
+
+            setStep('done');
+
+        } catch (error) {
             Alert.alert(
                 'Erreur',
                 'Le transfert a échoué. Vérifiez votre connexion et réessayez.'

@@ -32,17 +32,17 @@ project/
     │   ├── app/                               → Écrans de l'application (Expo Router)
     │   │   ├── _layout.tsx                    → Layout global + navigation tab bar
     │   │   ├── index.tsx                      → Écran d'accueil
-    │   │   ├── send.jsx                       → Écran d'envoi de fichier
-    │   │   ├── receive.jsx                    → Écran de réception
-    │   │   ├── convert.jsx                    → Écran de conversion
-    │   │   ├── history.jsx                    → Écran historique
-    │   │   └── settings.jsx                   → Écran paramètres
+    │   │   ├── send.tsx                       → Écran d'envoi de fichier
+    │   │   ├── receive.tsx                    → Écran de réception
+    │   │   ├── convert.tsx                    → Écran de conversion
+    │   │   ├── history.tsx                    → Écran historique
+    │   │   └── settings.tsx                   → Écran paramètres
     │   │
     │   ├── components/                        → Composants réutilisables
-    │   │   ├── FileSelector.jsx               → Sélection du fichier depuis le téléphone
-    │   │   ├── QRDisplay.jsx                  → Affichage du QR code
-    │   │   ├── LinkDisplay.jsx                → Affichage + bouton copier le lien
-    │   │   ├── Progress.jsx                   → Barre de progression de l'upload
+    │   │   ├── FileSelector.tsx               → Sélection du fichier depuis le téléphone
+    │   │   ├── QRDisplay.tsx                  → Affichage du QR code
+    │   │   ├── LinkDisplay.tsx                → Affichage + bouton copier le lien
+    │   │   ├── Progress.tsx                   → Barre de progression de l'upload
     │   │   ├── animated-icon.module.css       → styles CSS pour l'animation de l'icône
     │   │   ├── animated-icon.tsx              → icône animée (splash screen)
     │   │   ├── animated-icon.web.tsx          → version web de l'icône animée
@@ -323,6 +323,25 @@ Tab bar (barre en bas)
   ├── QR code
   ├── Lien à copier
   └── "Envoyez ce lien au destinataire"
+
+
+
+
+
+
+2. Écran Receive — 3 étapes :
+
+
+ÉTAPE 1 — Choix du mode
+  ├── 📷 Scanner QR code
+  └── 🔗 Entrer le lien manuellement
+
+ÉTAPE 2 — Téléchargement
+  └── Flèche animée vers le bas
+      └── "Téléchargement en cours..."
+
+ÉTAPE 3 — Résultat
+  └── ✅ "Téléchargé avec succès"
 
 
   ============================================================

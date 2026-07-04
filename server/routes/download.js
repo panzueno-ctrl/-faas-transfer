@@ -55,8 +55,20 @@ router.get('/:id', async (req, res) => {
     const buffer = Buffer.from(await fileData.arrayBuffer());
 
     // On envoie le fichier au receiver
-    res.setHeader('Content-Disposition', `attachment; filename="${transfer.file_name}"`);
-    res.setHeader('Content-Type', fileData.type);
+    // On extrait juste le nom du fichier sans les métadonnées entre parenthèses
+    // ex: "faas-transfer.zip (2 fichiers)" → "faas-transfer.zip"
+    const safeFileName = transfer.file_name.split('(')[0].trim();
+
+    // Debug — on affiche les infos du fichier
+    console.log('file_name:', transfer.file_name);
+    console.log('fileData.type:', fileData.type);
+    console.log('safeFileName:', safeFileName);
+
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
+
+
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
+    res.setHeader('Content-Type', fileData.type || 'application/octet-stream');
     res.send(buffer);
 
     // On met downloaded = true dans la table

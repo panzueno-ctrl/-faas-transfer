@@ -8,9 +8,9 @@
  * pour l'utilisateur — pas de messages techniques.
  */
 
-// Taille maximale autorisée — 50 MB en bytes
-// 50 * 1024 * 1024 = 52 428 800 bytes
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
+// Taille maximale autorisée — 10 GB en bytes
+// 10 * 1024 * 1024 * 1024 = 10 737 418 240 bytes
+const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024;
 
 // Types de fichiers autorisés
 // On accepte tout type de fichier pour le transfert
