@@ -90,7 +90,7 @@ router.post('/', upload.single('file'), validateFile, async (req, res) => {
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     // On sauvegarde les métadonnées dans la table transfers
-    const { error: dbError } = await supabase
+    const { error: dbError, data: dbData } = await supabase
         .from('transfers')
         .insert({
             id: fileId,
@@ -100,9 +100,11 @@ router.post('/', upload.single('file'), validateFile, async (req, res) => {
             downloaded: false
         });
 
-    // Si la sauvegarde en DB échoue on retourne une erreur
+    console.log('dbData:', dbData);
+    console.log('dbError:', dbError);
+
     if (dbError) {
-        console.log('dbError:', dbError);
+        console.log('dbError details:', JSON.stringify(dbError));
         return res.status(500).json({ error: 'Erreur lors de la sauvegarde des métadonnées' });
     }
     console.log('Insert réussi, id:', fileId);
@@ -173,18 +175,21 @@ router.post('/multiple', upload.array('files'), async (req, res) => {
         const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
         // On sauvegarde les métadonnées dans la table transfers
-        const { error: dbError } = await supabase
+        const { error: dbError, data: dbData } = await supabase
             .from('transfers')
             .insert({
                 id: fileId,
-                file_name: `faas-transfer.zip (${req.files.length} fichiers)`,
+                file_name: req.file.originalname,
                 file_url: urlData.publicUrl,
                 expires_at: expiresAt,
                 downloaded: false
             });
 
+        console.log('dbData:', dbData);
+        console.log('dbError:', dbError);
+
         if (dbError) {
-            console.log('dbError:', dbError);
+            console.log('dbError details:', JSON.stringify(dbError));
             return res.status(500).json({ error: 'Erreur lors de la sauvegarde des métadonnées' });
         }
         console.log('Insert réussi, id:', fileId);
