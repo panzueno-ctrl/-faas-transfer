@@ -23,6 +23,7 @@ router.get('/:id', async (req, res) => {
 
     // On récupère l'id depuis l'URL
     const { id } = req.params;
+    console.log('Download demandé pour id:', id);
 
     // On cherche le transfert dans la table transfers
     const { data: transfer, error } = await supabase
@@ -30,6 +31,9 @@ router.get('/:id', async (req, res) => {
         .select('*')
         .eq('id', id)
         .single();
+
+    console.log('transfer:', transfer);
+    console.log('error:', error);
 
     // Si pas trouvé ou erreur → lien invalide
     if (error || !transfer) {
