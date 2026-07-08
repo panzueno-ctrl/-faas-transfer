@@ -68,31 +68,35 @@ router.get('/:id', async (req, res) => {
     console.log('fileData.type:', fileData.type);
     console.log('safeFileName:', safeFileName);
 
-    res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-
-
+    // On envoie le fichier au receiver
     res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
     res.setHeader('Content-Type', fileData.type || 'application/octet-stream');
-    res.send(buffer);
 
-    // On met downloaded = true dans la table
-    await supabase
-        .from('transfers')
-        .update({ downloaded: true })
-        .eq('id', id);
+    // On attend que la réponse soit complètement envoyée avant de supprimer
+    res.on('finish', async () => {
 
-    // On supprime le fichier après 5 secondes
-    setTimeout(async () => {
-        await supabase.storage
-            .from('transfers')
-            .remove([transfer.file_url.split('/').pop()]);
-
+        // On met downloaded = true dans la table
         await supabase
             .from('transfers')
-            .delete()
+            .update({ downloaded: true })
             .eq('id', id);
-    }, 10000);
 
+        // On supprime le fichier après 60 secondes
+        // pour s'assurer que le receiver a bien reçu le fichier
+        setTimeout(async () => {
+            await supabase.storage
+                .from('transfers')
+                .remove([transfer.file_url.split('/').pop()]);
+
+            await supabase
+                .from('transfers')
+                .delete()
+                .eq('id', id);
+        }, 60000);
+
+    });
+
+    res.send(buffer);
 });
 
 // On exporte le router
