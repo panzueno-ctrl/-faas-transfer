@@ -383,3 +383,71 @@ C'est un problème classique en déploiement
  mais Railway avait une version plus ancienne par défaut.
 
 ============================================================
+
+
+
+Voilà l'explication pour ta documentation :
+
+Problème : Lien de téléchargement invalide en production
+
+
+Symptôme
+Après un upload réussi, le lien de téléchargement retournait 
+{"error": "Lien expiré ou invalide"}
+même pour un fichier qui venait d'être uploadé.
+
+
+Étapes de diagnostic
+
+Étape 1 — Vérification de l'URL
+Les liens générés pointaient vers localhost:3000 au lieu de Railway. 
+On a corrigé l'URL dans upload.js
+pour pointer vers https://faas-transfer-production.up.railway.app.
+
+Étape 2 — Vérification de l'insert en DB
+On a ajouté des logs et découvert que l'insert dans la table transfers 
+retournait dbData: null — Supabase acceptait la requête mais n'insérait rien.
+On a ajouté .select() après l'insert
+pour forcer Supabase à retourner les données insérées.
+L'insert a commencé à fonctionner.
+
+Étape 3 — Le vrai problème
+Même après l'insert corrigé, le téléchargement échouait.
+Les logs montraient que le download était appelé deux fois par le navigateur :
+1ère requête → transfer trouvé ✅ → fichier envoyé → suppression déclenchée
+2ème requête → transfer: null ❌ → ligne déjà supprimée → "Lien invalide"
+
+
+
+Cause racine
+Le code supprimait la ligne de la DB pendant l'envoi du fichier — pas après. 
+Le navigateur faisant deux requêtes HTTP (comportement normal), 
+la deuxième trouvait la ligne déjà supprimée par la première.
+
+Solution
+On a utilisé l'événement res.on('finish')
+qui se déclenche uniquement après que la réponse est complètement envoyée au client.
+La suppression se fait maintenant après 60 secondes, 
+garantissant que le receiver a bien reçu le fichier :
+
+
+javascriptres.on('finish', async () => {
+  // Met à jour le statut
+  await supabase.from('transfers').update({ downloaded: true }).eq('id', id);
+  
+  // Supprime après 60 secondes
+  setTimeout(async () => {
+    await supabase.storage.from('transfers').remove([filePath]);
+    await supabase.from('transfers').delete().eq('id', id);
+  }, 60000);
+});
+
+res.send(buffer); // Envoie d'abord, supprime après
+
+Leçon apprise
+Ne jamais modifier l'état de la DB
+avant d'être certain que la réponse HTTP est complètement transmise au client.
+res.on('finish') est le bon pattern 
+pour exécuter du code après l'envoi complet d'une réponse.
+
+=================================================================
