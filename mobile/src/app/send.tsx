@@ -304,18 +304,14 @@ export default function SendScreen() {
     // ── ÉTAPE 1 — Sélection de la catégorie ──
     if (step === 'category') {
         return (
-            <SafeAreaView style={styles.container}>
-
-                {/* Bouton retour vers l'accueil */}
+            <View style={styles.container}>
                 <Pressable style={styles.backButton} onPress={() => router.push('/')}>
                     <Ionicons name="arrow-back-outline" size={20} color="#aaaaaa" />
                     <Text style={styles.backButtonText}>Accueil</Text>
                 </Pressable>
-
                 <Text style={styles.title}>Envoyer un fichier</Text>
                 <Text style={styles.subtitle}>Choisissez une catégorie</Text>
-
-                <ScrollView contentContainerStyle={styles.categoriesGrid}>
+                <View style={styles.categoriesGrid}>
                     {CATEGORIES.map((cat) => (
                         <Pressable
                             key={cat.id}
@@ -324,13 +320,12 @@ export default function SendScreen() {
                                 pressed && styles.categoryCardPressed,
                             ]}
                             onPress={() => pickFile(cat.mimeTypes)}>
-                            <Ionicons name={cat.icon as any} size={32} color="#4a9eff" />
+                            <Ionicons name={cat.icon as any} size={28} color="#4a9eff" />
                             <Text style={styles.categoryLabel}>{cat.label}</Text>
                         </Pressable>
                     ))}
-                </ScrollView>
-
-            </SafeAreaView>
+                </View>
+            </View>
         );
     }
 
@@ -434,21 +429,25 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#0a0a0a',
-        padding: 20,
+        padding: 32,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
 
     // Bouton retour en haut à gauche
     backButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 15,
         alignSelf: 'flex-start',
-        marginBottom: 16,
+        position: 'absolute',       // ← positionné en absolu
+        top: 20,
+        left: 20,
     },
 
     backButtonText: {
-        color: '#aaaaaa',
-        fontSize: 14,
+        color: '#ffffff',
+        fontSize: 20,
     },
 
     title: {
@@ -469,27 +468,31 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 12,
+        justifyContent: 'center',
+        maxWidth: 900,
+        width: '100%',
     },
 
     categoryCard: {
-        width: '47%',
-        backgroundColor: '#1a1a1a',
-        borderRadius: 16,
-        padding: 24,
+        width: 260,          // ← largeur fixe en pixels au lieu de %
+        flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 14,
+        backgroundColor: '#141414',
+        borderRadius: 14,
+        padding: 18,
         borderWidth: 1,
-        borderColor: '#222222',
+        borderColor: '#1e1e1e',
     },
 
     categoryCardPressed: {
-        backgroundColor: '#222222',
+        backgroundColor: '#1a2a3a',
         borderColor: '#4a9eff',
     },
 
     categoryLabel: {
         color: '#ffffff',
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: '500',
     },
 
