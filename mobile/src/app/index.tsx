@@ -91,8 +91,10 @@ export default function HomeScreen() {
 
                 {/* Logo FaaS */}
                 <View style={styles.logoContainer}>
-                  <LogoFaaS size={50} showBackground={true} />
-                  <Text style={styles.logoText}>FaaS</Text>
+                  <LogoFaaS size={44} showBackground={true} />
+                  <Text style={styles.logoText}>
+                    FaaS <Text style={styles.logoTextHighlight}>Transfer</Text>
+                  </Text>
                 </View>
 
                 {/* MENU  */}
@@ -102,13 +104,18 @@ export default function HomeScreen() {
                 {MENU_ITEMS.map((item) => (
                   <Pressable
                     key={item.route}
-                    style={({ pressed }) => [
+                    style={({ pressed, hovered }: any) => [
                       styles.menuItem,
-                      pressed && styles.menuItemHovered,
+                      hovered && styles.menuItemHovered,
+                      pressed && styles.menuItemPressed,
                     ]}
                     onPress={() => router.push(item.route as any)}>
-                    <Ionicons name={item.icon as any} size={24} color="#4a9eff" />
-                    <Text style={styles.menuLabel}>{item.label}</Text>
+                    {({ hovered }: any) => (
+                      <>
+                        <Ionicons name={item.icon as any} size={24} color={hovered ? "#3B82F6" : "#64748B"} />
+                        <Text style={[styles.menuLabel, hovered && { color: "#F8FAFC" }]}>{item.label}</Text>
+                      </>
+                    )}
                   </Pressable>
                 ))}
               </>
@@ -252,9 +259,9 @@ const styles = StyleSheet.create({
 
   // ── Sidebar gauche ──
   sidebar: {
-    width: 260, // Plus large pour une vraie barre de navigation desktop
+    width: 280, // Plus large pour une vraie barre de navigation desktop
     backgroundColor: '#060709', // Pitch black pour la profondeur
-    paddingTop: 32,
+    paddingTop: 40,
     paddingHorizontal: 20,
     paddingBottom: 24,
     borderRightWidth: 1,
@@ -266,9 +273,9 @@ const styles = StyleSheet.create({
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 40,
-    paddingHorizontal: 8,
+    gap: 16,
+    marginBottom: 48,
+    paddingHorizontal: 12,
   },
 
   logoIconWrapper: {
@@ -285,19 +292,23 @@ const styles = StyleSheet.create({
   },
 
   logoText: {
-    color: '#ffffff',
-    fontSize: 26,
+    color: '#F8FAFC',
+    fontSize: 22,
     fontWeight: '900',
     letterSpacing: -1,
   },
 
+  logoTextHighlight: {
+    color: '#3B82F6',
+  },
+
   sidebarTitle: {
-    color: '#666666',
-    fontSize: 12,
+    color: '#475569',
+    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 2,
-    marginBottom: 16,
-    paddingHorizontal: 12,
+    letterSpacing: 2.5,
+    marginBottom: 20,
+    paddingHorizontal: 16,
     textAlign: 'left',
   },
 
@@ -307,22 +318,25 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 12,
-    gap: 14,
+    gap: 16,
     marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: 'transparent', // Invisible by default
   },
 
   menuItemHovered: {
-    backgroundColor: '#1a2a3a',
+    backgroundColor: 'rgba(59, 130, 246, 0.08)', // Fond léger bleu électrique
+    borderLeftColor: '#3B82F6', // Marqueur bleu électrique à gauche
   },
 
   menuItemPressed: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
   },
 
   menuLabel: {
-    color: '#ffffff',
+    color: '#94A3B8', // Slate 400 (plus doux que le blanc)
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   },
 
   // ── Contenu principal ──
