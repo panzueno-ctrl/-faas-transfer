@@ -1,4 +1,4 @@
-﻿/**
+/**
  * app/receive.tsx
  *
  * Écran de réception de fichiers.
@@ -23,42 +23,26 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import ActionCard from '../components/ActionCard'; // ✅ IMPORT DU NOUVEAU COMPOSANT
+import ActionCard from '../components/ActionCard';
 
-// Adresse du serveur
 const SERVER_URL = 'https://faas-transfer-production.up.railway.app';
 
 export default function ReceiveScreen() {
-
-    // Pour naviguer vers d'autres écrans
     const router = useRouter();
-
-    // Étape actuelle du flux
     const [step, setStep] = useState<'choice' | 'scanning' | 'manual' | 'downloading' | 'done'>('choice');
-
-    // Lien entré manuellement ou scanné
     const [link, setLink] = useState('');
-
-    // Nom du fichier téléchargé
     const [fileName, setFileName] = useState('');
-
-    // Permission caméra pour le scanner QR
     const [permission, requestPermission] = useCameraPermissions();
 
-    // Extrait l'id depuis le lien de téléchargement
-    // ex: http://localhost:3000/download/abc123 → abc123
     const extractId = (url: string) => {
         const parts = url.split('/download/');
         return parts.length > 1 ? parts[1].trim() : null;
     };
 
-    // Démarre le téléchargement depuis le lien
     const downloadFile = async (url: string) => {
         setStep('downloading');
-
         const id = extractId(url);
 
-        // Si l'id n'est pas valide on affiche une erreur
         if (!id) {
             Alert.alert('Erreur', 'Le lien est invalide. Vérifiez et réessayez.');
             setStep('choice');
@@ -66,8 +50,6 @@ export default function ReceiveScreen() {
         }
 
         try {
-            // On ouvre le lien dans le navigateur pour déclencher le téléchargement
-            // C'est la façon la plus simple et compatible avec tous les appareils
             const downloadUrl = `${SERVER_URL}/download/${id}`;
             const supported = await Linking.canOpenURL(downloadUrl);
 
@@ -77,7 +59,6 @@ export default function ReceiveScreen() {
 
             await Linking.openURL(downloadUrl);
 
-            // On considère le téléchargement réussi après l'ouverture du lien
             setFileName(id);
             setStep('done');
 
@@ -90,14 +71,11 @@ export default function ReceiveScreen() {
         }
     };
 
-    // Gère le scan d'un QR code
     const handleQRScan = ({ data }: { data: string }) => {
-        // On arrête le scanner et on démarre le téléchargement
         setLink(data);
         downloadFile(data);
     };
 
-    // Demande la permission caméra et ouvre le scanner
     const openScanner = async () => {
         if (!permission?.granted) {
             const result = await requestPermission();
@@ -112,252 +90,250 @@ export default function ReceiveScreen() {
         setStep('scanning');
     };
 
-    // ── ÉTAPE 1 — Choix du mode ──
     if (step === 'choice') {
         return (
             <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                
+                <View style={styles.contentWrapper}>
+                    <Pressable style={styles.backButton} onPress={() => router.push('/')}>
+                        <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
+                        <Text style={styles.backButtonText}>Accueil</Text>
+                    </Pressable>
 
-                {/* Bouton retour vers l'accueil */}
-                <Pressable style={styles.backButton} onPress={() => router.push('/')}>
-                    <Ionicons name="arrow-back-outline" size={20} color="#ffffff" />
-                    <Text style={styles.backButtonText}>Accueil</Text>
-                </Pressable>
+                    <Text style={styles.title}>Recevoir un fichier</Text>
+                    <Text style={styles.subtitle}>Comment voulez-vous recevoir ?</Text>
 
-                <Text style={styles.title}>Recevoir un fichier</Text>
-                <Text style={styles.subtitle}>Comment voulez-vous recevoir ?</Text>
-
-                <View style={styles.choicesContainer}>
-
-                    {/* ✅ UTILISATION DE NOTRE COMPOSANT RÉUTILISABLE ActionCard ! */}
-                    
-                    {/* Option 1 — Scanner le QR code */}
-                    <ActionCard 
-                        icon="qr-code-outline" 
-                        title="Scanner un QR code" 
-                        description="Scannez le QR code affiché sur l'écran de l'envoyeur" 
-                        onPress={openScanner} 
-                    />
-
-                    {/* Option 2 — Entrer le lien manuellement */}
-                    <ActionCard 
-                        icon="link-outline" 
-                        title="Entrer le lien" 
-                        description="Collez le lien reçu par message ou email" 
-                        onPress={() => setStep('manual')} 
-                    />
-
+                    <View style={styles.choicesContainer}>
+                        <ActionCard 
+                            icon="qr-code-outline" 
+                            title="Scanner un QR code" 
+                            description="Scannez le QR code affiché sur l'écran de l'envoyeur" 
+                            onPress={openScanner} 
+                        />
+                        <ActionCard 
+                            icon="link-outline" 
+                            title="Entrer le lien" 
+                            description="Collez le lien reçu par message ou email" 
+                            onPress={() => setStep('manual')} 
+                        />
+                    </View>
                 </View>
-
             </SafeAreaView>
         );
     }
 
-    // ── ÉTAPE 2 — Scanner QR code ──
     if (step === 'scanning') {
         return (
             <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                
+                <View style={styles.contentWrapper}>
+                    <Pressable style={styles.backButton} onPress={() => setStep('choice')}>
+                        <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
+                        <Text style={styles.backButtonText}>Retour</Text>
+                    </Pressable>
 
-                {/* Bouton retour */}
-                <Pressable style={styles.backButton} onPress={() => setStep('choice')}>
-                    <Ionicons name="arrow-back-outline" size={20} color="#ffffff" />
-                    <Text style={styles.backButtonText}>Retour</Text>
-                </Pressable>
+                    <Text style={styles.title}>Scanner le QR code</Text>
+                    <Text style={styles.subtitle}>Pointez la caméra vers le QR code</Text>
 
-                <Text style={styles.title}>Scanner le QR code</Text>
-                <Text style={styles.subtitle}>Pointez la caméra vers le QR code</Text>
-
-                {/* Vue caméra pour scanner le QR code */}
-                <View style={styles.cameraContainer}>
-                    <CameraView
-                        style={styles.camera}
-                        facing="back"
-                        onBarcodeScanned={handleQRScan}
-                        barcodeScannerSettings={{
-                            barcodeTypes: ['qr'],
-                        }}
-                    />
-                    {/* Viseur au centre */}
-                    <View style={styles.scanOverlay}>
-                        <View style={styles.scanCorner} />
+                    <View style={styles.cameraContainer}>
+                        <CameraView
+                            style={styles.camera}
+                            facing="back"
+                            onBarcodeScanned={handleQRScan}
+                            barcodeScannerSettings={{
+                                barcodeTypes: ['qr'],
+                            }}
+                        />
+                        <View style={styles.scanOverlay}>
+                            <View style={styles.scanCorner} />
+                        </View>
                     </View>
                 </View>
-
             </SafeAreaView>
         );
     }
 
-    // ── ÉTAPE 3 — Entrer le lien manuellement ──
     if (step === 'manual') {
         return (
             <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                
+                <View style={styles.contentWrapper}>
+                    <Pressable style={styles.backButton} onPress={() => setStep('choice')}>
+                        <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
+                        <Text style={styles.backButtonText}>Retour</Text>
+                    </Pressable>
 
-                {/* Bouton retour */}
-                <Pressable style={styles.backButton} onPress={() => setStep('choice')}>
-                    <Ionicons name="arrow-back-outline" size={20} color="#ffffff" />
-                    <Text style={styles.backButtonText}>Retour</Text>
-                </Pressable>
+                    <Text style={styles.title}>Entrer le lien</Text>
+                    <Text style={styles.subtitle}>Collez le lien reçu de l'envoyeur</Text>
 
-                <Text style={styles.title}>Entrer le lien</Text>
-                <Text style={styles.subtitle}>Collez le lien reçu de l'envoyeur</Text>
+                    <View style={styles.inputContainer}>
+                        <Ionicons name="link-outline" size={20} color="#94A3B8" />
+                        <TextInput
+                            style={styles.input}
+                            placeholder="http://..."
+                            placeholderTextColor="#475569"
+                            value={link}
+                            onChangeText={setLink}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            keyboardType="url"
+                        />
+                    </View>
 
-                {/* Champ de saisie du lien */}
-                <View style={styles.inputContainer}>
-                    <Ionicons name="link-outline" size={20} color="#666666" />
-                    <TextInput
-                        style={styles.input}
-                        placeholder="http://..."
-                        placeholderTextColor="#444444"
-                        value={link}
-                        onChangeText={setLink}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        keyboardType="url"
-                    />
+                    <Pressable
+                        style={({ pressed }) => [
+                            styles.downloadButton,
+                            pressed && styles.downloadButtonPressed,
+                            !link && styles.downloadButtonDisabled,
+                        ]}
+                        onPress={() => downloadFile(link)}
+                        disabled={!link}>
+                        <Ionicons name="download-outline" size={20} color="#ffffff" />
+                        <Text style={styles.downloadButtonText}>Télécharger</Text>
+                    </Pressable>
                 </View>
-
-                {/* Bouton télécharger */}
-                <Pressable
-                    style={({ pressed }) => [
-                        styles.downloadButton,
-                        pressed && styles.downloadButtonPressed,
-                        !link && styles.downloadButtonDisabled,
-                    ]}
-                    onPress={() => downloadFile(link)}
-                    disabled={!link}>
-                    <Ionicons name="download-outline" size={20} color="#ffffff" />
-                    <Text style={styles.downloadButtonText}>Télécharger</Text>
-                </Pressable>
-
             </SafeAreaView>
         );
     }
 
-    // ── ÉTAPE 4 — Téléchargement en cours ──
     if (step === 'downloading') {
         return (
             <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
                 <View style={styles.centerContent}>
-
-                    {/* Flèche animée vers le bas */}
                     <View style={styles.downloadIcon}>
-                        <Ionicons name="arrow-down-circle" size={80} color="#4a9eff" />
+                        <Ionicons name="arrow-down-circle" size={80} color="#3B82F6" />
                     </View>
-
-                    <ActivityIndicator size="large" color="#4a9eff" />
-                    <Text style={styles.downloadingTitle}>Téléchargement en cours...</Text>
+                    <ActivityIndicator size="large" color="#3B82F6" />
+                    <Text style={styles.downloadingTitle}>Transfert en cours...</Text>
                     <Text style={styles.downloadingSubtitle}>Veuillez patienter</Text>
-
                 </View>
             </SafeAreaView>
         );
     }
 
-    // ── ÉTAPE 5 — Téléchargement réussi ──
     return (
         <SafeAreaView style={styles.container}>
+            <View style={styles.backgroundGlow} pointerEvents="none" />
             <View style={styles.centerContent}>
-
-                {/* Icône succès */}
-                <Ionicons name="checkmark-circle" size={80} color="#4caf50" />
-
+                <Ionicons name="checkmark-circle" size={80} color="#10B981" />
                 <Text style={styles.successTitle}>Téléchargé avec succès ✅</Text>
                 <Text style={styles.successSubtitle}>
                     Le fichier a été ouvert dans votre navigateur.
                 </Text>
 
-                {/* Bouton pour recevoir un autre fichier */}
                 <Pressable
-                    style={styles.downloadButton}
+                    style={styles.backButtonFull}
                     onPress={() => {
                         setStep('choice');
                         setLink('');
                         setFileName('');
                     }}>
-                    <Ionicons name="arrow-back-outline" size={20} color="#ffffff" />
-                    <Text style={styles.downloadButtonText}>Recevoir un autre fichier</Text>
+                    <Ionicons name="arrow-back-outline" size={20} color="#94A3B8" />
+                    <Text style={styles.backButtonFullText}>Recevoir un autre fichier</Text>
                 </Pressable>
-
             </View>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-
     container: {
         flex: 1,
-        backgroundColor: '#0a0a0a',
+        backgroundColor: '#0B0C10',
         padding: 32,
-        justifyContent: 'center',
-        alignItems: 'center'
+        position: 'relative',
+        overflow: 'hidden',
     },
 
-    // Bouton retour en haut à gauche
+    contentWrapper: {
+        flex: 1,
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10,
+    },
+
+    backgroundGlow: {
+        position: 'absolute',
+        top: -150,
+        left: '50%',
+        transform: [{ translateX: -400 }],
+        width: 800,
+        height: 800,
+        borderRadius: 400,
+        backgroundColor: 'rgba(59, 130, 246, 0.03)',
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 120,
+        zIndex: 0,
+    },
+
     backButton: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        position: 'absolute',       // ← positionné en absolu en haut
-        top: 24,
-        left: 24,
+        alignSelf: 'flex-start',
+        position: 'absolute',
+        top: 32,
+        left: 32,
+        zIndex: 10,
+        backgroundColor: '#13151A',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#1F232D',
     },
 
     backButtonText: {
-        color: '#ffffff',
-        fontSize: 22,
+        color: '#94A3B8',
+        fontSize: 14,
         fontWeight: '600',
     },
 
     title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#ffffff',
-        marginBottom: 6,
-        textAlign: 'center',
-        marginTop: 60, // ← S'applique désormais à tous les écrans !
-        // Effet de lueur (Glow)
-        textShadowColor: 'rgba(74, 158, 255, 0.4)',
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 10,
+        fontSize: 32,
+        fontWeight: '900',
+        color: '#F8FAFC',
+        marginBottom: 8,
+        letterSpacing: -0.5,
     },
 
     subtitle: {
-        fontSize: 15,
-        color: '#666666',
-        marginBottom: 32,
-        textAlign: 'center',
-        marginTop: 4, // ← Appliqué ici
+        fontSize: 16,
+        color: '#94A3B8',
+        marginBottom: 40,
     },
 
-    // Conteneur des deux choix
     choicesContainer: {
-        flex: 1,
         justifyContent: 'center',
         gap: 16,
-        maxWidth: 700,
+        maxWidth: 500,
         width: '100%',
         alignSelf: 'center',
     },
 
-    // 🧹 MÉNAGE FAIT PAR VOTRE MENTOR : 
-    // Les styles choiceCard, choiceCardPressed, iconWrapper, choiceLabel 
-    // et choiceDescription ont été supprimés d'ici ! 
-    // Ils vivent maintenant au chaud dans src/components/ActionCard.tsx. 
-    // Regardez comme le fichier est plus propre !
-
-    // Caméra pour scanner le QR code
     cameraContainer: {
         flex: 1,
         borderRadius: 20,
         overflow: 'hidden',
         position: 'relative',
+        width: '100%',
+        maxWidth: 500,
+        maxHeight: 500,
+        borderWidth: 1,
+        borderColor: '#1F232D',
     },
 
     camera: {
         flex: 1,
     },
 
-    // Viseur au centre de la caméra
     scanOverlay: {
         position: 'absolute',
         top: 0,
@@ -372,46 +348,48 @@ const styles = StyleSheet.create({
         width: 200,
         height: 200,
         borderWidth: 2,
-        borderColor: '#4a9eff',
+        borderColor: '#3B82F6',
         borderRadius: 12,
     },
 
-    // Champ de saisie du lien
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#1a1a1a',
+        backgroundColor: '#13151A',
         borderRadius: 12,
         padding: 16,
         gap: 12,
         borderWidth: 1,
-        borderColor: '#333333',
-        marginBottom: 16,
+        borderColor: '#1F232D',
+        marginBottom: 24,
+        width: '100%',
+        maxWidth: 500,
     },
 
     input: {
         flex: 1,
-        color: '#ffffff',
-        fontSize: 14,
+        color: '#F8FAFC',
+        fontSize: 16,
     },
 
-    // Bouton télécharger
     downloadButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        backgroundColor: '#4a9eff',
+        backgroundColor: '#3B82F6',
         paddingVertical: 16,
         borderRadius: 12,
+        width: '100%',
+        maxWidth: 500,
     },
 
     downloadButtonPressed: {
-        backgroundColor: '#3a8eef',
+        backgroundColor: '#2563EB',
     },
 
     downloadButtonDisabled: {
-        backgroundColor: '#333333',
+        backgroundColor: '#1F232D',
         opacity: 0.5,
     },
 
@@ -421,49 +399,60 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
 
-    // Centrage du contenu
     centerContent: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
         gap: 16,
+        zIndex: 10,
     },
 
-    // Icône téléchargement en cours
     downloadIcon: {
         marginBottom: 8,
     },
 
     downloadingTitle: {
-        fontSize: 20,
+        fontSize: 24,
         fontWeight: 'bold',
-        color: '#ffffff',
+        color: '#F8FAFC',
     },
 
     downloadingSubtitle: {
-        fontSize: 14,
-        color: '#666666',
+        fontSize: 16,
+        color: '#94A3B8',
     },
 
-    // Écran succès
     successTitle: {
-        fontSize: 22,
+        fontSize: 24,
         fontWeight: 'bold',
-        color: '#ffffff',
+        color: '#F8FAFC',
         textAlign: 'center',
     },
 
     successSubtitle: {
-        fontSize: 14,
-        color: '#666666',
+        fontSize: 16,
+        color: '#94A3B8',
         textAlign: 'center',
-        lineHeight: 20,
+        lineHeight: 24,
+        marginBottom: 24,
     },
 
-    hero: {
+    backButtonFull: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 100,
-        marginBottom: 20,
+        gap: 8,
+        backgroundColor: '#13151A',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#1F232D',
     },
 
+    backButtonFullText: {
+        color: '#F8FAFC',
+        fontSize: 16,
+        fontWeight: '600',
+    },
 });
+

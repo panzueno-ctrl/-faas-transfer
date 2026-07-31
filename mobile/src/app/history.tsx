@@ -6,7 +6,6 @@
  * Chaque fichier envoyé a un statut : en attente, téléchargé ou expiré.
  */
 
-// useFocusEffect recharge l'écran chaque fois qu'on y entre
 import { useFocusEffect } from 'expo-router';
 import {
     View,
@@ -20,42 +19,30 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 
-// Clé de stockage AsyncStorage pour l'historique des envois
 const STORAGE_KEY = 'faas_history';
 
-// Type d'un transfert dans l'historique
 type Transfer = {
-    id: string;           // id unique retourné par le serveur
-    fileName: string;     // nom original du fichier
-    downloadUrl: string;  // lien de téléchargement
-    sentAt: string;       // date d'envoi
-    status: 'pending' | 'downloaded' | 'expired'; // statut du transfert
+    id: string;
+    fileName: string;
+    downloadUrl: string;
+    sentAt: string;
+    status: 'pending' | 'downloaded' | 'expired';
 };
 
 export default function HistoryScreen() {
-
-    // Pour naviguer vers d'autres écrans
     const router = useRouter();
-
-    // Onglet actif — envoyés ou reçus
     const [activeTab, setActiveTab] = useState<'sent' | 'received'>('sent');
-
-    // Liste des transferts envoyés
     const [sentFiles, setSentFiles] = useState<Transfer[]>([]);
-
-    // Indicateur de chargement
     const [loading, setLoading] = useState(true);
 
-    // On recharge l'historique chaque fois que l'écran devient actif
     useFocusEffect(
         useCallback(() => {
             loadHistory();
         }, [])
     );
 
-    // Charge l'historique depuis AsyncStorage
     const loadHistory = async () => {
         try {
             const data = await AsyncStorage.getItem(STORAGE_KEY);
@@ -69,7 +56,6 @@ export default function HistoryScreen() {
         }
     };
 
-    // Supprime un transfert de l'historique
     const deleteTransfer = async (id: string) => {
         try {
             const updated = sentFiles.filter(f => f.id !== id);
@@ -80,19 +66,17 @@ export default function HistoryScreen() {
         }
     };
 
-    // Retourne la couleur et l'icône selon le statut
     const getStatusStyle = (status: Transfer['status']) => {
         switch (status) {
             case 'downloaded':
-                return { color: '#4caf50', icon: 'checkmark-circle-outline' };
+                return { color: '#10B981', icon: 'checkmark-circle-outline' };
             case 'expired':
-                return { color: '#ff5252', icon: 'time-outline' };
+                return { color: '#EF4444', icon: 'time-outline' };
             default:
-                return { color: '#4a9eff', icon: 'hourglass-outline' };
+                return { color: '#3B82F6', icon: 'hourglass-outline' };
         }
     };
 
-    // Retourne le label du statut en français
     const getStatusLabel = (status: Transfer['status']) => {
         switch (status) {
             case 'downloaded': return 'Téléchargé';
@@ -103,240 +87,279 @@ export default function HistoryScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
+            <View style={styles.backgroundGlow} pointerEvents="none" />
 
-            {/* Bouton retour vers l'accueil */}
-            <Pressable style={styles.backButton} onPress={() => router.push('/')}>
-                <Ionicons name="arrow-back-outline" size={20} color="#aaaaaa" />
-                <Text style={styles.backButtonText}>Accueil</Text>
-            </Pressable>
-
-            <Text style={styles.title}>Récents</Text>
-
-            {/* Onglets Envoyés / Reçus */}
-            <View style={styles.tabs}>
-                <Pressable
-                    style={[styles.tab, activeTab === 'sent' && styles.tabActive]}
-                    onPress={() => setActiveTab('sent')}>
-                    <Text style={[styles.tabText, activeTab === 'sent' && styles.tabTextActive]}>
-                        Envoyés
-                    </Text>
+            <View style={styles.contentWrapper}>
+                <Pressable style={styles.backButton} onPress={() => router.push('/')}>
+                    <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
+                    <Text style={styles.backButtonText}>Accueil</Text>
                 </Pressable>
-                <Pressable
-                    style={[styles.tab, activeTab === 'received' && styles.tabActive]}
-                    onPress={() => setActiveTab('received')}>
-                    <Text style={[styles.tabText, activeTab === 'received' && styles.tabTextActive]}>
-                        Reçus
-                    </Text>
-                </Pressable>
-            </View>
 
-            {/* Contenu selon l'onglet actif */}
-            {loading ? (
-                <ActivityIndicator size="large" color="#4a9eff" style={styles.loader} />
-            ) : activeTab === 'sent' ? (
+                <View style={styles.headerContainer}>
+                    <Text style={styles.title}>Historique</Text>
+                    <Text style={styles.subtitle}>Vos transferts récents</Text>
+                </View>
 
-                <View style={{ flex: 1 }}>
-                    <ScrollView showsVerticalScrollIndicator={false}>
-                        {sentFiles.length === 0 ? (
+                <View style={styles.tabs}>
+                    <Pressable
+                        style={[styles.tab, activeTab === 'sent' && styles.tabActive]}
+                        onPress={() => setActiveTab('sent')}>
+                        <Text style={[styles.tabText, activeTab === 'sent' && styles.tabTextActive]}>
+                            Envoyés
+                        </Text>
+                    </Pressable>
+                    <Pressable
+                        style={[styles.tab, activeTab === 'received' && styles.tabActive]}
+                        onPress={() => setActiveTab('received')}>
+                        <Text style={[styles.tabText, activeTab === 'received' && styles.tabTextActive]}>
+                            Reçus
+                        </Text>
+                    </Pressable>
+                </View>
 
-                            <View style={styles.emptyContainer}>
-                                <Ionicons name="time-outline" size={48} color="#333333" />
-                                <Text style={styles.emptyText}>Aucun fichier envoyé</Text>
-                            </View>
-
-                        ) : (
-                            sentFiles.map((transfer) => {
-                                const statusStyle = getStatusStyle(transfer.status);
-                                return (
-                                    <View key={transfer.id} style={styles.transferCard}>
-
-                                        {/* Icône fichier */}
-                                        <View style={styles.fileIcon}>
-                                            <Ionicons name="document-outline" size={24} color="#4a9eff" />
-                                        </View>
-
-                                        {/* Infos du transfert */}
-                                        <View style={styles.fileInfo}>
-                                            <Text style={styles.fileName} numberOfLines={1}>
-                                                {transfer.fileName}
-                                            </Text>
-                                            <Text style={styles.fileDate}>{transfer.sentAt}</Text>
-                                            <View style={styles.statusRow}>
-                                                <Ionicons
-                                                    name={statusStyle.icon as any}
-                                                    size={12}
-                                                    color={statusStyle.color}
-                                                />
-                                                <Text style={[styles.statusText, { color: statusStyle.color }]}>
-                                                    {getStatusLabel(transfer.status)}
-                                                </Text>
+                {loading ? (
+                    <View style={styles.emptyContainer}>
+                        <ActivityIndicator size="large" color="#3B82F6" />
+                    </View>
+                ) : activeTab === 'sent' ? (
+                    <View style={styles.listContainer}>
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                            {sentFiles.length === 0 ? (
+                                <View style={styles.emptyContainer}>
+                                    <Ionicons name="time-outline" size={64} color="#1F232D" />
+                                    <Text style={styles.emptyText}>Aucun fichier envoyé</Text>
+                                </View>
+                            ) : (
+                                sentFiles.map((transfer) => {
+                                    const statusStyle = getStatusStyle(transfer.status);
+                                    return (
+                                        <View key={transfer.id} style={styles.transferCard}>
+                                            <View style={styles.fileIcon}>
+                                                <Ionicons name="document-outline" size={24} color="#3B82F6" />
                                             </View>
+                                            <View style={styles.fileInfo}>
+                                                <Text style={styles.fileName} numberOfLines={1}>
+                                                    {transfer.fileName}
+                                                </Text>
+                                                <Text style={styles.fileDate}>{transfer.sentAt}</Text>
+                                                <View style={styles.statusRow}>
+                                                    <Ionicons
+                                                        name={statusStyle.icon as any}
+                                                        size={14}
+                                                        color={statusStyle.color}
+                                                    />
+                                                    <Text style={[styles.statusText, { color: statusStyle.color }]}>
+                                                        {getStatusLabel(transfer.status)}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            <Pressable
+                                                onPress={() => deleteTransfer(transfer.id)}
+                                                style={styles.deleteButton}>
+                                                <Ionicons name="trash-outline" size={20} color="#475569" />
+                                            </Pressable>
                                         </View>
-
-                                        {/* Bouton supprimer */}
-                                        <Pressable
-                                            onPress={() => deleteTransfer(transfer.id)}
-                                            style={styles.deleteButton}>
-                                            <Ionicons name="trash-outline" size={18} color="#555555" />
-                                        </Pressable>
-
-                                    </View>
-                                );
-                            })
-                        )}
-                    </ScrollView>
-                </View>
-
-            ) : (
-
-                <View style={styles.emptyContainer}>
-                    <Ionicons name="download-outline" size={48} color="#333333" />
-                    <Text style={styles.emptyText}>Aucun fichier reçu</Text>
-                </View>
-
-            )}
-
+                                    );
+                                })
+                            )}
+                        </ScrollView>
+                    </View>
+                ) : (
+                    <View style={styles.listContainer}>
+                        <View style={styles.emptyContainer}>
+                            <Ionicons name="download-outline" size={64} color="#1F232D" />
+                            <Text style={styles.emptyText}>Aucun fichier reçu</Text>
+                        </View>
+                    </View>
+                )}
+            </View>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-
-    // Conteneur principal
     container: {
         flex: 1,
-        backgroundColor: '#0a0a0a',
-        padding: 20,
+        backgroundColor: '#0B0C10',
+        padding: 32,
+        position: 'relative',
+        overflow: 'hidden',
     },
 
-    // Bouton retour
+    contentWrapper: {
+        flex: 1,
+        width: '100%',
+        alignItems: 'center',
+        zIndex: 10,
+    },
+
+    backgroundGlow: {
+        position: 'absolute',
+        top: -150,
+        left: '50%',
+        transform: [{ translateX: -400 }],
+        width: 800,
+        height: 800,
+        borderRadius: 400,
+        backgroundColor: 'rgba(59, 130, 246, 0.03)',
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 120,
+        zIndex: 0,
+    },
+
     backButton: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
         alignSelf: 'flex-start',
-        marginBottom: 16,
+        position: 'absolute',
+        top: 32,
+        left: 32,
+        zIndex: 20,
+        backgroundColor: '#13151A',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#1F232D',
     },
 
     backButtonText: {
-        color: '#aaaaaa',
+        color: '#94A3B8',
         fontSize: 14,
+        fontWeight: '600',
     },
 
-    // Titre principal
+    headerContainer: {
+        alignItems: 'center',
+        marginTop: 60,
+        marginBottom: 32,
+    },
+
     title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#ffffff',
-        marginBottom: 20,
+        fontSize: 32,
+        fontWeight: '900',
+        color: '#F8FAFC',
+        marginBottom: 8,
+        letterSpacing: -0.5,
     },
 
-    // Onglets Envoyés / Reçus
+    subtitle: {
+        fontSize: 16,
+        color: '#94A3B8',
+    },
+
     tabs: {
         flexDirection: 'row',
-        backgroundColor: '#1a1a1a',
+        backgroundColor: '#13151A',
         borderRadius: 12,
-        padding: 4,
-        marginBottom: 20,
+        padding: 6,
+        marginBottom: 32,
+        borderWidth: 1,
+        borderColor: '#1F232D',
+        width: '100%',
+        maxWidth: 500,
     },
 
     tab: {
         flex: 1,
-        paddingVertical: 10,
+        paddingVertical: 12,
         alignItems: 'center',
         borderRadius: 10,
     },
 
-    // Onglet actif
     tabActive: {
-        backgroundColor: '#4a9eff',
+        backgroundColor: '#3B82F6',
     },
 
     tabText: {
-        color: '#666666',
-        fontWeight: '500',
+        color: '#94A3B8',
+        fontWeight: '600',
         fontSize: 14,
     },
 
-    // Texte de l'onglet actif
     tabTextActive: {
         color: '#ffffff',
     },
 
-    // Indicateur de chargement
-    loader: {
-        marginTop: 40,
+    listContainer: {
+        flex: 1,
+        width: '100%',
+        maxWidth: 600,
     },
 
-    // Message quand la liste est vide
+    scrollContent: {
+        paddingBottom: 40,
+    },
+
     emptyContainer: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 12,
-        paddingTop: 60,
+        gap: 16,
+        marginTop: 100,
     },
 
     emptyText: {
-        color: '#444444',
-        fontSize: 14,
+        color: '#475569',
+        fontSize: 16,
+        fontWeight: '500',
     },
 
-    // Carte d'un transfert
     transferCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#1a1a1a',
-        borderRadius: 12,
+        backgroundColor: '#13151A',
+        borderRadius: 16,
         padding: 16,
-        marginBottom: 10,
-        gap: 12,
+        marginBottom: 12,
+        gap: 16,
         borderWidth: 1,
-        borderColor: '#222222',
+        borderColor: '#1F232D',
     },
 
-    // Icône du fichier
     fileIcon: {
-        width: 44,
-        height: 44,
-        backgroundColor: '#0a1a2a',
-        borderRadius: 10,
+        width: 48,
+        height: 48,
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
     },
 
-    // Infos du fichier
     fileInfo: {
         flex: 1,
         gap: 4,
     },
 
     fileName: {
-        color: '#ffffff',
-        fontSize: 14,
-        fontWeight: '500',
+        color: '#F8FAFC',
+        fontSize: 16,
+        fontWeight: '600',
     },
 
     fileDate: {
-        color: '#555555',
-        fontSize: 12,
+        color: '#94A3B8',
+        fontSize: 13,
     },
 
-    // Ligne de statut
     statusRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        gap: 6,
+        marginTop: 2,
     },
 
     statusText: {
-        fontSize: 12,
-        fontWeight: '500',
+        fontSize: 13,
+        fontWeight: '600',
     },
 
-    // Bouton supprimer
     deleteButton: {
-        padding: 8,
+        padding: 12,
+        backgroundColor: 'rgba(239, 68, 68, 0.05)',
+        borderRadius: 10,
     },
-
 });

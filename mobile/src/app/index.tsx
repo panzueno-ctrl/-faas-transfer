@@ -351,13 +351,13 @@ const styles = StyleSheet.create({
     top: -150,
     left: '50%',
     transform: [
-      { translateX: -400 } // centrer l'orbe de 800px
+      { translateX: -400 }
     ],
     width: 800,
     height: 800,
     borderRadius: 400,
-    backgroundColor: 'rgba(59, 130, 246, 0.03)', // Electric Blue tint
-    shadowColor: '#3B82F6', // Vibrant Electric Blue glow
+    backgroundColor: 'rgba(59, 130, 246, 0.03)',
+    shadowColor: '#3B82F6',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 120,

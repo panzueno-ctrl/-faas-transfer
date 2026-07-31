@@ -306,24 +306,32 @@ export default function SendScreen() {
     if (step === 'category') {
         return (
             <View style={styles.container}>
-                <Pressable style={styles.backButton} onPress={() => router.push('/')}>
-                    <Ionicons name="arrow-back-outline" size={20} color="#aaaaaa" />
-                    <Text style={styles.backButtonText}>Accueil</Text>
-                </Pressable>
-                <Text style={styles.title}>Envoyer un fichier</Text>
-                <Text style={styles.subtitle}>Choisissez une catégorie</Text>
-                <View style={styles.categoriesGrid}>
-                    {CATEGORIES.map((cat) => (
-                        <ActionCard
-                            key={cat.id}
-                            title={cat.label}
-                            description="" // Pas de description pour les catégories
-                            icon={cat.icon as any}
-                            onPress={() => pickFile(cat.mimeTypes)}
-                            style={styles.categoryCard} // On garde votre largeur de 260px
-                            compact={true} // On utilise le mode réduit !
-                        />
-                    ))}
+                {/* Orbe lumineux en fond */}
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                
+                {/* Conteneur principal avec zIndex élevé pour forcer le premier plan */}
+                <View style={styles.contentWrapper}>
+                    <Pressable style={styles.backButton} onPress={() => router.push('/')}>
+                        <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
+                        <Text style={styles.backButtonText}>Accueil</Text>
+                    </Pressable>
+                    
+                    <Text style={styles.title}>Envoyer un fichier</Text>
+                    <Text style={styles.subtitle}>Choisissez une catégorie</Text>
+                    
+                    <View style={styles.categoriesGrid}>
+                        {CATEGORIES.map((cat) => (
+                            <ActionCard
+                                key={cat.id}
+                                title={cat.label}
+                                description="" 
+                                icon={cat.icon as any}
+                                onPress={() => pickFile(cat.mimeTypes)}
+                                style={styles.categoryCard} 
+                                compact={true} 
+                            />
+                        ))}
+                    </View>
                 </View>
             </View>
         );
@@ -333,10 +341,11 @@ export default function SendScreen() {
     if (step === 'uploading') {
         return (
             <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
                 <View style={styles.centerContent}>
 
                     {/* Indicateur de chargement animé */}
-                    <ActivityIndicator size="large" color="#4a9eff" />
+                    <ActivityIndicator size="large" color="#3B82F6" />
 
                     <Text style={styles.uploadingTitle}>Transfert en cours...</Text>
                     <Text style={styles.uploadingFile}>{selectedFile?.name}</Text>
@@ -355,12 +364,13 @@ export default function SendScreen() {
     // ── ÉTAPE 3 — Transfert effectué ──
     return (
         <SafeAreaView style={styles.container}>
+            <View style={styles.backgroundGlow} pointerEvents="none" />
 
-            <ScrollView contentContainerStyle={styles.resultContent}>
+            <ScrollView style={{ flex: 1, zIndex: 10, width: '100%' }} contentContainerStyle={styles.resultContent}>
 
                 {/* Bouton pour recommencer un nouveau transfert */}
                 <Pressable style={styles.backButton} onPress={reset}>
-                    <Ionicons name="arrow-back-outline" size={20} color="#aaaaaa" />
+                    <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
                     <Text style={styles.backButtonText}>Nouveau transfert</Text>
                 </Pressable>
 
@@ -428,39 +438,75 @@ const styles = StyleSheet.create({
 
     container: {
         flex: 1,
-        backgroundColor: '#0a0a0a',
+        backgroundColor: '#0B0C10', // Deep Midnight
         padding: 32,
+        position: 'relative',
+        overflow: 'hidden',
+    },
+
+    // Nouveau wrapper qui force le contenu en haut
+    contentWrapper: {
+        flex: 1,
+        width: '100%',
         alignItems: 'center',
         justifyContent: 'center',
+        zIndex: 10,
+    },
+
+    backgroundGlow: {
+        position: 'absolute',
+        top: -150,
+        left: '50%',
+        transform: [{ translateX: -400 }],
+        width: 800,
+        height: 800,
+        borderRadius: 400,
+        backgroundColor: 'rgba(59, 130, 246, 0.03)',
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 120,
+        zIndex: 0,
     },
 
     // Bouton retour en haut à gauche
     backButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 15,
+        gap: 8,
         alignSelf: 'flex-start',
-        position: 'absolute',       // ← positionné en absolu
-        top: 20,
-        left: 20,
+        position: 'absolute',
+        top: 32,
+        left: 32,
+        zIndex: 10,
+        backgroundColor: '#13151A',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#1F232D',
     },
 
     backButtonText: {
-        color: '#ffffff',
-        fontSize: 20,
+        color: '#94A3B8',
+        fontSize: 14,
+        fontWeight: '600',
     },
 
     title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#ffffff',
-        marginBottom: 4,
+        fontSize: 32,
+        fontWeight: '900',
+        color: '#F8FAFC',
+        marginBottom: 8,
+        letterSpacing: -0.5,
+        zIndex: 1,
     },
 
     subtitle: {
-        fontSize: 14,
-        color: '#666666',
-        marginBottom: 24,
+        fontSize: 16,
+        color: '#94A3B8',
+        marginBottom: 40,
+        zIndex: 1,
     },
 
     // Grille des catégories — deux colonnes
@@ -471,6 +517,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         maxWidth: 900,
         width: '100%',
+        zIndex: 10, // FIX: s'assure que la grille est au-dessus du glow
     },
 
     // On ne garde que la largeur pour forcer les cartes à s'aligner sur 2 colonnes
@@ -486,103 +533,122 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         gap: 16,
         padding: 20,
+        zIndex: 10, // FIX
     },
 
     uploadingTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#ffffff',
+        fontSize: 24,
+        fontWeight: '800',
+        color: '#F8FAFC',
+        marginTop: 16,
     },
 
     uploadingFile: {
-        fontSize: 13,
-        color: '#666666',
+        fontSize: 15,
+        color: '#94A3B8',
+        marginBottom: 24,
     },
 
     // Barre de progression de l'upload
     progressBar: {
         width: '100%',
-        height: 6,
-        backgroundColor: '#222222',
-        borderRadius: 3,
+        maxWidth: 400,
+        height: 8,
+        backgroundColor: '#13151A',
+        borderRadius: 4,
         overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#1F232D',
     },
 
     progressFill: {
         height: '100%',
-        backgroundColor: '#4a9eff',
-        borderRadius: 3,
+        backgroundColor: '#3B82F6',
+        borderRadius: 4,
     },
 
     progressText: {
-        color: '#4a9eff',
-        fontSize: 14,
-        fontWeight: '600',
+        color: '#3B82F6',
+        fontSize: 16,
+        fontWeight: '700',
+        marginTop: 8,
     },
 
     // Contenu de l'étape résultat
     resultContent: {
         alignItems: 'center',
-        gap: 20,
+        gap: 24,
         paddingBottom: 40,
+        paddingTop: 80, // Laisse la place au bouton retour absolu
+        width: '100%',
+        maxWidth: 500,
+        alignSelf: 'center',
+        zIndex: 10, // FIX
     },
 
     successIcon: {
         marginTop: 8,
+        backgroundColor: 'rgba(74, 222, 128, 0.1)',
+        padding: 20,
+        borderRadius: 60,
     },
 
     successTitle: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        color: '#ffffff',
+        fontSize: 32,
+        fontWeight: '900',
+        color: '#F8FAFC',
+        letterSpacing: -0.5,
     },
 
     successFile: {
-        fontSize: 13,
-        color: '#666666',
+        fontSize: 15,
+        color: '#94A3B8',
+        marginTop: -12,
     },
 
     // Conteneur du QR code
     qrContainer: {
-        backgroundColor: '#1a1a1a',
-        borderRadius: 16,
-        padding: 24,
+        backgroundColor: '#13151A',
+        borderRadius: 24,
+        padding: 32,
         alignItems: 'center',
-        gap: 16,
+        gap: 20,
         borderWidth: 1,
-        borderColor: '#333333',
+        borderColor: '#1F232D',
         width: '100%',
     },
 
     qrLabel: {
-        color: '#666666',
-        fontSize: 12,
+        color: '#94A3B8',
+        fontSize: 11,
         textTransform: 'uppercase',
-        letterSpacing: 1,
+        letterSpacing: 1.5,
+        fontWeight: '600',
     },
 
     // Conteneur du lien avec bouton copier
     linkContainer: {
         width: '100%',
-        backgroundColor: '#1a1a1a',
-        borderRadius: 12,
+        backgroundColor: '#0B0C10',
+        borderRadius: 16,
         padding: 16,
-        gap: 8,
+        gap: 12,
         borderWidth: 1,
-        borderColor: '#333333',
+        borderColor: '#1F232D',
     },
 
     linkLabel: {
-        fontSize: 12,
-        color: '#666666',
+        fontSize: 11,
+        color: '#94A3B8',
         textTransform: 'uppercase',
-        letterSpacing: 1,
+        letterSpacing: 1.5,
+        fontWeight: '600',
     },
 
     linkRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 12,
     },
 
     linkTextContainer: {
@@ -590,17 +656,18 @@ const styles = StyleSheet.create({
     },
 
     linkText: {
-        color: '#4a9eff',
-        fontSize: 13,
+        color: '#3B82F6',
+        fontSize: 14,
         lineHeight: 20,
+        fontWeight: '500',
     },
 
     copyButton: {
-        padding: 8,
-        backgroundColor: '#111111',
-        borderRadius: 8,
+        padding: 10,
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        borderRadius: 10,
         borderWidth: 1,
-        borderColor: '#333333',
+        borderColor: 'rgba(59, 130, 246, 0.3)',
     },
 
     shareInstruction: {

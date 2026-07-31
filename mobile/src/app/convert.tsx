@@ -23,18 +23,15 @@ import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import ActionCard from '../components/ActionCard';
 
-// Adresse du serveur
 const SERVER_URL = 'http://localhost:3000';
 
-// Groupe 1 — Conversions de fichiers
 const CONVERSIONS = [
     {
         id: 'word-to-pdf',
         label: 'Word → PDF',
         icon: 'document-text-outline',
         endpoint: '/convert/word-to-pdf',
-        mimeTypes: ['application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        mimeTypes: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
         outputExt: 'pdf',
     },
     {
@@ -87,7 +84,6 @@ const CONVERSIONS = [
     },
 ];
 
-// Groupe 2 — Traitement PDF
 const PDF_TOOLS = [
     {
         id: 'merge-pdf',
@@ -157,41 +153,25 @@ const PDF_TOOLS = [
 ];
 
 export default function ConvertScreen() {
-
-    // Pour naviguer vers d'autres écrans
     const router = useRouter();
-
-    // Étape actuelle du flux
     const [step, setStep] = useState<'menu' | 'processing' | 'done'>('menu');
-
-    // Service sélectionné par l'utilisateur
     const [selectedService, setSelectedService] = useState<any>(null);
-
-    // Nom du fichier traité
     const [fileName, setFileName] = useState('');
-
-    // URL du fichier résultat à télécharger
     const [resultUrl, setResultUrl] = useState('');
 
-    // Sélectionne un fichier et lance le traitement
     const handleServicePress = async (service: any) => {
         setSelectedService(service);
-
         try {
             const res = await DocumentPicker.getDocumentAsync({
                 type: service.mimeTypes,
                 copyToCacheDirectory: true,
-                // Pour fusionner on permet la sélection multiple
                 multiple: service.multiple || false,
             });
 
-            // Si l'utilisateur a annulé
             if (res.canceled) return;
 
             const file = res.assets[0];
             setFileName(file.name);
-
-            // On lance le traitement
             await processFile(service, file);
 
         } catch (error) {
@@ -199,34 +179,24 @@ export default function ConvertScreen() {
         }
     };
 
-    // Envoie le fichier au serveur pour traitement
     const processFile = async (service: any, file: any) => {
         setStep('processing');
-
         try {
-            // On crée le FormData avec le fichier
             const formData = new FormData();
-
-            // Conversion du fichier en Blob pour le web
             const response_file = await fetch(file.uri);
             const blob = await response_file.blob();
             formData.append('file', blob, file.name);
 
-            // Certains services nécessitent des paramètres supplémentaires
             if (service.id === 'rotate-pdf') {
-                // Rotation par défaut à 90 degrés
                 formData.append('rotation', '90');
             }
             if (service.id === 'watermark-pdf') {
-                // Filigrane par défaut
                 formData.append('text', 'CONFIDENTIEL');
             }
             if (service.id === 'protect-pdf') {
-                // Mot de passe par défaut — à personnaliser plus tard
                 formData.append('password', 'faas2024');
             }
 
-            // Envoi vers le serveur
             const response = await fetch(`${SERVER_URL}${service.endpoint}`, {
                 method: 'POST',
                 body: formData,
@@ -236,10 +206,7 @@ export default function ConvertScreen() {
                 throw new Error('Erreur serveur');
             }
 
-            // On récupère le fichier traité sous forme de blob
             const resultBlob = await response.blob();
-
-            // On crée une URL temporaire pour télécharger le fichier
             const url = URL.createObjectURL(resultBlob);
             setResultUrl(url);
             setStep('done');
@@ -253,16 +220,13 @@ export default function ConvertScreen() {
         }
     };
 
-    // Télécharge le fichier résultat
     const downloadResult = () => {
-        // On crée un lien temporaire et on clique dessus pour télécharger
         const a = document.createElement('a');
         a.href = resultUrl;
         a.download = `faas-${selectedService.id}.${selectedService.outputExt}`;
         a.click();
     };
 
-    // Réinitialise pour un nouveau traitement
     const reset = () => {
         setStep('menu');
         setSelectedService(null);
@@ -270,64 +234,67 @@ export default function ConvertScreen() {
         setResultUrl('');
     };
 
-
-    // ── ÉTAPE 1 — Menu des services ──
     if (step === 'menu') {
         return (
             <SafeAreaView style={styles.container}>
-                <ScrollView showsVerticalScrollIndicator={false}>
-
-                    {/* Bouton retour vers l'accueil */}
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                
+                <View style={styles.contentWrapper}>
                     <Pressable style={styles.backButton} onPress={() => router.push('/')}>
-                        <Ionicons name="arrow-back-outline" size={20} color="#aaaaaa" />
+                        <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
                         <Text style={styles.backButtonText}>Accueil</Text>
                     </Pressable>
 
-                    <Text style={styles.title}>Convertir</Text>
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                        <View style={styles.headerContainer}>
+                            <Text style={styles.title}>Boîte à outils PDF</Text>
+                            <Text style={styles.subtitle}>Convertissez et modifiez vos fichiers</Text>
+                        </View>
 
-                    {/* Groupe 1 — Conversions */}
-                    <Text style={styles.groupTitle}>Convertissez votre fichier</Text>
-                    <View style={styles.grid}>
-                        {CONVERSIONS.map((service) => (
-                            <ActionCard
-                                key={service.id}
-                                title={service.label}
-                                description=""
-                                icon={service.icon as any}
-                                onPress={() => handleServicePress(service)}
-                                style={styles.serviceCard}
-                                compact={true}
-                            />
-                        ))}
-                    </View>
+                        <Text style={styles.groupTitle}>Conversions populaires</Text>
+                        <View style={styles.grid}>
+                            {CONVERSIONS.map((service) => (
+                                <ActionCard
+                                    key={service.id}
+                                    title={service.label}
+                                    description=""
+                                    icon={service.icon as any}
+                                    onPress={() => handleServicePress(service)}
+                                    style={styles.serviceCard}
+                                    compact={true}
+                                />
+                            ))}
+                        </View>
 
-                    {/* Groupe 2 — Traitement PDF */}
-                    <Text style={styles.groupTitle}>Traitez votre fichier</Text>
-                    <View style={styles.grid}>
-                        {PDF_TOOLS.map((service) => (
-                            <ActionCard
-                                key={service.id}
-                                title={service.label}
-                                description=""
-                                icon={service.icon as any}
-                                onPress={() => handleServicePress(service)}
-                                style={styles.serviceCard}
-                                compact={true}
-                            />
-                        ))}
-                    </View>
-
-                </ScrollView>
+                        <Text style={styles.groupTitle}>Traitement PDF avancé</Text>
+                        <View style={styles.grid}>
+                            {PDF_TOOLS.map((service) => (
+                                <ActionCard
+                                    key={service.id}
+                                    title={service.label}
+                                    description=""
+                                    icon={service.icon as any}
+                                    onPress={() => handleServicePress(service)}
+                                    style={styles.serviceCard}
+                                    compact={true}
+                                />
+                            ))}
+                        </View>
+                    </ScrollView>
+                </View>
             </SafeAreaView>
         );
     }
 
-    // ── ÉTAPE 2 — Traitement en cours ──
     if (step === 'processing') {
         return (
             <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
                 <View style={styles.centerContent}>
-                    <ActivityIndicator size="large" color="#4a9eff" />
+                    <View style={styles.downloadIcon}>
+                        <Ionicons name="cog-outline" size={80} color="#3B82F6" />
+                    </View>
+                    <ActivityIndicator size="large" color="#3B82F6" />
                     <Text style={styles.processingTitle}>Traitement en cours...</Text>
                     <Text style={styles.processingFile}>{fileName}</Text>
                 </View>
@@ -335,40 +302,58 @@ export default function ConvertScreen() {
         );
     }
 
-    // ── ÉTAPE 3 — Traitement terminé ──
     return (
         <SafeAreaView style={styles.container}>
+            <View style={styles.backgroundGlow} pointerEvents="none" />
             <View style={styles.centerContent}>
-
-                {/* Icône succès */}
-                <Ionicons name="checkmark-circle" size={80} color="#4caf50" />
-
+                <Ionicons name="checkmark-circle" size={80} color="#10B981" />
                 <Text style={styles.successTitle}>Traitement terminé ✅</Text>
                 <Text style={styles.successFile}>{fileName}</Text>
 
-                {/* Bouton télécharger le résultat */}
                 <Pressable style={styles.downloadButton} onPress={downloadResult}>
                     <Ionicons name="download-outline" size={20} color="#ffffff" />
                     <Text style={styles.downloadButtonText}>Télécharger le fichier</Text>
                 </Pressable>
 
-                {/* Bouton nouveau traitement */}
                 <Pressable style={styles.resetButton} onPress={reset}>
-                    <Ionicons name="arrow-back-outline" size={20} color="#aaaaaa" />
+                    <Ionicons name="arrow-back-outline" size={20} color="#94A3B8" />
                     <Text style={styles.resetButtonText}>Nouveau traitement</Text>
                 </Pressable>
-
             </View>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-
     container: {
         flex: 1,
-        backgroundColor: '#0a0a0a',
-        padding: 20,
+        backgroundColor: '#0B0C10',
+        padding: 32,
+        position: 'relative',
+        overflow: 'hidden',
+    },
+
+    contentWrapper: {
+        flex: 1,
+        width: '100%',
+        alignItems: 'center',
+        zIndex: 10,
+    },
+
+    backgroundGlow: {
+        position: 'absolute',
+        top: -150,
+        left: '50%',
+        transform: [{ translateX: -400 }],
+        width: 800,
+        height: 800,
+        borderRadius: 400,
+        backgroundColor: 'rgba(59, 130, 246, 0.03)',
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 120,
+        zIndex: 0,
     },
 
     backButton: {
@@ -376,71 +361,116 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 8,
         alignSelf: 'flex-start',
-        marginBottom: 16,
+        position: 'absolute',
+        top: 32,
+        left: 32,
+        zIndex: 20,
+        backgroundColor: '#13151A',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#1F232D',
     },
 
     backButtonText: {
-        color: '#aaaaaa',
+        color: '#94A3B8',
         fontSize: 14,
+        fontWeight: '600',
+    },
+
+    scrollContent: {
+        paddingTop: 100, // Espace pour le bouton retour absolu
+        paddingBottom: 40,
+        alignItems: 'center',
+        width: '100%',
+        maxWidth: 900,
+    },
+
+    headerContainer: {
+        alignItems: 'center',
+        marginBottom: 40,
     },
 
     title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#ffffff',
-        marginBottom: 20,
+        fontSize: 32,
+        fontWeight: '900',
+        color: '#F8FAFC',
+        marginBottom: 8,
+        letterSpacing: -0.5,
+        textAlign: 'center',
+    },
+
+    subtitle: {
+        fontSize: 16,
+        color: '#94A3B8',
+        textAlign: 'center',
     },
 
     groupTitle: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '600',
-        color: '#888888',
-        marginBottom: 12,
-        marginTop: 8,
+        color: '#F8FAFC',
+        marginBottom: 16,
+        alignSelf: 'flex-start',
+        width: '100%',
+        borderBottomWidth: 1,
+        borderBottomColor: '#1F232D',
+        paddingBottom: 8,
     },
 
     grid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 10,
-        marginBottom: 24,
+        gap: 12,
+        marginBottom: 32,
+        width: '100%',
+        justifyContent: 'center',
     },
 
-    // Largeur ajustée pour l'ActionCard (passage en 2 colonnes au lieu de 3 sur mobile)
     serviceCard: {
-        width: '48%',
-        minWidth: 160,
+        width: 260,
     },
-    // 🧹 MÉNAGE : Les autres styles (pressé, label) sont gérés par ActionCard.tsx !
 
     centerContent: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
         gap: 16,
-        padding: 20,
+        zIndex: 10,
+        width: '100%',
+        maxWidth: 400,
+    },
+
+    downloadIcon: {
+        marginBottom: 8,
     },
 
     processingTitle: {
-        fontSize: 20,
+        fontSize: 24,
         fontWeight: 'bold',
-        color: '#ffffff',
+        color: '#F8FAFC',
+        textAlign: 'center',
     },
 
     processingFile: {
-        fontSize: 13,
-        color: '#666666',
+        fontSize: 16,
+        color: '#94A3B8',
+        textAlign: 'center',
     },
 
     successTitle: {
-        fontSize: 22,
+        fontSize: 24,
         fontWeight: 'bold',
-        color: '#ffffff',
+        color: '#F8FAFC',
+        textAlign: 'center',
     },
 
     successFile: {
-        fontSize: 13,
-        color: '#666666',
+        fontSize: 16,
+        color: '#94A3B8',
+        textAlign: 'center',
+        marginBottom: 24,
     },
 
     downloadButton: {
@@ -448,11 +478,12 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        backgroundColor: '#4a9eff',
+        backgroundColor: '#3B82F6',
         paddingVertical: 16,
         paddingHorizontal: 32,
         borderRadius: 12,
         width: '100%',
+        marginBottom: 12,
     },
 
     downloadButtonText: {
@@ -465,11 +496,19 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
+        backgroundColor: '#13151A',
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#1F232D',
+        width: '100%',
+        justifyContent: 'center',
     },
 
     resetButtonText: {
-        color: '#aaaaaa',
-        fontSize: 14,
+        color: '#F8FAFC',
+        fontSize: 16,
+        fontWeight: '600',
     },
-
 });
