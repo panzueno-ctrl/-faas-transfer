@@ -311,7 +311,13 @@ export default function SendScreen() {
                 
                 {/* Conteneur principal avec zIndex élevé pour forcer le premier plan */}
                 <View style={styles.contentWrapper}>
-                    <Pressable style={styles.backButton} onPress={() => router.push('/')}>
+                    {/* Bouton retour hors du bloc centré */}
+                    <Pressable 
+                        style={({ pressed, hovered }: any) => [
+                            styles.backButton,
+                            (pressed || hovered) && styles.backButtonHovered
+                        ]}
+                        onPress={() => router.push('/')}>
                         <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
                         <Text style={styles.backButtonText}>Accueil</Text>
                     </Pressable>
@@ -478,13 +484,24 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: 32,
         left: 32,
-        zIndex: 10,
+        zIndex: 20,
         backgroundColor: '#13151A',
         paddingVertical: 10,
         paddingHorizontal: 16,
         borderRadius: 12,
         borderWidth: 1,
         borderColor: '#1F232D',
+        transitionDuration: '0.2s',
+    },
+
+    backButtonHovered: {
+        backgroundColor: '#1E2433',
+        borderColor: '#3B82F6',
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        transform: [{ translateY: -1 }],
     },
 
     backButtonText: {

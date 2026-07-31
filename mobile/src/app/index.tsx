@@ -179,30 +179,35 @@ export default function HomeScreen() {
           </View>
 
           {/* ── Section bienvenue / fichiers récents ── */}
-          <View style={styles.welcomeContainer}>
+          <Pressable 
+            style={({ pressed, hovered }: any) => [
+                styles.welcomeContainer,
+                (pressed || hovered) && styles.welcomeContainerHovered
+            ]}
+            onPress={() => router.push('/send' as any)}>
+            {({ pressed, hovered }: any) => (
+              <>
+                <View style={styles.welcomeIcon}>
+                  <Ionicons name="folder-open-outline" size={40} color="#4a9eff" />
+                </View>
 
-            {/* Icône dossier */}
-            <View style={styles.welcomeIcon}>
-              <Ionicons name="folder-open-outline" size={40} color="#4a9eff" />
-            </View>
+                <Text style={styles.welcomeTitle}>Bienvenue sur FaaS Transfer !</Text>
+                <Text style={styles.welcomeSubtitle}>
+                  Vous n'avez pas encore de fichiers récents.
+                </Text>
 
-            <Text style={styles.welcomeTitle}>Bienvenue sur FaaS Transfer !</Text>
-            <Text style={styles.welcomeSubtitle}>
-              Vous n'avez pas encore de fichiers récents.
-            </Text>
-
-            {/* Bouton CTA */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.ctaButton,
-                pressed && styles.ctaButtonPressed,
-              ]}
-              onPress={() => router.push('/send' as any)}>
-              <Ionicons name="cloud-upload-outline" size={18} color="#ffffff" />
-              <Text style={styles.ctaButtonText}>Commencer votre premier transfert</Text>
-            </Pressable>
-
-          </View>
+                <View style={[
+                  styles.ctaButton, 
+                  (pressed || hovered) && styles.ctaButtonHovered
+                ]}>
+                  <Ionicons name="cloud-upload-outline" size={18} color="#ffffff" />
+                  <Text style={[styles.ctaButtonText, (pressed || hovered) && { color: '#ffffff' }]}>
+                    Commencer votre premier transfert
+                  </Text>
+                </View>
+              </>
+            )}
+          </Pressable>
 
           </ScrollView>
         </View>
@@ -447,7 +452,7 @@ const styles = StyleSheet.create({
   welcomeContainer: {
     width: '100%',
     maxWidth: 900,
-    backgroundColor: '#13151A', // Premium Gunmetal
+    backgroundColor: '#13151A',
     borderRadius: 24,
     paddingVertical: 50,
     paddingHorizontal: 40,
@@ -456,12 +461,23 @@ const styles = StyleSheet.create({
     marginTop: 40,
     gap: 16,
     borderWidth: 1,
-    borderColor: '#1F232D', // Subtle border
-    borderTopColor: 'rgba(59, 130, 246, 0.4)', // Electric blue glow
+    borderColor: '#1F232D',
+    borderTopColor: 'rgba(59, 130, 246, 0.4)',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 20 },
     shadowOpacity: 0.6,
     shadowRadius: 30,
+    transitionDuration: '0.2s',
+  },
+
+  welcomeContainerHovered: {
+    borderColor: '#3B82F6',
+    borderTopColor: '#3B82F6',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 30,
+    transform: [{ translateY: -2 }],
   },
 
   welcomeIcon: {
@@ -502,8 +518,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(59, 130, 246, 0.3)',
   },
 
-  // CTA pressé
-  ctaButtonPressed: {
+  ctaButtonHovered: {
     backgroundColor: '#3B82F6', // Couleur primaire
   },
 

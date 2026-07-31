@@ -16,24 +16,18 @@ interface ActionCardProps {
 export default function ActionCard({ title, description, icon, onPress, style, compact = false }: ActionCardProps) {
     return (
         <Pressable
-            style={({ pressed }) => [
+            style={({ pressed, hovered }: any) => [
                 styles.choiceCard,
-                compact && styles.choiceCardCompact, // ← NOUVEAU : Applique le style compact
-                pressed && styles.choiceCardPressed,
-                style // Application du style passé en paramètre
+                compact && styles.choiceCardCompact,
+                (pressed || hovered) && styles.choiceCardHovered,
+                style
             ]}
             onPress={onPress}
         >
-            {/* L'icône avec son effet premium */}
             <View style={styles.iconWrapper}>
                 <Ionicons name={icon} size={32} color="#4a9eff" />
             </View>
 
-            {/* 
-              J'ai ajouté une balise <View> autour de vos deux textes. 
-              C'est une bonne pratique pour qu'ils soient empilés proprement (l'un au-dessus de l'autre),
-              surtout parce que le composant parent a "flexDirection: 'row'" (horizontal).
-            */}
             <View style={styles.textContainer}>
                 <Text style={styles.choiceLabel}>{title}</Text>
                 <Text style={styles.choiceDescription}>{description}</Text>
@@ -42,29 +36,29 @@ export default function ActionCard({ title, description, icon, onPress, style, c
     );
 }
 
-// 3. Les styles spécifiques à la carte
 const styles = StyleSheet.create({
     choiceCard: {
         flexDirection: 'row',
-        alignItems: 'center', // Aligne l'icône et le texte verticalement au centre
+        alignItems: 'center',
         gap: 20,
-        backgroundColor: '#13151A', // Premium Gunmetal
+        backgroundColor: '#13151A',
         borderRadius: 16,
         padding: 32,
         borderWidth: 1,
-        borderColor: '#1F232D', // Bordure subtile
+        borderColor: '#1F232D',
         width: '100%',
         maxWidth: 700,
+        transitionDuration: '0.2s', // Effet de transition fluide sur web
     },
-    choiceCardPressed: {
-        backgroundColor: '#1E2433', // Fond au clic
-        borderColor: '#3B82F6', // Bordure électrique
-        // Effet lumineux (Glow) au clic
+    choiceCardHovered: {
+        backgroundColor: '#1E2433',
+        borderColor: '#3B82F6',
         shadowColor: '#3B82F6',
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 15,
         elevation: 8,
+        transform: [{ translateY: -2 }], // Soulèvement subtil
     },
     // NOUVEAU : Style appliqué uniquement si compact = true
     choiceCardCompact: {

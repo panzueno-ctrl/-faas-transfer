@@ -82,7 +82,12 @@ export default function SettingsScreen() {
             <View style={styles.backgroundGlow} pointerEvents="none" />
 
             <View style={styles.contentWrapper}>
-                <Pressable style={styles.backButton} onPress={() => router.push('/')}>
+                <Pressable 
+                    style={({ pressed, hovered }: any) => [
+                        styles.backButton,
+                        (pressed || hovered) && styles.backButtonHovered
+                    ]}
+                    onPress={() => router.push('/')}>
                     <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
                     <Text style={styles.backButtonText}>Accueil</Text>
                 </Pressable>
@@ -100,9 +105,10 @@ export default function SettingsScreen() {
                             {LANGUAGES.map((lang) => (
                                 <Pressable
                                     key={lang.id}
-                                    style={[
+                                    style={({ pressed, hovered }: any) => [
                                         styles.optionCard,
                                         language === lang.id && styles.optionCardActive,
+                                        (pressed || hovered) && styles.optionCardHovered,
                                     ]}
                                     onPress={() => {
                                         setLanguage(lang.id);
@@ -129,9 +135,10 @@ export default function SettingsScreen() {
                             {EXPIRATION_OPTIONS.map((option) => (
                                 <Pressable
                                     key={option.id}
-                                    style={[
+                                    style={({ pressed, hovered }: any) => [
                                         styles.optionCard,
                                         expiration === option.id && styles.optionCardActive,
+                                        (pressed || hovered) && styles.optionCardHovered,
                                     ]}
                                     onPress={() => {
                                         setExpiration(option.id);
@@ -158,9 +165,10 @@ export default function SettingsScreen() {
                             {QUALITY_OPTIONS.map((option) => (
                                 <Pressable
                                     key={option.id}
-                                    style={[
+                                    style={({ pressed, hovered }: any) => [
                                         styles.optionCard,
                                         quality === option.id && styles.optionCardActive,
+                                        (pressed || hovered) && styles.optionCardHovered,
                                     ]}
                                     onPress={() => {
                                         setQuality(option.id);
@@ -187,7 +195,12 @@ export default function SettingsScreen() {
                         {/* ── Danger zone ── */}
                         <View style={styles.dangerZone}>
                             <Text style={styles.sectionTitleDanger}>Zone de danger</Text>
-                            <Pressable style={styles.dangerButton} onPress={clearHistory}>
+                            <Pressable 
+                                style={({ pressed, hovered }: any) => [
+                                    styles.dangerButton,
+                                    (pressed || hovered) && styles.dangerButtonHovered
+                                ]}
+                                onPress={clearHistory}>
                                 <View style={styles.dangerIconContainer}>
                                     <Ionicons name="trash-outline" size={20} color="#EF4444" />
                                 </View>
@@ -252,6 +265,17 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         borderWidth: 1,
         borderColor: '#1F232D',
+        transitionDuration: '0.2s',
+    },
+
+    backButtonHovered: {
+        backgroundColor: '#1E2433',
+        borderColor: '#3B82F6',
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        transform: [{ translateY: -1 }],
     },
 
     backButtonText: {
@@ -310,6 +334,17 @@ const styles = StyleSheet.create({
         padding: 18,
         borderWidth: 1,
         borderColor: '#1F232D',
+        transitionDuration: '0.2s',
+    },
+
+    optionCardHovered: {
+        backgroundColor: '#1E2433',
+        borderColor: '#3B82F6',
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        transform: [{ translateY: -1 }],
     },
 
     optionCardActive: {
@@ -357,6 +392,17 @@ const styles = StyleSheet.create({
         padding: 16,
         borderWidth: 1,
         borderColor: 'rgba(239, 68, 68, 0.2)',
+        transitionDuration: '0.2s',
+    },
+    
+    dangerButtonHovered: {
+        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+        borderColor: '#EF4444',
+        shadowColor: '#EF4444',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        transform: [{ translateY: -1 }],
     },
     
     dangerIconContainer: {
