@@ -1,4 +1,4 @@
-/**
+﻿/**
  * app/receive.tsx
  *
  * Écran de réception de fichiers.
@@ -23,6 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import ActionCard from '../components/ActionCard'; // ✅ IMPORT DU NOUVEAU COMPOSANT
 
 // Adresse du serveur
 const SERVER_URL = 'https://faas-transfer-production.up.railway.app';
@@ -118,7 +119,7 @@ export default function ReceiveScreen() {
 
                 {/* Bouton retour vers l'accueil */}
                 <Pressable style={styles.backButton} onPress={() => router.push('/')}>
-                    <Ionicons name="arrow-back-outline" size={20} color="#aaaaaa" />
+                    <Ionicons name="arrow-back-outline" size={20} color="#ffffff" />
                     <Text style={styles.backButtonText}>Accueil</Text>
                 </Pressable>
 
@@ -127,33 +128,23 @@ export default function ReceiveScreen() {
 
                 <View style={styles.choicesContainer}>
 
+                    {/* ✅ UTILISATION DE NOTRE COMPOSANT RÉUTILISABLE ActionCard ! */}
+                    
                     {/* Option 1 — Scanner le QR code */}
-                    <Pressable
-                        style={({ pressed }) => [
-                            styles.choiceCard,
-                            pressed && styles.choiceCardPressed,
-                        ]}
-                        onPress={openScanner}>
-                        <Ionicons name="qr-code-outline" size={48} color="#4a9eff" />
-                        <Text style={styles.choiceLabel}>Scanner un QR code</Text>
-                        <Text style={styles.choiceDescription}>
-                            Scannez le QR code affiché sur l'écran de l'envoyeur
-                        </Text>
-                    </Pressable>
+                    <ActionCard 
+                        icon="qr-code-outline" 
+                        title="Scanner un QR code" 
+                        description="Scannez le QR code affiché sur l'écran de l'envoyeur" 
+                        onPress={openScanner} 
+                    />
 
                     {/* Option 2 — Entrer le lien manuellement */}
-                    <Pressable
-                        style={({ pressed }) => [
-                            styles.choiceCard,
-                            pressed && styles.choiceCardPressed,
-                        ]}
-                        onPress={() => setStep('manual')}>
-                        <Ionicons name="link-outline" size={48} color="#4a9eff" />
-                        <Text style={styles.choiceLabel}>Entrer le lien</Text>
-                        <Text style={styles.choiceDescription}>
-                            Collez le lien reçu par message ou email
-                        </Text>
-                    </Pressable>
+                    <ActionCard 
+                        icon="link-outline" 
+                        title="Entrer le lien" 
+                        description="Collez le lien reçu par message ou email" 
+                        onPress={() => setStep('manual')} 
+                    />
 
                 </View>
 
@@ -168,7 +159,7 @@ export default function ReceiveScreen() {
 
                 {/* Bouton retour */}
                 <Pressable style={styles.backButton} onPress={() => setStep('choice')}>
-                    <Ionicons name="arrow-back-outline" size={20} color="#aaaaaa" />
+                    <Ionicons name="arrow-back-outline" size={20} color="#ffffff" />
                     <Text style={styles.backButtonText}>Retour</Text>
                 </Pressable>
 
@@ -202,7 +193,7 @@ export default function ReceiveScreen() {
 
                 {/* Bouton retour */}
                 <Pressable style={styles.backButton} onPress={() => setStep('choice')}>
-                    <Ionicons name="arrow-back-outline" size={20} color="#aaaaaa" />
+                    <Ionicons name="arrow-back-outline" size={20} color="#ffffff" />
                     <Text style={styles.backButtonText}>Retour</Text>
                 </Pressable>
 
@@ -296,7 +287,9 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#0a0a0a',
-        padding: 20,
+        padding: 32,
+        justifyContent: 'center',
+        alignItems: 'center'
     },
 
     // Bouton retour en haut à gauche
@@ -304,63 +297,53 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        alignSelf: 'flex-start',
-        marginBottom: 16,
+        position: 'absolute',       // ← positionné en absolu en haut
+        top: 24,
+        left: 24,
     },
 
     backButtonText: {
-        color: '#aaaaaa',
-        fontSize: 14,
+        color: '#ffffff',
+        fontSize: 22,
+        fontWeight: '600',
     },
 
     title: {
-        fontSize: 24,
+        fontSize: 28,
         fontWeight: 'bold',
         color: '#ffffff',
-        marginBottom: 4,
+        marginBottom: 6,
+        textAlign: 'center',
+        marginTop: 60, // ← S'applique désormais à tous les écrans !
+        // Effet de lueur (Glow)
+        textShadowColor: 'rgba(74, 158, 255, 0.4)',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 10,
     },
 
     subtitle: {
-        fontSize: 14,
+        fontSize: 15,
         color: '#666666',
-        marginBottom: 24,
+        marginBottom: 32,
+        textAlign: 'center',
+        marginTop: 4, // ← Appliqué ici
     },
 
     // Conteneur des deux choix
     choicesContainer: {
-        gap: 16,
         flex: 1,
         justifyContent: 'center',
+        gap: 16,
+        maxWidth: 700,
+        width: '100%',
+        alignSelf: 'center',
     },
 
-    // Carte de choix
-    choiceCard: {
-        backgroundColor: '#1a1a1a',
-        borderRadius: 20,
-        padding: 32,
-        alignItems: 'center',
-        gap: 12,
-        borderWidth: 1,
-        borderColor: '#222222',
-    },
-
-    choiceCardPressed: {
-        backgroundColor: '#222222',
-        borderColor: '#4a9eff',
-    },
-
-    choiceLabel: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#ffffff',
-    },
-
-    choiceDescription: {
-        fontSize: 13,
-        color: '#666666',
-        textAlign: 'center',
-        lineHeight: 20,
-    },
+    // 🧹 MÉNAGE FAIT PAR VOTRE MENTOR : 
+    // Les styles choiceCard, choiceCardPressed, iconWrapper, choiceLabel 
+    // et choiceDescription ont été supprimés d'ici ! 
+    // Ils vivent maintenant au chaud dans src/components/ActionCard.tsx. 
+    // Regardez comme le fichier est plus propre !
 
     // Caméra pour scanner le QR code
     cameraContainer: {
@@ -475,6 +458,12 @@ const styles = StyleSheet.create({
         color: '#666666',
         textAlign: 'center',
         lineHeight: 20,
+    },
+
+    hero: {
+        alignItems: 'center',
+        marginTop: 100,
+        marginBottom: 20,
     },
 
 });

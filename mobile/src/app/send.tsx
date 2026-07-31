@@ -26,6 +26,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import ActionCard from '../components/ActionCard';
 
 // On importe AsyncStorage pour sauvegarder l'historique des envois
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -313,16 +314,15 @@ export default function SendScreen() {
                 <Text style={styles.subtitle}>Choisissez une catégorie</Text>
                 <View style={styles.categoriesGrid}>
                     {CATEGORIES.map((cat) => (
-                        <Pressable
+                        <ActionCard
                             key={cat.id}
-                            style={({ pressed }) => [
-                                styles.categoryCard,
-                                pressed && styles.categoryCardPressed,
-                            ]}
-                            onPress={() => pickFile(cat.mimeTypes)}>
-                            <Ionicons name={cat.icon as any} size={28} color="#4a9eff" />
-                            <Text style={styles.categoryLabel}>{cat.label}</Text>
-                        </Pressable>
+                            title={cat.label}
+                            description="" // Pas de description pour les catégories
+                            icon={cat.icon as any}
+                            onPress={() => pickFile(cat.mimeTypes)}
+                            style={styles.categoryCard} // On garde votre largeur de 260px
+                            compact={true} // On utilise le mode réduit !
+                        />
                     ))}
                 </View>
             </View>
@@ -473,28 +473,11 @@ const styles = StyleSheet.create({
         width: '100%',
     },
 
+    // On ne garde que la largeur pour forcer les cartes à s'aligner sur 2 colonnes
     categoryCard: {
-        width: 260,          // ← largeur fixe en pixels au lieu de %
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-        backgroundColor: '#141414',
-        borderRadius: 14,
-        padding: 18,
-        borderWidth: 1,
-        borderColor: '#1e1e1e',
+        width: 260,
     },
-
-    categoryCardPressed: {
-        backgroundColor: '#1a2a3a',
-        borderColor: '#4a9eff',
-    },
-
-    categoryLabel: {
-        color: '#ffffff',
-        fontSize: 15,
-        fontWeight: '500',
-    },
+    // 🧹 MÉNAGE : Les styles internes (pressé, label, etc.) sont maintenant gérés par ActionCard !
 
     // Centrage du contenu pour l'étape upload
     centerContent: {

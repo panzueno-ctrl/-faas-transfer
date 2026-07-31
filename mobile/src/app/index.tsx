@@ -18,6 +18,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
+import ActionCard from '../components/ActionCard';
+import LogoFaaS from '../components/LogoFaaS';
 
 // On détecte la largeur de l'écran pour adapter la navigation
 // isTablet = true si l'écran est >= 768px (tablette ou desktop)
@@ -86,9 +89,10 @@ export default function HomeScreen() {
                   <Ionicons name="close-outline" size={24} color="#ffffff" />
                 </Pressable>
 
-                {/* Logo F */}
+                {/* Logo FaaS */}
                 <View style={styles.logoContainer}>
-                  <Text style={styles.logoText}>F</Text>
+                  <LogoFaaS size={50} showBackground={true} />
+                  <Text style={styles.logoText}>FaaS</Text>
                 </View>
 
                 {/* MENU  */}
@@ -103,7 +107,7 @@ export default function HomeScreen() {
                       pressed && styles.menuItemHovered,
                     ]}
                     onPress={() => router.push(item.route as any)}>
-                    <Ionicons name={item.icon as any} size={22} color="#4a9eff" />
+                    <Ionicons name={item.icon as any} size={24} color="#4a9eff" />
                     <Text style={styles.menuLabel}>{item.label}</Text>
                   </Pressable>
                 ))}
@@ -114,16 +118,21 @@ export default function HomeScreen() {
         )}
 
         {/* ── Contenu principal ── */}
-        <ScrollView
-          style={styles.main}
-          contentContainerStyle={styles.mainContent}
-          showsVerticalScrollIndicator={false}>
+        <View style={styles.mainWrapper}>
+          
+          {/* Effet d'orbe / arc lumineux (Le fameux cercle !) */}
+          <View style={styles.backgroundGlow} pointerEvents="none" />
+
+          <ScrollView
+            style={styles.main}
+            contentContainerStyle={styles.mainContent}
+            showsVerticalScrollIndicator={false}>
 
           {isTablet && !sidebarOpen && (
             <Pressable
               style={styles.openSidebar}
               onPress={() => setSidebarOpen(true)}>
-              <Ionicons name="menu-outline" size={24} color="#ffffff" />
+              <Ionicons name="menu-outline" size={32} color="#4a9eff" />
             </Pressable>
           )}
 
@@ -132,40 +141,33 @@ export default function HomeScreen() {
             <Pressable
               style={styles.hamburgerButton}
               onPress={() => setMenuOpen(true)}>
-              <Ionicons name="menu-outline" size={35} color="#4a9eff" />
+              <Ionicons name="menu-outline" size={32} color="#4a9eff" />
             </Pressable>
           )}
 
           {/* ── Titre de l'app ── */}
           <View style={styles.hero}>
-            <Text style={styles.appName}>FaaS</Text>
-            <Text style={styles.appNameAccent}>Transfer</Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.appName}>FaaS</Text>
+              <Text style={styles.appNameAccent}>Transfer</Text>
+            </View>
             <Text style={styles.appTagline}>
-              Transférez et convertissez{'\n'}vos fichiers sans limites
+              La manière la plus simple et sécurisée de transférer vos fichiers.
             </Text>
           </View>
 
           {/* ── Actions rapides ── */}
           <View style={styles.actionsGrid}>
             {QUICK_ACTIONS.map((action) => (
-              <Pressable
+              <ActionCard
                 key={action.route}
-                style={({ pressed }) => [
-                  styles.actionCard,
-                  pressed && styles.actionCardPressed,
-                ]}
-                onPress={() => router.push(action.route as any)}>
-
-                {/* Icône de l'action */}
-                <Ionicons name={action.icon as any} size={26} color={action.color} />
-
-                {/* Titre et description */}
-                <View style={styles.actionTextContainer}>
-                  <Text style={styles.actionTitle}>{action.title}</Text>
-                  <Text style={styles.actionDescription}>{action.description}</Text>
-                </View>
-
-              </Pressable>
+                icon={action.icon as any}
+                title={action.title}
+                description={action.description}
+                onPress={() => router.push(action.route as any)}
+                style={styles.actionCard} // Garde la largeur de 30% pour la grille
+                compact={true} // Active le mode réduit (Option A) !
+              />
             ))}
           </View>
 
@@ -195,7 +197,8 @@ export default function HomeScreen() {
 
           </View>
 
-        </ScrollView>
+          </ScrollView>
+        </View>
 
       </View>
 
@@ -238,7 +241,7 @@ const styles = StyleSheet.create({
   // Conteneur principal
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0aff',
+    backgroundColor: '#0B0C10', // Deep Midnight
   },
 
   // Layout principal — sidebar + contenu
@@ -249,88 +252,107 @@ const styles = StyleSheet.create({
 
   // ── Sidebar gauche ──
   sidebar: {
-    width: 140,
-    backgroundColor: '#111111',
-    paddingTop: 24,
-    paddingHorizontal: 16,
+    width: 260, // Plus large pour une vraie barre de navigation desktop
+    backgroundColor: '#060709', // Pitch black pour la profondeur
+    paddingTop: 32,
+    paddingHorizontal: 20,
     paddingBottom: 24,
     borderRightWidth: 1,
-    borderRightColor: '#1a1a1a',
+    borderRightColor: '#1A1D24', // Bordure subtile
     justifyContent: 'flex-start',
     gap: 0,
   },
 
   logoContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#1a3a6a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 40,
+    paddingHorizontal: 8,
+  },
+
+  logoIconWrapper: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#4a9eff',
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'center',   // ← centré
-    marginBottom: 20,
-    borderWidth: 2,
-    borderColor: '#4a9eff44',
+    shadowColor: '#4a9eff',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
 
   logoText: {
-    color: '#4a9eff',
-    fontSize: 28,
-    fontWeight: '900',
-  },
-
-  // Label MENU en haut de la sidebar
-  sidebarTitle: {
     color: '#ffffff',
-    fontSize: 11,
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: -1,
+  },
+
+  sidebarTitle: {
+    color: '#666666',
+    fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 3,
-    marginBottom: 20,      // ← espace sous MENU avant les icônes
-    paddingHorizontal: 4,
-    textAlign: 'center',   // ← centré
+    letterSpacing: 2,
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    textAlign: 'left',
   },
 
-  menuLines: {
-    gap: 4,
-    width: 32,          // ← largeur fixe au lieu de paddingHorizontal
-    marginBottom: 28,
-  },
-
-  menuLine: {
-    height: 2,
-    backgroundColor: '#333333',
-    borderRadius: 2,
-  },
-
-  // Item de navigation
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    gap: 10,
-    marginBottom: 4,       // ← petit espace entre chaque item
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 14,
+    marginBottom: 8,
   },
 
   menuItemHovered: {
     backgroundColor: '#1a2a3a',
   },
 
-  // Item pressé — feedback visuel
   menuItemPressed: {
     backgroundColor: '#1a1a1a',
   },
 
   menuLabel: {
     color: '#ffffff',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '500',
   },
 
   // ── Contenu principal ──
+  mainWrapper: {
+    flex: 1,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+
+  backgroundGlow: {
+    position: 'absolute',
+    top: -150,
+    left: '50%',
+    transform: [
+      { translateX: -400 } // centrer l'orbe de 800px
+    ],
+    width: 800,
+    height: 800,
+    borderRadius: 400,
+    backgroundColor: 'rgba(59, 130, 246, 0.03)', // Electric Blue tint
+    shadowColor: '#3B82F6', // Vibrant Electric Blue glow
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 120,
+    zIndex: 0,
+  },
+
   main: {
     flex: 1,
+    zIndex: 1,
   },
 
   mainContent: {
@@ -344,47 +366,50 @@ const styles = StyleSheet.create({
 
   // Bouton hamburger sur mobile
   hamburgerButton: {
-    alignSelf: 'flex-start',
-    padding: 8,
-    borderRadius: 10,
-    backgroundColor: '#1a1a1a',
-    marginBottom: 4,
+    position: 'absolute',
+    top: 24,
+    left: 24,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(74, 158, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: '#4a9eff44',
+    zIndex: 10,
   },
 
   // ── Hero section ──
   hero: {
     alignItems: 'center',
-    gap: 2,
+    gap: 16,
+    marginBottom: 40,
+    marginTop: 20,
+  },
+
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
 
   appName: {
-    fontSize: 56,
+    fontSize: 64,
     fontWeight: '900',
     color: '#ffffff',
     letterSpacing: -2,
-    textShadowColor: 'rgba(255,255,255,0.3)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 20,   // ← halo blanc autour de FaaS
   },
 
-  // "Transfer" en bleu
   appNameAccent: {
-    fontSize: 56,
+    fontSize: 64,
     fontWeight: '900',
-    color: '#4a9eff',
+    color: '#3B82F6', // Electric Blue
     letterSpacing: -2,
-    marginTop: -8,
-    textShadowColor: 'rgba(74,158,255,0.6)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 25,   // ← halo bleu autour de Transfer
   },
 
   appTagline: {
-    fontSize: 15,
-    color: '#444444',
+    fontSize: 18,
+    color: '#94A3B8', // Slate 400
     textAlign: 'center',
-    lineHeight: 20,
-    marginTop: 10,
+    fontWeight: '500',
   },
 
   // ── Grille des actions rapides ──
@@ -396,100 +421,76 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Card d'action rapide
+  // Card d'action rapide (on ne garde QUE la largeur pour la grille)
   actionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: '#141414',
-    borderRadius: 14,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#1e1e1e',
     width: '30%',
     minWidth: 160,
     maxWidth: 300,
   },
-
-  // Card pressée — légère mise en surbrillance
-  actionCardPressed: {
-    backgroundColor: '#1a2a3a',
-    borderColor: '#4a9eff',
-    transform: [{ scale: 1.02 }],
-  },
-
-  actionTextContainer: {
-    flex: 1,
-    gap: 3,
-  },
-
-  actionTitle: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-
-  actionDescription: {
-    color: '#555555',
-    fontSize: 14,
-    lineHeight: 18,
-  },
+  // 🧹 MÉNAGE: L'intérieur de la carte est géré par ActionCard.tsx !
 
   // ── Section bienvenue ──
   welcomeContainer: {
-    width: '85%',
-    maxWidth: 1900,
-    backgroundColor: '#111111',
-    borderRadius: 16,
-    padding: 32,
+    width: '100%',
+    maxWidth: 900,
+    backgroundColor: '#13151A', // Premium Gunmetal
+    borderRadius: 24,
+    paddingVertical: 50,
+    paddingHorizontal: 40,
     alignItems: 'center',
-    gap: 12,
+    alignSelf: 'center',
+    marginTop: 40,
+    gap: 16,
     borderWidth: 1,
-    borderColor: '#1a1a1a',
+    borderColor: '#1F232D', // Subtle border
+    borderTopColor: 'rgba(59, 130, 246, 0.4)', // Electric blue glow
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.6,
+    shadowRadius: 30,
   },
 
   welcomeIcon: {
     width: 92,
     height: 92,
     borderRadius: 20,
-    backgroundColor: '#0a1a2a',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#4a9eff22',
+    borderColor: 'rgba(59, 130, 246, 0.2)',
     marginBottom: 4,
   },
 
   welcomeTitle: {
-    fontSize: 25,
-    fontWeight: '700',
-    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#F8FAFC',
   },
 
   welcomeSubtitle: {
-    fontSize: 15,
-    color: '#444444',
+    fontSize: 16,
+    color: '#94A3B8',
     textAlign: 'center',
+    marginBottom: 16,
   },
 
   // Bouton CTA principal
   ctaButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#1a2a3a',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    marginTop: 8,
+    backgroundColor: '#1E2433', // Fond interactif
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 10,
     borderWidth: 1,
-    borderColor: '#4a9eff44',
+    borderColor: 'rgba(59, 130, 246, 0.3)',
   },
 
   // CTA pressé
   ctaButtonPressed: {
-    backgroundColor: '#1e3a5a',
-    borderColor: '#4a9eff',
+    backgroundColor: '#3B82F6', // Couleur primaire
   },
 
   ctaButtonText: {
@@ -527,11 +528,15 @@ const styles = StyleSheet.create({
   },
 
   openSidebar: {
-    alignSelf: 'flex-start',
-    padding: 8,
-    borderRadius: 10,
-    backgroundColor: '#1a1a1a',
-    margin: 16,
+    position: 'absolute',
+    top: 32,
+    left: 32,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(74, 158, 255, 0.05)', // Fond transparent bleuté
+    borderWidth: 1,
+    borderColor: '#4a9eff44',
+    zIndex: 10,
   },
 
   sidebarClosed: {

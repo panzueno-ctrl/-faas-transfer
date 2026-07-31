@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
+import ActionCard from '../components/ActionCard';
 
 // Adresse du serveur
 const SERVER_URL = 'http://localhost:3000';
@@ -288,16 +289,15 @@ export default function ConvertScreen() {
                     <Text style={styles.groupTitle}>Convertissez votre fichier</Text>
                     <View style={styles.grid}>
                         {CONVERSIONS.map((service) => (
-                            <Pressable
+                            <ActionCard
                                 key={service.id}
-                                style={({ pressed }) => [
-                                    styles.serviceCard,
-                                    pressed && styles.serviceCardPressed,
-                                ]}
-                                onPress={() => handleServicePress(service)}>
-                                <Ionicons name={service.icon as any} size={28} color="#4a9eff" />
-                                <Text style={styles.serviceLabel}>{service.label}</Text>
-                            </Pressable>
+                                title={service.label}
+                                description=""
+                                icon={service.icon as any}
+                                onPress={() => handleServicePress(service)}
+                                style={styles.serviceCard}
+                                compact={true}
+                            />
                         ))}
                     </View>
 
@@ -305,16 +305,15 @@ export default function ConvertScreen() {
                     <Text style={styles.groupTitle}>Traitez votre fichier</Text>
                     <View style={styles.grid}>
                         {PDF_TOOLS.map((service) => (
-                            <Pressable
+                            <ActionCard
                                 key={service.id}
-                                style={({ pressed }) => [
-                                    styles.serviceCard,
-                                    pressed && styles.serviceCardPressed,
-                                ]}
-                                onPress={() => handleServicePress(service)}>
-                                <Ionicons name={service.icon as any} size={28} color="#4a9eff" />
-                                <Text style={styles.serviceLabel}>{service.label}</Text>
-                            </Pressable>
+                                title={service.label}
+                                description=""
+                                icon={service.icon as any}
+                                onPress={() => handleServicePress(service)}
+                                style={styles.serviceCard}
+                                compact={true}
+                            />
                         ))}
                     </View>
 
@@ -407,28 +406,12 @@ const styles = StyleSheet.create({
         marginBottom: 24,
     },
 
+    // Largeur ajustée pour l'ActionCard (passage en 2 colonnes au lieu de 3 sur mobile)
     serviceCard: {
-        width: '30%',
-        backgroundColor: '#1a1a1a',
-        borderRadius: 14,
-        padding: 16,
-        alignItems: 'center',
-        gap: 8,
-        borderWidth: 1,
-        borderColor: '#222222',
+        width: '48%',
+        minWidth: 160,
     },
-
-    serviceCardPressed: {
-        backgroundColor: '#222222',
-        borderColor: '#4a9eff',
-    },
-
-    serviceLabel: {
-        color: '#ffffff',
-        fontSize: 11,
-        fontWeight: '500',
-        textAlign: 'center',
-    },
+    // 🧹 MÉNAGE : Les autres styles (pressé, label) sont gérés par ActionCard.tsx !
 
     centerContent: {
         flex: 1,
