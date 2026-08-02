@@ -25,7 +25,7 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import ActionCard from '../components/ActionCard';
 
-const SERVER_URL = 'https://faas-transfer-production.up.railway.app';
+const SERVER_URL = 'https://-faas-transfer.onrender.com';
 
 export default function ReceiveScreen() {
     const router = useRouter();
