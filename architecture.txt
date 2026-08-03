@@ -268,8 +268,19 @@ Tab bar (barre en bas)
 
   C. PROCÉDURE DE MISE EN LIGNE (GOOGLE SEARCH CONSOLE)
   ─────────────────────────────────────────────────────────
-  Une fois les fichiers déployés sur Vercel :
-  1. Aller sur Google Search Console.
-  2. Ajouter la propriété (l'URL Vercel ou le domaine final).
-  3. Soumettre le lien direct vers le sitemap (ex: /sitemap.xml).
-  4. Google viendra lire le sitemap et référencera le site en quelques jours.
+  Une fois les balises meta et le sitemap créés, voici les étapes pour 
+  forcer Google à référencer l'application (à faire soi-même sur le web) :
+  
+  1. Se connecter à Google Search Console : https://search.google.com/search-console
+  2. Ajouter une propriété via "Préfixe de l'URL" (ex: https://faas-transfer.vercel.app).
+  3. Valider la propriété avec la méthode "Balise HTML" :
+     - Copier la balise `<meta name="google-site-verification" content="..." />`
+     - La coller dans le `<Head>` du fichier `_layout.tsx`.
+     - Faire un `git commit` et un `git push`.
+     - Attendre le déploiement sur Vercel (environ 2 minutes).
+     - Cliquer sur le bouton "VALIDER" sur Google Search Console.
+  4. Une fois validé en vert, aller dans le menu "Sitemaps" (à gauche).
+  5. Entrer `sitemap.xml` et cliquer sur "Envoyer".
+  
+  Résultat : Google scanne officiellement le site et l'affiche dans ses 
+  recherches dans les jours qui suivent.
