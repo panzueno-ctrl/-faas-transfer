@@ -1,104 +1,182 @@
 ============================================================
   FAAS — FILE AS A SERVICE
-  Architecture V1
+  Documentation Technique & Architecture V1
+============================================================
+
+============================================================
+  1. ARCHITECTURE DES DOSSIERS
 ============================================================
 
 project/
 │
-├── server/                                    → Backend Node.js + Express
+├── server/                                    → Backend Node.js + Express (Hébergé sur Render)
 │   │
-│   ├── index.js                               → Point d'entrée du serveur
+│   ├── index.js                               → Point d'entrée principal du serveur
+│   ├── package.json                           → Dépendances backend et scripts (node >= 20.0.0)
+│   ├── package-lock.json                      → Verrouillage des versions des dépendances
+│   ├── railway.json                           → Ancienne config de déploiement (peut être supprimé)
+│   ├── .env                                   → Variables secrètes (clés Supabase) - Ignoré sur Git
+│   ├── .gitignore                             → Fichiers à ignorer par Git (ex: node_modules, .env)
 │   │
-│   ├── routes/                                → Endpoints de l'API
-│   │   ├── upload.js                          → POST /upload
-│   │   ├── download.js                        → GET /download/:id
-│   │   ├── convert.js                         → POST /convert/*
-│   │   └── expire.js                          → DELETE /expire/:id
+│   ├── config/
+│   │   └── env.js                             → Validation et export des variables d'environnement
 │   │
-│   ├── middlewares/                           → Logique intermédiaire
-│   │   └── fileHandler.js                     → Validation des fichiers
+│   ├── routes/                                → Routes de l'API Express
+│   │   ├── upload.js                          → [POST] /upload : Réception et stockage dans Supabase
+│   │   ├── download.js                        → [GET] /download/:id : Récupération du fichier
+│   │   ├── convert.js                         → [POST] /convert/* : Routes de conversion de fichiers
+│   │   └── expire.js                          → [DELETE] /expire/:id : Suppression manuelle
 │   │
-│   ├── services/                              → Logique métier
-│   │   ├── supabase.js                        → Connexion et opérations Supabase
-│   │   ├── converter.js                       → Logique de conversion .pages/.key → PDF
-│   │   └── cleanup.js                         → Job automatique nettoyage fichiers expirés
+│   ├── middlewares/
+│   │   └── fileHandler.js                     → Validation de la taille et du type des fichiers
 │   │
-│   └── config/
-│       └── env.js                             → Variables d'environnement
+│   └── services/                              → Logique métier et appels externes
+│       ├── cleanup.js                         → Tâche automatique de nettoyage (fichiers expirés)
+│       ├── converter.js                       → Moteur de conversion (LibreOffice, ImageMagick)
+│       ├── ocr.js                             → Reconnaissance optique de caractères (V2)
+│       ├── pdfLib.js                          → Manipulation avancée de PDF (V2)
+│       └── supabase.js                        → Connexion et client Supabase
 │
-└── mobile/                                    → App React Native + Expo
+└── mobile/                                    → Interface Web & Mobile (Hébergée sur Vercel)
     │
-    ├── src/
-    │   ├── app/                               → Écrans de l'application (Expo Router)
-    │   │   ├── _layout.tsx                    → Layout global + navigation tab bar
-    │   │   ├── index.tsx                      → Écran d'accueil
-    │   │   ├── send.tsx                       → Écran d'envoi de fichier
-    │   │   ├── receive.tsx                    → Écran de réception
-    │   │   ├── convert.tsx                    → Écran de conversion
-    │   │   ├── history.tsx                    → Écran historique
-    │   │   └── settings.tsx                   → Écran paramètres
-    │   │
-    │   ├── components/                        → Composants réutilisables
-    │   │   ├── FileSelector.tsx               → Sélection du fichier depuis le téléphone
-    │   │   ├── QRDisplay.tsx                  → Affichage du QR code
-    │   │   ├── LinkDisplay.tsx                → Affichage + bouton copier le lien
-    │   │   ├── Progress.tsx                   → Barre de progression de l'upload
-    │   │   ├── animated-icon.module.css       → styles CSS pour l'animation de l'icône
-    │   │   ├── animated-icon.tsx              → icône animée (splash screen)
-    │   │   ├── animated-icon.web.tsx          → version web de l'icône animée
-    │   │   ├── app-tabs.tsx                   → tab bar navigation (mobile)
-    │   │   ├── app-tabs.web.tsx               → tab bar navigation (web)
-    │   │   ├── external-link.tsx              → composant lien externe
-    │   │   ├── hint-row.tsx                   → composant ligne d'indice/aide
-    │   │   ├── themed-text.tsx                → composant texte avec thème clair/sombre
-    │   │   ├── themed-view.tsx                → composant vue avec thème clair/sombre
-    │   │   ├── web-badge.tsx                  → badge "web" affiché sur la version web
-    │   │   │
-    │   │   ├── ui/
-    │   │   └── collapsible.tsx                → composant accordéon (section dépliable)
-    │   │
-    │   ├── hooks/                             → Hooks générés par Expo
-    │   │   ├── use-color-scheme.ts
-    │   │   └── use-theme.ts
-    │   │
-    │   ├── constants/                         → Constantes globales
-    │   │   └── theme.ts                       → Couleurs et thème de l'app
-    │   │
-    │   └── services/
-    │       └── api.js                         → Appels vers le serveur Express
+    ├── package.json                           → Dépendances frontend et scripts Expo
+    ├── package-lock.json                      → Verrouillage des dépendances frontend
+    ├── app.json                               → Configuration du projet Expo (nom, version, icônes)
+    ├── tsconfig.json                          → Configuration TypeScript
+    ├── expo-env.d.ts                          → Déclarations de types pour Expo
+    ├── .gitignore                             → Fichiers ignorés par Git
     │
-    ├── assets/                                → Images, icônes, polices
-    ├── app.json                               → Configuration Expo
-    └── package.json
+    ├── src/                                   → Code source de l'application
+    │   ├── app/                               → Pages de l'application (Expo Router)
+    │   │   ├── _layout.tsx                    → Layout global, gestion de la navigation Tab Bar
+    │   │   ├── index.tsx                      → Page d'accueil (Bouton central d'Action)
+    │   │   ├── send.tsx                       → Flux d'envoi de fichier (Sélection, Upload, QR Code)
+    │   │   ├── receive.tsx                    → Flux de réception (Scanner, Entrer code, Lien)
+    │   │   ├── convert.tsx                    → Interface de conversion de fichiers
+    │   │   ├── history.tsx                    → Liste de l'historique des transferts locaux
+    │   │   ├── settings.tsx                   → Configuration de l'app (Thème, Purge historique)
+    │   │   └── explore.tsx                    → Page d'exploration secondaire
+    │   │
+    │   ├── components/                        → Composants réutilisables de l'interface
+    │   │   ├── ActionCard.tsx                 → Carte de menu interactive (Effets Hover/Press)
+    │   │   ├── LogoFaaS.tsx                   → Composant affichant le logo
+    │   │   ├── app-tabs.tsx / .web.tsx        → Barre de navigation inférieure (Mobile / Web)
+    │   │   ├── animated-icon.tsx / .web.tsx   → Icône animée interactive (Splash / Accueil)
+    │   │   ├── external-link.tsx              → Composant gérant les liens sortants
+    │   │   ├── hint-row.tsx                   → Ligne d'indice et d'aide contextuelle
+    │   │   ├── themed-text.tsx                → Texte adaptatif (Mode Clair/Sombre)
+    │   │   ├── themed-view.tsx                → Vue adaptative (Mode Clair/Sombre)
+    │   │   ├── web-badge.tsx                  → Badge affiché spécifiquement sur le web
+    │   │   └── ui/
+    │   │       └── collapsible.tsx            → Composant accordéon pour les sections dépliables
+    │   │
+    │   ├── constants/
+    │   │   └── theme.ts                       → Définition des couleurs (Primaire, Danger, Textes)
+    │   │
+    │   ├── hooks/                             → Hooks personnalisés
+    │   │   ├── use-theme.ts                   → Gestion du thème de l'utilisateur
+    │   │   └── use-color-scheme.ts / .web.ts  → Détection du mode clair/sombre de l'OS
+    │   │
+    │   ├── services/
+    │   │   └── api.js                         → Appels Axios vers le backend Render
+    │   │
+    │   └── global.css                         → Styles globaux (Tailwind / NativeWind)
+    │
+    ├── assets/                                → Médias statiques (Icônes, Favicon, Images)
+    └── scripts/                               → Scripts utilitaires (ex: reset-project.js)
 
 
 ============================================================
-  API ENDPOINTS
+  2. STACK TECHNOLOGIQUE ET HÉBERGEMENT (GOLDEN STACK)
 ============================================================
 
-  TRANSFERT
+🌐 Frontend (Interface) : Vercel
+   - Rôle : Héberge l'application web/mobile compilée (React Native Web / Expo).
+   - Pourquoi : C'est le meilleur CDN mondial. Le site se charge instantanément n'importe où.
+   - Limites (Plan Gratuit) : 100 Go de bande passante par mois. Largement suffisant pour l'interface.
+   - NB : Déploiement automatique à chaque `git push` sur la branche main de GitHub.
+
+⚙️ Backend (Serveur) : Render (Remplacement de Railway)
+   - Rôle : Héberge le serveur Node.js / Express qui gère l'API (upload, download, conversions).
+   - Pourquoi : Plan gratuit qui ne s'arrête pas après quelques jours.
+   - Limites (Plan Gratuit) : 512 Mo de RAM. Le serveur s'endort après 15 min d'inactivité (spin down), ce qui cause un délai de ~50s au premier chargement de la journée (cold start).
+   - NB : Bien surveiller la consommation de RAM lors des conversions de gros fichiers.
+
+🗄️ Base de données & Stockage : Supabase
+   - Rôle : PostgreSQL pour stocker les métadonnées (table `transfers`), et Buckets pour les fichiers.
+   - Pourquoi : L'alternative backend-as-a-service gratuite la plus puissante du marché.
+   - Limites (Plan Gratuit) : 500 Mo de base de données. Stockage de fichiers de 1 Go.
+   - NB : Le stockage limité (1 Go) justifie l'importance de notre suppression automatique (cron/fin de download). Si le quota est atteint, l'application crashera lors des uploads.
+
+💾 Code source : GitHub
+   - Rôle : Versionnement (Git) et sauvegarde du code.
+   - Pourquoi : Indispensable pour l'intégration continue (CI/CD) avec Vercel et Render.
+   - Limites (Plan Gratuit) : Quasi illimité pour notre usage.
+   - NB : Les variables d'environnement (clés secrètes) ne doivent JAMAIS y être poussées. C'est à ça que sert le `.env` (ignoré grâce au `.gitignore`).
+
+
+============================================================
+  3. STRUCTURE DE L'APPLICATION MOBILE (UI/UX)
+============================================================
+
+Tab bar (barre en bas)
+  ├── 🏠 Accueil
+  │     ├── Actions rapides (📤 Envoyer, 📥 Recevoir, 🔄 Convertir)
+  │     └── Fichiers récents
+  │
+  ├── 📤 Envoyer (En 4 étapes)
+  │     ├── 1. Sélection catégorie (Photos, Audio, Vidéos, Documents, etc.)
+  │     ├── 2. Sélection fichier → Bouton "Envoyer"
+  │     ├── 3. Upload → Barre de progression "Transfert en cours..."
+  │     └── 4. Résultat → QR code + Lien + Code 6 chiffres
+  │
+  ├── 📥 Recevoir (En 3 étapes)
+  │     ├── 1. Choix du mode (Scanner QR, Entrer code, Coller lien)
+  │     ├── 2. Téléchargement → Flèche animée "Téléchargement en cours..."
+  │     └── 3. Résultat → "Téléchargé avec succès"
+  │
+  ├── 🔄 Convertir
+  │     └── Formats : PDF→JPG/PNG/PPTX, JPG/PNG→PDF, Word/Pages/Keynote→PDF
+  │
+  ├── 🕐 Historique
+  │     └── Fichiers envoyés/reçus avec statuts (téléchargé, en attente, expiré)
+  │
+  └── ⚙️ Paramètres
+        └── Langue, Durée d'expiration, Qualité, Suppression d'historique
+
+
+============================================================
+  4. API ENDPOINTS & FLUX COMPLET
+============================================================
+
+  TRANSFERT (Flux End-to-End)
   ─────────────────────────────────────────────────────────
-  POST   /upload            → Reçoit le fichier, stocke dans Supabase,
-                              retourne un id unique + lien + code 6 chiffres
+  POST /upload
+  1. Le client envoie le fichier (après une éventuelle conversion locale).
+  2. Le serveur stocke le fichier dans Supabase Storage.
+  3. Le serveur crée une entrée dans la table `transfers`.
+  4. Le serveur retourne l'id unique à l'app.
+  5. L'app affiche le QR code / Lien / Code à 6 chiffres.
 
-  GET    /download/:id      → Récupère le fichier depuis Supabase,
-                              déclenche le téléchargement
+  GET /download/:id
+  1. Le destinataire visite le lien ou entre le code.
+  2. Le serveur récupère le fichier depuis Supabase et l'envoie.
+  3. Le fichier est marqué `downloaded = true` et supprimé après 60 secondes.
 
-  DELETE /expire/:id        → Supprime le fichier de Supabase
-                              et les métadonnées de la DB
+  DELETE /expire/:id
+  - Supprime manuellement le fichier de Supabase et de la base de données.
 
-  CONVERSION
+  CONVERSION (Flux End-to-End)
   ─────────────────────────────────────────────────────────
-  POST   /convert/word-to-pdf     → Word (.docx/.doc) → PDF        ✅ V1
-  POST   /convert/pdf-to-image    → PDF → JPG / PNG                ⬜ V1
-  POST   /convert/image-to-pdf    → JPG / PNG → PDF                ⬜ V1
-  POST   /convert/pdf-to-pptx     → PDF → PowerPoint               ⬜ V1
-  POST   /convert/pages-to-pdf    → .pages → PDF (Apple)           ⬜ V2
-  POST   /convert/key-to-pdf      → .key → PDF (Apple Keynote)     ⬜ V2
+  POST /convert/[type]
+  1. L'app envoie le fichier au serveur.
+  2. Le serveur convertit via LibreOffice/ImageMagick/Poppler.
+  3. Le serveur retourne le fichier converti.
+  4. L'app propose de télécharger ou de transférer le fichier directement.
 
 
 ============================================================
-  BASE DE DONNÉES — Supabase
+  5. BASE DE DONNÉES — Supabase (PostgreSQL)
 ============================================================
 
   Table: transfers
@@ -115,339 +193,83 @@ project/
 
 
 ============================================================
-  FLUX COMPLET END-TO-END
+  6. ÉTAT DES FONCTIONNALITÉS & ROADMAP
 ============================================================
 
-  TRANSFERT
+  CONVERSIONS
+  ──────────────────────────────────────────────
+  ✅ PDF ↔ Word        (LibreOffice)
+  ✅ PDF → Image       (poppler-utils)
+  ✅ Image → PDF       (ImageMagick)
+  ✅ PDF → PowerPoint  (pptx→pdf fait)
+  ⬜ PDF ↔ Excel       (LibreOffice)
+  ⬜ .pages → PDF      (Apple - V2)
+  ⬜ .key → PDF        (Apple Keynote - V2)
+
+  MANIPULATION PDF (V2)
+  ──────────────────────────────────────────────
+  ⬜ Fusionner/Diviser/Extraire (pdf-lib)
+  ⬜ Compresser/Aplatir         (Ghostscript)
+  ⬜ Protéger/Déverrouiller     (pdf-lib)
+  ⬜ Signer/Biffer              (pdf-lib)
+
+  AVANCÉ (V2)
+  ──────────────────────────────────────────────
+  ⬜ PDF OCR                    (Tesseract)
+  ⬜ Résumer/Traduire/Discuter  (IA - Claude API)
+
+
+============================================================
+  7. HISTORIQUE DES DÉCISIONS & RÉSOLUTION DE BUGS
+============================================================
+
+  A. Déploiement Initial du Serveur Express
   ─────────────────────────────────────────────────────────
-  1. Sender ouvre l'app → sélectionne un fichier par catégorie
-         ↓
-  2. App propose conversion optionnelle avant envoi
-         ↓
-  3. App envoie POST /upload au serveur Express
-         ↓
-  4. Serveur stocke le fichier dans Supabase Storage
-         ↓
-  5. Serveur crée une entrée dans la table transfers
-         ↓
-  6. Serveur retourne l'id unique à l'app
-         ↓
-  7. App affiche trois options :
-       ├── QR code        → "Scannez si vous êtes proches"
-       ├── Lien           → "Copiez si vous êtes éloignés"
-       └── Code 6 chiffres → "Entrez le code dans l'app"
-         ↓
-  8. Receiver scanne / clique le lien / entre le code
-         ↓
-  9. Navigateur ou app → GET /download/:id
-         ↓
-  10. Serveur récupère le fichier depuis Supabase → téléchargement
-         ↓
-  11. Fichier marqué downloaded = true → suppression après 10s
+  - Objectif : Recevoir fichier HTTP → Supabase Storage → Retourner ID → Download via ID.
+  - Étapes : Structure dossiers → Init Node.js → Config .env → Supabase services → Endpoints → Tests.
 
-  CONVERSION
+  B. Problème de compatibilité Node.js en Production
   ─────────────────────────────────────────────────────────
-  1. Utilisateur sélectionne un fichier dans l'onglet Convertir
-         ↓
-  2. App propose les conversions disponibles selon le type du fichier
-         ↓
-  3. App envoie POST /convert/[type] au serveur
-         ↓
-  4. Serveur convertit via LibreOffice
-         ↓
-  5. Serveur retourne le fichier converti
-         ↓
-  6. App propose de télécharger ou d'envoyer directement
+  - Symptôme : Crash du serveur lors du déploiement initial.
+  - Cause : La plateforme utilisait Node 18 par défaut. `@supabase/supabase-js` récent requiert Node 20 (APIs WebSocket natives).
+  - Solution : Ajout de `"engines": { "node": ">=20.0.0" }` dans `package.json` pour forcer la version.
+
+  C. Problème "Lien expiré ou invalide" après Upload
+  ─────────────────────────────────────────────────────────
+  - Symptôme : Même après un upload réussi, le téléchargement échouait immédiatement.
+  - Cause racine : Le code supprimait la ligne de la base de données PENDANT l'envoi du fichier, et non APRÈS. Les navigateurs faisant souvent deux requêtes HTTP (ex: pré-chargement), la deuxième trouvait la ligne déjà supprimée par la première.
+  - Solution : Utilisation de l'événement `res.on('finish')`. La suppression s'effectue désormais de manière différée (après 60 secondes) garantissant que la réponse HTTP est 100% transmise au client avant le nettoyage.
 
 
 ============================================================
-  STACK TECHNOLOGIQUE
+  8. RÉFÉRENCEMENT NATUREL (SEO) SUR GOOGLE
 ============================================================
 
-  App Mobile   →  React Native + Expo
-  Serveur      →  Node.js + Express (localhost / ngrok pour tests)
-  Stockage     →  Supabase Storage
-  Base données →  Supabase Database (PostgreSQL)
-  Tunnel       →  ngrok (pour tester à distance en développement)
-  Déploiement  →  GitHub + Vercel
-
-
-============================================================
-
-
-CONVERSIONS
-──────────────────────────────────────────────
-PDF ↔ Word        → LibreOffice      ✅ déjà fait
-PDF ↔ Excel       → LibreOffice      ⬜
-PDF ↔ PowerPoint  → LibreOffice      ⬜ (pptx→pdf fait)
-PDF → Image       → poppler-utils    ✅ déjà fait
-Image → PDF       → ImageMagick      ✅ déjà fait
-
-MANIPULATION PDF
-──────────────────────────────────────────────
-Fusionner PDFs    → pdf-lib          ⬜
-Diviser PDF       → pdf-lib          ⬜
-Compresser PDF    → Ghostscript      ⬜
-Extraire pages    → pdf-lib          ⬜
-Supprimer pages   → pdf-lib          ⬜
-Pivoter pages     → pdf-lib          ⬜
-Rogner pages      → pdf-lib          ⬜
-Numéroter pages   → pdf-lib          ⬜
-Filigrane         → pdf-lib          ⬜
-Protéger/chiffrer → pdf-lib          ⬜
-Déverrouiller     → pdf-lib          ⬜
-Aplatir           → Ghostscript      ⬜
-
-ANNOTATIONS / ÉDITION
-──────────────────────────────────────────────
-Annoter           → pdf-lib          ⬜
-Modifier texte    → pdf-lib          ⬜
-Biffer (redact)   → pdf-lib          ⬜
-Signer            → pdf-lib          ⬜
-
-OCR
-──────────────────────────────────────────────
-PDF OCR           → Tesseract        ⬜
-
-AVANCÉ
-──────────────────────────────────────────────
-Résumer PDF       → IA (Claude API)  ⬜ V2
-Traduire PDF      → IA (Claude API)  ⬜ V2
-Discuter avec PDF → IA (Claude API)  ⬜ V2
-Demander signatures → service externe ⬜ V2
-
-============================================================
-
-
-
-
-
-I. Construire le serveur Express
-
-
-============================================================
-
-Parfait. Voilà ce qu'on veut faire et comment on va s'y prendre.
-
-Ce qu'on veut faire aujourd'hui
-Construire le serveur Express qui peut :
-
-Recevoir un fichier depuis une requête HTTP
-Le stocker dans Supabase Storage
-Retourner un id unique
-Permettre de télécharger le fichier via cet id
-
-
-Comment on va s'y prendre — étape par étape
-Étape 1 → Créer la structure des dossiers
-Étape 2 → Initialiser le projet Node.js + installer les packages
-Étape 3 → Créer le fichier .env avec tes clés Supabase
-Étape 4 → Connecter Supabase
-Étape 5 → Créer le serveur Express de base
-Étape 6 → Créer l'endpoint /upload
-Étape 7 → Créer l'endpoint /download/:id
-Étape 8 → Tester avec Thunder Client ou Postman
-
-============================================================
-
-
-
-
-II. Structure App
-
-
-============================================================
-
-Tab bar (barre en bas)
-  ├── 🏠 Accueil
-  │     ├── Actions rapides
-  │     │     ├── 📤 Envoyer
-  │     │     ├── 📥 Recevoir
-  │     │     └── 🔄 Convertir
-  │     └── Fichiers récents
-  │
-  ├── 📤 Envoyer
-  │     ├── Catégories → Photos, Vidéos, Audio, Documents, Autres
-  │     ├── Conversion optionnelle avant envoi
-  │     ├── Barre de progression upload
-  │     └── Résultat → QR code + Lien + Code 6 chiffres
-  │
-  ├── 📥 Recevoir
-  │     ├── Scanner QR code
-  │     ├── Entrer code 6 chiffres
-  │     └── Coller un lien
-  │
-  ├── 🔄 Convertir
-  │     ├── PDF → JPG / PNG
-  │     ├── JPG / PNG → PDF
-  │     ├── PDF → PowerPoint
-  │     ├── Word → PDF
-  │     ├── .pages → PDF
-  │     └── .key → PDF
-  │
-  ├── 🕐 Historique
-  │     ├── Fichiers envoyés
-  │     │     └── Statut : téléchargé / en attente / expiré
-  │     └── Fichiers reçus
-  │
-  └── ⚙️ Paramètres
-        ├── Langue
-        ├── Durée d'expiration (1h / 24h / 72h)
-        ├── Qualité transfert (original / compressé)
-        └── Supprimer l'historique
-
-
-
-
-1.Écran Send — 4 étapes :
-
-
-ÉTAPE 1 — Sélection catégorie
-  ├── 🖼️ Photos
-  ├── 🎵 Audio  
-  ├── 🎬 Vidéos
-  ├── 📄 Documents
-  ├── ⬇️ Téléchargements
-  └── 📁 Fichiers
-
-ÉTAPE 2 — Sélection fichier
-  └── Liste des fichiers de la catégorie choisie
-      └── Bouton "Envoyer" en bas
-
-ÉTAPE 3 — Upload
-  └── Barre de progression
-      └── "Transfert en cours..."
-
-ÉTAPE 4 — Résultat
-  ├── ✅ "Transfert effectué"
-  ├── QR code
-  ├── Lien à copier
-  └── "Envoyez ce lien au destinataire"
-
-
-
-
-
-
-2. Écran Receive — 3 étapes :
-
-
-ÉTAPE 1 — Choix du mode
-  ├── 📷 Scanner QR code
-  └── 🔗 Entrer le lien manuellement
-
-ÉTAPE 2 — Téléchargement
-  └── Flèche animée vers le bas
-      └── "Téléchargement en cours..."
-
-ÉTAPE 3 — Résultat
-  └── ✅ "Téléchargé avec succès"
-
-
-  ============================================================
-
-   Utilisateur ouvre faas-transfer.vercel.app
-        ↓
-   App Expo (Vercel)
-        ↓
-   Requêtes HTTP vers ton serveur Express (Railway)
-        ↓
-   Supabase (base de données + stockage)
-
-  ============================================================
-
-      (PROBLEME RENCONTRER LORS DU DEPLOIEMENT)
-  Exactement, tu as bien résumé. Voilà ce qui s'est passé :
-
-
-Problème 1 — Expo Go
-
- Expo Go sur ton téléphone était en SDK 57 mais ton projet était en SDK 56.
- Les deux versions ne sont pas compatibles. 
- Et le réseau WSL ne permettait pas à ton téléphone d'accéder directement au serveur Expo.
-
-Problème 2 — Railway Node.js
-
-Railway utilisait par défaut Node.js 18 pour faire tourner ton serveur Express. 
-Mais le package @supabase/supabase-js dans sa version récente nécessite Node.js 20 minimum
- — il utilise des APIs WebSocket natives qui n'existent pas dans Node.js 18.
-En ajoutant "engines": { "node": ">=20.0.0" } dans package.json,
- on a forcé Railway à utiliser Node.js 20 — et là tout a fonctionné.
-
-Résumé simple :
-Railway (Node 18) + Supabase récent = incompatible ❌
-Railway (Node 20) + Supabase récent = compatible  ✅
-C'est un problème classique en déploiement 
-— l'environnement de production est différent de l'environnement de développement.
- Sur ton PC tu avais Node.js 24 donc pas de problème, 
- mais Railway avait une version plus ancienne par défaut.
-
-============================================================
-
-
-
-Voilà l'explication pour ta documentation :
-
-Problème : Lien de téléchargement invalide en production
-
-
-Symptôme
-Après un upload réussi, le lien de téléchargement retournait 
-{"error": "Lien expiré ou invalide"}
-même pour un fichier qui venait d'être uploadé.
-
-
-Étapes de diagnostic
-
-Étape 1 — Vérification de l'URL
-Les liens générés pointaient vers localhost:3000 au lieu de Railway. 
-On a corrigé l'URL dans upload.js
-pour pointer vers https://faas-transfer-production.up.railway.app.
-
-Étape 2 — Vérification de l'insert en DB
-On a ajouté des logs et découvert que l'insert dans la table transfers 
-retournait dbData: null — Supabase acceptait la requête mais n'insérait rien.
-On a ajouté .select() après l'insert
-pour forcer Supabase à retourner les données insérées.
-L'insert a commencé à fonctionner.
-
-Étape 3 — Le vrai problème
-Même après l'insert corrigé, le téléchargement échouait.
-Les logs montraient que le download était appelé deux fois par le navigateur :
-1ère requête → transfer trouvé ✅ → fichier envoyé → suppression déclenchée
-2ème requête → transfer: null ❌ → ligne déjà supprimée → "Lien invalide"
-
-
-
-Cause racine
-Le code supprimait la ligne de la DB pendant l'envoi du fichier — pas après. 
-Le navigateur faisant deux requêtes HTTP (comportement normal), 
-la deuxième trouvait la ligne déjà supprimée par la première.
-
-Solution
-On a utilisé l'événement res.on('finish')
-qui se déclenche uniquement après que la réponse est complètement envoyée au client.
-La suppression se fait maintenant après 60 secondes, 
-garantissant que le receiver a bien reçu le fichier :
-
-
-javascriptres.on('finish', async () => {
-  // Met à jour le statut
-  await supabase.from('transfers').update({ downloaded: true }).eq('id', id);
-  
-  // Supprime après 60 secondes
-  setTimeout(async () => {
-    await supabase.storage.from('transfers').remove([filePath]);
-    await supabase.from('transfers').delete().eq('id', id);
-  }, 60000);
-});
-
-res.send(buffer); // Envoie d'abord, supprime après
-
-Leçon apprise
-Ne jamais modifier l'état de la DB
-avant d'être certain que la réponse HTTP est complètement transmise au client.
-res.on('finish') est le bon pattern 
-pour exécuter du code après l'envoi complet d'une réponse.
-
-=================================================================
+  Le référencement (SEO) permet à l'application d'apparaître 
+  dans les résultats de recherche Google quand on tape "FaaS Transfer".
+  Étant donné que c'est une application dynamique (React/Expo), 
+  Google a besoin d'aide pour la lire.
+
+  A. FICHIERS STATIQUES (Dossier : mobile/public/)
+  ─────────────────────────────────────────────────────────
+  - robots.txt : Fichier lu en premier par les robots de Google. 
+    Il leur donne la permission d'explorer toutes les pages du site.
+  - sitemap.xml : C'est le "plan de la ville". Il liste toutes 
+    les pages importantes (Accueil, Envoyer, Recevoir, Convertir) 
+    pour que Google n'en rate aucune.
+
+  B. BALISES META (Fichier : mobile/src/app/_layout.tsx)
+  ─────────────────────────────────────────────────────────
+  - Composant <Head> d'expo-router : Injecte des balises HTML invisibles.
+  - <title> : Le grand titre bleu cliquable sur Google.
+  - <meta name="description"> : Le petit texte descriptif noir en dessous du titre.
+  - <meta property="og:..."> : (Open Graph) Les images et textes qui 
+    s'affichent quand on partage le lien sur WhatsApp, Twitter ou LinkedIn.
+
+  C. PROCÉDURE DE MISE EN LIGNE (GOOGLE SEARCH CONSOLE)
+  ─────────────────────────────────────────────────────────
+  Une fois les fichiers déployés sur Vercel :
+  1. Aller sur Google Search Console.
+  2. Ajouter la propriété (l'URL Vercel ou le domaine final).
+  3. Soumettre le lien direct vers le sitemap (ex: /sitemap.xml).
+  4. Google viendra lire le sitemap et référencera le site en quelques jours.

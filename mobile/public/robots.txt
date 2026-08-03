@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://faas-transfer.vercel.app/sitemap.xml
