@@ -32,6 +32,7 @@ export default function TabLayout() {
         <meta property="og:title" content="FaaS Transfer - Partage de fichiers instantané" />
         <meta property="og:description" content="Envoyez et recevez vos fichiers instantanément, gratuitement et sans création de compte. La solution la plus simple pour partager vos documents et images." />
         <meta name="theme-color" content={colorScheme === 'dark' ? '#000000' : '#ffffff'} />
+        <meta name="google-site-verification" content="5QQjlFYYE2uBKBIyS4rk2fbbXgjY2ehB7B5JN63Cp2w" />
       </Head>
 
       {/* Animation au démarrage de l'app */}
