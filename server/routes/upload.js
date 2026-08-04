@@ -219,5 +219,90 @@ router.post('/multiple', upload.array('files'), async (req, res) => {
 
 });
 
-// On exporte le router pour l'utiliser dans index.js
+// ─────────────────────────────────────────────
+// POST /upload/request-url
+// Génère un ticket sécurisé (Signed URL) pour uploader directement vers Supabase
+// Le client envoie un nom de fichier, et reçoit l'URL où l'uploader sans passer par ce serveur.
+// ─────────────────────────────────────────────
+router.post('/request-url', async (req, res) => {
+    try {
+        const { fileName, contentType } = req.body;
+        if (!fileName) {
+            return res.status(400).json({ error: 'fileName manquant' });
+        }
+
+        const fileId = uuidv4();
+        // On nettoie le nom de fichier pour éviter les erreurs d'URL
+        const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storageName = `${fileId}-${cleanName}`;
+
+        // Supabase génère l'URL pré-signée valable 60 secondes pour uploader le fichier
+        const { data, error } = await supabase.storage
+            .from('transfers')
+            .createSignedUploadUrl(storageName);
+
+        if (error) {
+            console.error('Erreur createSignedUploadUrl:', error);
+            return res.status(500).json({ error: 'Impossible de générer le ticket d\'accès' });
+        }
+
+        res.status(200).json({
+            fileId,
+            storageName,
+            signedUrl: data.signedUrl,
+            token: data.token
+        });
+    } catch (err) {
+        console.error('Exception dans /request-url:', err);
+        res.status(500).json({ error: 'Erreur interne du serveur' });
+    }
+});
+
+// ─────────────────────────────────────────────
+// POST /upload/confirm
+// Le client appelle cette route une fois l'upload direct terminé.
+// On sauvegarde alors les métadonnées dans la base de données.
+// ─────────────────────────────────────────────
+router.post('/confirm', async (req, res) => {
+    try {
+        const { fileId, originalName, storageName } = req.body;
+        
+        if (!fileId || !originalName || !storageName) {
+            return res.status(400).json({ error: 'Paramètres manquants' });
+        }
+        
+        // On récupère l'URL publique finale (le fichier est déjà dans Supabase)
+        const { data: urlData } = supabase.storage
+            .from('transfers')
+            .getPublicUrl(storageName);
+
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        // On insère l'entrée dans la BDD pour qu'elle soit téléchargeable
+        const { error: dbError } = await supabase
+            .from('transfers')
+            .insert({
+                id: fileId,
+                file_name: originalName,
+                file_url: urlData.publicUrl,
+                expires_at: expiresAt,
+                downloaded: false
+            });
+
+        if (dbError) {
+            console.error('Erreur insertion confirm:', dbError);
+            return res.status(500).json({ error: 'Erreur lors de la sauvegarde des métadonnées' });
+        }
+
+        // On renvoie l'URL de la page de téléchargement
+        res.status(201).json({
+            id: fileId,
+            downloadUrl: `https://faas-transfer.onrender.com/download/${fileId}`
+        });
+    } catch (err) {
+        console.error('Exception dans /confirm:', err);
+        res.status(500).json({ error: 'Erreur interne du serveur' });
+    }
+});
+
 module.exports = router;

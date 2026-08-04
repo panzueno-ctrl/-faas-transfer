@@ -25,6 +25,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import JSZip from 'jszip';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import ActionCard from '../components/ActionCard';
@@ -130,151 +132,99 @@ export default function SendScreen() {
         }
     };
 
-    // Envoie le fichier au serveur Express
+    // Envoie le fichier via Direct Upload vers Supabase
     const uploadFile = async (file: any) => {
         setStep('uploading');
         setProgress(0);
 
         try {
-            // On crée un FormData pour envoyer le fichier
-            const formData = new FormData();
-
-            // Selon la plateforme, on passe l'objet natif ou l'objet web
-            if (Platform.OS === 'web') {
-                formData.append('file', file.file);
-            } else {
-                formData.append('file', {
-                    uri: file.uri,
-                    name: file.name,
-                    type: file.mimeType || 'application/octet-stream',
-                } as any);
-            }
-
-            // Simulation de la progression — on monte jusqu'à 90%
-            // Les 10% restants arrivent quand le serveur confirme la réception
-            const progressInterval = setInterval(() => {
-                setProgress(prev => {
-                    if (prev >= 90) {
-                        clearInterval(progressInterval);
-                        return 90;
-                    }
-                    return prev + 10;
-                });
-            }, 200);
-
-            // Envoi du fichier vers le serveur Express
-            const response = await fetch(`${SERVER_URL}/upload`, {
+            // 1. Demander le ticket d'accès (Signed URL) au backend
+            const reqUrlResponse = await fetch(`${SERVER_URL}/upload/request-url`, {
                 method: 'POST',
-                body: formData,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fileName: file.name,
+                    contentType: file.mimeType || 'application/octet-stream'
+                })
             });
 
-            // On arrête la progression simulée et on passe à 100%
-            clearInterval(progressInterval);
-            setProgress(100);
-
-            // Si le serveur retourne une erreur
-            if (!response.ok) {
-                throw new Error('Erreur serveur');
+            if (!reqUrlResponse.ok) {
+                throw new Error('Erreur lors de la demande de ticket au serveur');
             }
 
-            // On récupère l'id unique et le lien de téléchargement
-            const data = await response.json();
-            setResult(data);
+            const { fileId, storageName, signedUrl } = await reqUrlResponse.json();
 
-            // On sauvegarde le transfert dans l'historique local
-            const transfer = {
-                id: data.id,
-                fileName: file.name,
-                downloadUrl: data.downloadUrl,
-                sentAt: new Date().toLocaleDateString('fr-FR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                }),
-                status: 'pending',
-            };
+            // 2. Uploader directement vers Supabase via FileSystem (avec vraie barre de progression)
+            if (Platform.OS === 'web') {
+                // Sur Web, on utilise fetch/XMLHttpRequest pour le direct upload
+                const xhr = new XMLHttpRequest();
+                xhr.open('PUT', signedUrl);
+                xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        setProgress(Math.round((event.loaded / event.total) * 100));
+                    }
+                };
+                
+                await new Promise((resolve, reject) => {
+                    xhr.onload = () => {
+                        if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response);
+                        else reject(new Error('Erreur upload Supabase'));
+                    };
+                    xhr.onerror = () => reject(new Error('Erreur réseau'));
+                    xhr.send(file.file); // L'objet File natif du web
+                });
 
-            // On récupère l'historique existant et on ajoute le nouveau transfert en tête
-            const existing = await AsyncStorage.getItem('faas_history');
-            const history = existing ? JSON.parse(existing) : [];
-            history.unshift(transfer);
-            await AsyncStorage.setItem('faas_history', JSON.stringify(history));
-
-            setStep('done');
-
-        } catch (error) {
-            // Message d'erreur simple pour l'utilisateur
-            Alert.alert(
-                'Erreur',
-                'Le transfert a échoué. Vérifiez votre connexion et réessayez.'
-            );
-            setStep('category');
-        }
-    };
-
-    // Envoie plusieurs fichiers vers le serveur qui les zippe
-    const uploadMultipleFiles = async (files: any[]) => {
-        setStep('uploading');
-        setProgress(0);
-
-        try {
-            // On crée un FormData avec tous les fichiers
-            const formData = new FormData();
-
-            // On ajoute les fichiers sans saturer la RAM (streaming)
-            for (const file of files) {
-                if (Platform.OS === 'web') {
-                    formData.append('files', file.file);
-                } else {
-                    formData.append('files', {
-                        uri: file.uri,
-                        name: file.name,
-                        type: file.mimeType || 'application/octet-stream',
-                    } as any);
+            } else {
+                // Sur Mobile, on utilise expo-file-system pour un upload en background hyper rapide
+                const uploadTask = FileSystem.createUploadTask(
+                    signedUrl,
+                    file.uri,
+                    {
+                        httpMethod: 'PUT',
+                        headers: {
+                            'Content-Type': file.mimeType || 'application/octet-stream'
+                        }
+                    },
+                    (progressData) => {
+                        const percent = (progressData.totalBytesSent / progressData.totalBytesExpectedToSend) * 100;
+                        setProgress(Math.round(percent));
+                    }
+                );
+                
+                const uploadResult = await uploadTask.uploadAsync();
+                if (uploadResult?.status !== 200) {
+                    throw new Error('Erreur upload Supabase (Mobile)');
                 }
             }
 
-            // Simulation de progression
-            const progressInterval = setInterval(() => {
-                setProgress(prev => {
-                    if (prev >= 90) {
-                        clearInterval(progressInterval);
-                        return 90;
-                    }
-                    return prev + 10;
-                });
-            }, 200);
-
-            // Envoi vers le nouvel endpoint multiple
-            const response = await fetch(`${SERVER_URL}/upload/multiple`, {
-                method: 'POST',
-                body: formData,
-            });
-
-            clearInterval(progressInterval);
             setProgress(100);
 
-            if (!response.ok) {
-                throw new Error('Erreur serveur');
+            // 3. Confirmer l'upload au backend pour qu'il sauvegarde dans la BDD
+            const confirmResponse = await fetch(`${SERVER_URL}/upload/confirm`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fileId,
+                    originalName: file.name,
+                    storageName
+                })
+            });
+
+            if (!confirmResponse.ok) {
+                throw new Error('Erreur lors de la confirmation serveur');
             }
 
-            // On récupère l'id et le lien du ZIP
-            const data = await response.json();
+            const data = await confirmResponse.json();
             setResult(data);
 
             // On sauvegarde dans l'historique
             const transfer = {
                 id: data.id,
-                fileName: `${files.length} fichiers envoyés`,
+                fileName: file.name,
                 downloadUrl: data.downloadUrl,
                 sentAt: new Date().toLocaleDateString('fr-FR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
                 }),
                 status: 'pending',
             };
@@ -287,10 +237,58 @@ export default function SendScreen() {
             setStep('done');
 
         } catch (error) {
-            Alert.alert(
-                'Erreur',
-                'Le transfert a échoué. Vérifiez votre connexion et réessayez.'
-            );
+            Alert.alert('Erreur', 'Le transfert a échoué. Vérifiez votre connexion et réessayez.');
+            setStep('category');
+        }
+    };
+
+    // Zippe les fichiers en local puis fait un Direct Upload
+    const uploadMultipleFiles = async (files: any[]) => {
+        setStep('uploading');
+        setProgress(0);
+
+        try {
+            let fileToUpload: any;
+
+            if (Platform.OS === 'web') {
+                // Création du zip sur le web
+                const zip = new JSZip();
+                for (const file of files) {
+                    zip.file(file.name, file.file);
+                }
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                fileToUpload = {
+                    file: zipBlob,
+                    name: 'faas-transfer.zip',
+                    mimeType: 'application/zip'
+                };
+            } else {
+                // Création du zip sur mobile via base64
+                const zip = new JSZip();
+                // Astuce UX : on montre un "Faux 5%" pendant que le CPU zippe
+                setProgress(5); 
+                for (const file of files) {
+                    const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.Base64 });
+                    zip.file(file.name, base64, { base64: true });
+                }
+                const zipBase64 = await zip.generateAsync({ type: 'base64' });
+                const zipUri = FileSystem.cacheDirectory + `faas-transfer-${Date.now()}.zip`;
+                await FileSystem.writeAsStringAsync(zipUri, zipBase64, { encoding: FileSystem.EncodingType.Base64 });
+                
+                fileToUpload = {
+                    uri: zipUri,
+                    name: 'faas-transfer.zip',
+                    mimeType: 'application/zip'
+                };
+            }
+
+            // Une fois le ZIP créé, on utilise la même fonction de Direct Upload !
+            await uploadFile(fileToUpload);
+
+            // TODO: on pourrait supprimer le fichier zip temporaire du cache ici
+
+        } catch (error) {
+            Alert.alert('Erreur', 'Impossible de préparer l\'archive ZIP.');
             setStep('category');
         }
     };

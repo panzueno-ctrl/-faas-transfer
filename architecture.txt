@@ -385,3 +385,23 @@ Ce journal permet de garder une trace de toutes les anomalies rencontrées duran
   Symptôme : L'application ne permettait pas de sélectionner plusieurs fichiers d'un coup, ce qui gâchait l'utilité pour les gros envois (saisons de séries, albums photos).
   Problème : Le sélecteur de fichier (`DocumentPicker`) n'avait pas l'option multiple activée, et le backend ne savait gérer qu'un seul fichier à la fois.
   Solution : J'ai activé `multiple: true` dans le DocumentPicker, et j'ai créé une toute nouvelle route backend (`/multiple`) capable de recevoir plusieurs fichiers et de les archiver en un seul fichier ZIP robuste avant de l'envoyer sur Supabase.
+
+============================================================
+  11. AMÉLIORATION EXTRÊME DES PERFORMANCES (DIRECT UPLOAD)
+============================================================
+Le test de 8 secondes (23 Mo) qui prend 40 secondes et reste bloqué à 90% a mis en lumière deux problèmes majeurs dans l'architecture initiale. Pour envoyer des vidéos de 1 heure (plusieurs Gigaoctets) en quelques minutes, l'architecture a été modifiée.
+
+Les deux problèmes initiaux :
+1. La fausse barre de progression (Bloquée à 90%) : Dans le code initial de `send.tsx`, l'application utilisait une fausse animation qui montait automatiquement à 90% en quelques secondes (`setInterval`). Elle attendait ensuite que le serveur ait fini son travail pour passer à 100%.
+2. Le goulot d'étranglement du serveur (Double Upload) : Le fichier faisait le trajet `Téléphone -> Serveur Render -> Supabase`. Le fichier voyageait deux fois sur le réseau, et le serveur Render agissait comme un goulot.
+
+La Solution Ultime implémentée : "Direct Upload" (L'autoroute)
+L'architecture a été modifiée pour créer une autoroute directe entre le téléphone et Supabase. Le serveur Render sert uniquement de "Guichet".
+1. Le téléphone demande au serveur Render : "Je veux envoyer un fichier".
+2. Le serveur Render génère un ticket d'accès sécurisé (Signed URL) via Supabase et le renvoie en 0.1s.
+3. Le téléphone utilise ce ticket pour uploader le fichier directement à Supabase (1 seul voyage).
+
+Modifications techniques appliquées :
+- `server/routes/upload.js` : Création d'une route pour générer des Signed URLs Supabase (retrait de `multer` pour les gros fichiers).
+- `mobile/src/app/send.tsx` : Utilisation de `FileSystem.createUploadTask` d'Expo au lieu de `fetch()` pour un suivi de progression 100% réel.
+- Librairie `react-native-zip-archive` : Ajoutée pour zipper les fichiers multiples directement en local sur le téléphone avant de les envoyer sur "l'autoroute" Direct Upload.
