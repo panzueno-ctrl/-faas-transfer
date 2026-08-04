@@ -113,7 +113,7 @@ router.post('/', upload.single('file'), validateFile, async (req, res) => {
     // Tout s'est bien passé — on retourne l'id et le lien de téléchargement
     res.status(201).json({
         id: fileId,
-        downloadUrl: `https://faas-transfer-production.up.railway.app/download/${fileId}`
+        downloadUrl: `https://faas-transfer.onrender.com/download/${fileId}`
     });
 
 });
@@ -142,10 +142,13 @@ router.post('/multiple', upload.array('files'), async (req, res) => {
 
         // On crée un ZIP avec tous les fichiers
         const zipPath = `/tmp/${Date.now()}-faas-transfer.zip`;
-        const fileList = tempFiles.join(' ');
+        
+        // On entoure les chemins de guillemets pour gérer les espaces dans les noms de fichiers
+        const fileList = tempFiles.map(f => `"${f}"`).join(' ');
 
         await new Promise((resolve, reject) => {
-            exec(`zip ${zipPath} ${fileList}`, (error) => {
+            // L'option -j permet de ne pas inclure l'arborescence des dossiers dans le zip
+            exec(`zip -j "${zipPath}" ${fileList}`, (error) => {
                 if (error) reject(error);
                 else resolve(true);
             });
@@ -155,12 +158,13 @@ router.post('/multiple', upload.array('files'), async (req, res) => {
         const fileId = uuidv4();
         const zipName = `${fileId}-faas-transfer.zip`;
 
-        // On lit le ZIP et on l'uploade dans Supabase Storage
-        const zipBuffer = fs.readFileSync(zipPath);
+        // On lit le ZIP en stream pour ne pas saturer la RAM (très important pour les gros zips)
+        const fileStream = fs.createReadStream(zipPath);
         const { data, error } = await supabase.storage
             .from('transfers')
-            .upload(zipName, zipBuffer, {
-                contentType: 'application/zip'
+            .upload(zipName, fileStream, {
+                contentType: 'application/zip',
+                duplex: 'half'
             });
 
         if (error) {
@@ -180,7 +184,7 @@ router.post('/multiple', upload.array('files'), async (req, res) => {
             .from('transfers')
             .insert({
                 id: fileId,
-                file_name: req.file.originalname,
+                file_name: `Archive de ${req.files.length} fichiers.zip`, // FIX: req.file est undefined ici
                 file_url: urlData.publicUrl,
                 expires_at: expiresAt,
                 downloaded: false
@@ -203,7 +207,7 @@ router.post('/multiple', upload.array('files'), async (req, res) => {
         // On retourne l'id et le lien de téléchargement
         res.status(201).json({
             id: fileId,
-            downloadUrl: `https://faas-transfer-production.up.railway.app/download/${fileId}`,
+            downloadUrl: `https://faas-transfer.onrender.com/download/${fileId}`,
             fileCount: req.files.length,
         });
 

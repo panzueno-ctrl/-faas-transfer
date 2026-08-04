@@ -34,8 +34,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // On importe QRCode pour générer le QR code du lien de téléchargement
 import QRCode from 'react-native-qrcode-svg';
 
-// Adresse du serveur — remplace par l'URL railway pour tester sur téléphone
-const SERVER_URL = 'https://-faas-transfer.onrender.com';
+// Adresse du serveur
+const SERVER_URL = 'https://faas-transfer.onrender.com';
 
 // Catégories de fichiers disponibles avec leurs types MIME
 const CATEGORIES = [
