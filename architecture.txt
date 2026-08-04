@@ -240,6 +240,21 @@ Tab bar (barre en bas)
   - Cause racine : Le code supprimait la ligne de la base de données PENDANT l'envoi du fichier, et non APRÈS. Les navigateurs faisant souvent deux requêtes HTTP (ex: pré-chargement), la deuxième trouvait la ligne déjà supprimée par la première.
   - Solution : Utilisation de l'événement `res.on('finish')`. La suppression s'effectue désormais de manière différée (après 60 secondes) garantissant que la réponse HTTP est 100% transmise au client avant le nettoyage.
 
+  D. Écran blanc (Crash) lors de la génération du QR code
+  ─────────────────────────────────────────────────────────
+  - Symptôme : Lors de l'envoi d'un ou plusieurs fichiers, la barre de progression atteint 100% puis l'écran devient complètement vide, sans QR code ni lien.
+  - Cause racine : Deux erreurs combinées. L'adresse du backend dans le code mobile comportait une faute de frappe (`https://-faas-transfer...`). Lors du crash silencieux de la requête, le frontend tentait de générer un QR code avec un lien vide, ce qui faisait crasher le composant `react-native-qrcode-svg`.
+  - Solution : Correction de l'URL du backend vers `https://faas-transfer.onrender.com` dans `send.tsx` et `receive.tsx`.
+
+  E. Problème de Transfert Multiple (ZIP) et Saturation Mémoire
+  ─────────────────────────────────────────────────────────
+  - Symptôme : Le transfert de plusieurs fichiers échouait côté serveur, ou générait une archive corrompue difficile à ouvrir sur mobile.
+  - Cause racine : 
+    1. Le serveur chargeait l'intégralité du ZIP dans la RAM avant l'envoi à Supabase, ce qui plantait les petits serveurs (Render).
+    2. Les noms de fichiers avec espaces cassaient la commande de compression.
+    3. Le nom final de l'archive n'était pas défini (`undefined`), corrompant parfois l'extension.
+  - Solution : Passage sur une lecture en continu (Stream) via `fs.createReadStream()`. Protection des chemins de fichiers avec des guillemets dans la commande `zip` et forçage de l'option `-j` pour éviter l'inclusion de dossiers temporaires. Génération d'un nom de fichier sécurisé "Archive de X fichiers.zip".
+
 
 ============================================================
   8. RÉFÉRENCEMENT NATUREL (SEO) SUR GOOGLE

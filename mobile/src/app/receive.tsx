@@ -147,6 +147,7 @@ export default function ReceiveScreen() {
                         <CameraView
                             style={styles.camera}
                             facing="back"
+                            autofocus={true}
                             onBarcodeScanned={handleQRScan}
                             barcodeScannerSettings={{
                                 barcodeTypes: ['qr'],
