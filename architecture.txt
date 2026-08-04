@@ -315,9 +315,16 @@ Tab bar (barre en bas)
   Cause racine sur le Serveur (Backend) :
   Le serveur lisait également le fichier entier en RAM via `fs.readFileSync()` avant de l'envoyer à Supabase. Le serveur Render (Plan Gratuit) ne possédant que 512 Mo de RAM, il crashait lors de l'envoi de fichiers trop lourds.
 
-  Solution mise en place :
-  - Sur le frontend (`send.tsx`) : Utilisation directe des URIs des fichiers dans le `FormData` (grâce à `Platform.OS === 'web'`), ce qui permet au téléphone de lire le fichier en "stream" depuis son disque de stockage local sans saturer sa RAM.
-  - Sur le backend (`upload.js`) : Remplacement de `fs.readFileSync` par `fs.createReadStream` avec l'option `duplex: 'half'`, créant un tuyau continu de données entre Render et Supabase sans jamais stocker le gros fichier dans la RAM du serveur.
+  Solutions techniques implémentées (Détail fichier par fichier) :
+  
+  [MODIFY] mobile/src/app/send.tsx
+  - Importation de `Platform` depuis `react-native`.
+  - Remplacement du chargement destructif en RAM (`await fetch(file.uri).blob()`) par un envoi direct du fichier depuis le disque local du téléphone en utilisant `formData.append('file', { uri: file.uri, name: file.name, type: file.mimeType })`.
+  - Application de cette logique optimisée pour l'envoi d'un fichier unique ET pour les envois multiples. Le téléphone "stream" le fichier au serveur au lieu de le mettre en mémoire vive.
+
+  [MODIFY] server/routes/upload.js
+  - Dans la route `/` (envoi simple), remplacement de la lecture totale en mémoire (`fs.readFileSync`) par un stream asynchrone (`fs.createReadStream`) couplé à l'option `duplex: 'half'`.
+  - Résultat : Cela crée un tuyau de données direct entre le serveur Render et le stockage Supabase, sans jamais stocker le gros fichier dans la petite RAM (512 Mo) du serveur.
 
   B. Limites de la "Stack" Actuelle (Version Gratuite)
   ─────────────────────────────────────────────────────────
@@ -336,3 +343,27 @@ Tab bar (barre en bas)
   3. Vercel (Frontend Web) :
      - Bande passante : Limite de base de 100 Go/mois.
      - Taille des requêtes : Comme nos fichiers transitent entre le téléphone et notre serveur Render (et non pas vers Vercel), Vercel n'impose aucune limite sur le poids de nos transferts !
+
+
+============================================================
+  10. HISTORIQUE DES BUGS RÉSOLUS (ET SOLUTIONS)
+============================================================
+Ce journal permet de garder une trace de toutes les anomalies rencontrées durant les tests, et de la manière précise dont elles ont été réglées.
+
+  Bug 1 : Le serveur injoignable et l'écran bloqué
+  ─────────────────────────────────────────────────────────
+  Symptôme : Le chargement montait jusqu'à 100%, puis l'application devenait silencieuse ou affichait une page vide, sans jamais générer de QR code ni de lien.
+  Problème : Dans le code de l'application (`mobile/src/app/send.tsx` et `receive.tsx`), l'adresse du serveur backend était mal orthographiée avec un tiret en trop : `https://-faas-transfer.onrender.com`. Cette adresse n'existait pas, la connexion échouait silencieusement.
+  Solution : J'ai supprimé le tiret erroné dans les deux fichiers pour restaurer la bonne URL : `https://faas-transfer.onrender.com`.
+
+  Bug 2 : Les QR Codes généraient un lien mort (Railway)
+  ─────────────────────────────────────────────────────────
+  Symptôme : Après un transfert réussi, le QR Code scanné par un autre téléphone renvoyait vers une page d'erreur Railway.
+  Problème : Le backend (`server/routes/upload.js`) générait manuellement le lien de téléchargement (downloadUrl) qu'il renvoyait au téléphone. Ce lien était encore "codé en dur" avec l'ancien nom de domaine de notre premier hébergeur (Railway).
+  Solution : J'ai modifié `upload.js` dans la fonction d'upload simple et d'upload multiple, pour remplacer l'ancienne adresse par la nouvelle URL Render correcte.
+
+  Bug 3 : Mauvais logo dans la recherche Google (Logo Vercel)
+  ─────────────────────────────────────────────────────────
+  Symptôme : En faisant une recherche sur Google ou en envoyant le lien par WhatsApp, c'était le logo par défaut de Vercel (le petit triangle noir) qui apparaissait.
+  Problème : Le site web ne possédait pas de "favicon" officiel configuré avec notre logo.
+  Solution : J'ai repris le code SVG du logo que j'avais dessiné pour la barre de menu (le "F" bleu/violet avec la flèche). Je l'ai converti en un véritable fichier image (`favicon.svg`, `favicon.png` et `favicon.ico`) que j'ai placé dans le dossier `mobile/public/` et `mobile/assets/images/`. C'est désormais notre identité visuelle officielle.
