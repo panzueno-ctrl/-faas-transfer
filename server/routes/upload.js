@@ -62,11 +62,12 @@ router.post('/', upload.single('file'), validateFile, async (req, res) => {
     const fileId = uuidv4();
     const fileName = `${fileId}-${req.file.originalname}`;
 
-    // On lit le fichier depuis le disque et on l'uploade dans Supabase
+    // On lit le fichier depuis le disque (en flux) et on l'uploade dans Supabase
     const { data, error } = await supabase.storage
         .from('transfers')
-        .upload(fileName, fs.readFileSync(req.file.path), {
-            contentType: req.file.mimetype
+        .upload(fileName, fs.createReadStream(req.file.path), {
+            contentType: req.file.mimetype,
+            duplex: 'half'
         });
 
     console.log('data:', data);

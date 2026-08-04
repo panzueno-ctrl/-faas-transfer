@@ -21,6 +21,7 @@ import {
     Alert,
     ActivityIndicator,
     Clipboard,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
@@ -138,13 +139,16 @@ export default function SendScreen() {
             // On crée un FormData pour envoyer le fichier
             const formData = new FormData();
 
-            // Sur le web on convertit d'abord le fichier en Blob
-            // car on ne peut pas envoyer directement l'URI
-            const response_file = await fetch(file.uri);
-            const blob = await response_file.blob();
-
-            // On ajoute le blob au FormData avec le nom original du fichier
-            formData.append('file', blob, file.name);
+            // Selon la plateforme, on passe l'objet natif ou l'objet web
+            if (Platform.OS === 'web') {
+                formData.append('file', file.file);
+            } else {
+                formData.append('file', {
+                    uri: file.uri,
+                    name: file.name,
+                    type: file.mimeType || 'application/octet-stream',
+                } as any);
+            }
 
             // Simulation de la progression — on monte jusqu'à 90%
             // Les 10% restants arrivent quand le serveur confirme la réception
@@ -219,11 +223,17 @@ export default function SendScreen() {
             // On crée un FormData avec tous les fichiers
             const formData = new FormData();
 
-            // On convertit chaque fichier en Blob et on l'ajoute au FormData
+            // On ajoute les fichiers sans saturer la RAM (streaming)
             for (const file of files) {
-                const response_file = await fetch(file.uri);
-                const blob = await response_file.blob();
-                formData.append('files', blob, file.name);
+                if (Platform.OS === 'web') {
+                    formData.append('files', file.file);
+                } else {
+                    formData.append('files', {
+                        uri: file.uri,
+                        name: file.name,
+                        type: file.mimeType || 'application/octet-stream',
+                    } as any);
+                }
             }
 
             // Simulation de progression

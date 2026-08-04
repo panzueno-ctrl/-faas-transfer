@@ -299,3 +299,40 @@ Tab bar (barre en bas)
   
   Résultat : Google scanne officiellement le site et l'affiche dans ses 
   recherches dans les jours qui suivent.
+
+
+============================================================
+  9. LIMITES TECHNIQUES DE L'ARCHITECTURE ET CRASHS MÉMOIRE
+============================================================
+
+  A. Diagnostic des Crashs (Vidéos et envois multiples)
+  ─────────────────────────────────────────────────────────
+  Symptôme : Lors de l'envoi de gros fichiers (vidéos de 100Mo+) ou de plusieurs dizaines de photos, l'application simulait le chargement jusqu'à 90% puis crashait ou retournait à l'accueil silencieusement.
+  
+  Cause racine sur le Téléphone (Frontend) :
+  Le code utilisait `await fetch(file.uri).blob()` pour convertir le fichier avant de l'envoyer. Cette méthode charge l'intégralité du fichier dans la mémoire vive (RAM) du téléphone. Pour une vidéo de 200 Mo, l'application tente d'allouer 200 Mo de RAM instantanément. Le navigateur mobile ou l'OS tue alors le processus pour éviter la saturation.
+  
+  Cause racine sur le Serveur (Backend) :
+  Le serveur lisait également le fichier entier en RAM via `fs.readFileSync()` avant de l'envoyer à Supabase. Le serveur Render (Plan Gratuit) ne possédant que 512 Mo de RAM, il crashait lors de l'envoi de fichiers trop lourds.
+
+  Solution mise en place :
+  - Sur le frontend (`send.tsx`) : Utilisation directe des URIs des fichiers dans le `FormData` (grâce à `Platform.OS === 'web'`), ce qui permet au téléphone de lire le fichier en "stream" depuis son disque de stockage local sans saturer sa RAM.
+  - Sur le backend (`upload.js`) : Remplacement de `fs.readFileSync` par `fs.createReadStream` avec l'option `duplex: 'half'`, créant un tuyau continu de données entre Render et Supabase sans jamais stocker le gros fichier dans la RAM du serveur.
+
+  B. Limites de la "Stack" Actuelle (Version Gratuite)
+  ─────────────────────────────────────────────────────────
+  Voici les limites techniques imposées par nos hébergeurs gratuits actuels :
+
+  1. Render (Backend Node.js) :
+     - RAM : 512 Mo maximum. (Totalement contourné grâce à l'utilisation des Streams évoquée ci-dessus).
+     - Veille : Le serveur s'endort après 15 minutes d'inactivité. Le premier transfert peut donc prendre 30 secondes de plus à démarrer le temps que le serveur se réveille.
+
+  2. Supabase (Base de données et Stockage) :
+     - Base de données : 500 Mo gratuits (suffisant pour des millions d'entrées).
+     - Stockage Total : 1 Go d'espace disque maximum.
+     - Limite de taille de fichier par défaut : 50 Mo par fichier. Si vous essayez d'envoyer un fichier de 60 Mo, Supabase le bloquera. 
+       *Solution : Vous pouvez modifier cette limite dans les paramètres de votre projet Supabase (Dashboard > Storage > Policies/Settings).*
+
+  3. Vercel (Frontend Web) :
+     - Bande passante : Limite de base de 100 Go/mois.
+     - Taille des requêtes : Comme nos fichiers transitent entre le téléphone et notre serveur Render (et non pas vers Vercel), Vercel n'impose aucune limite sur le poids de nos transferts !
