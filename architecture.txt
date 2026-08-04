@@ -367,3 +367,21 @@ Ce journal permet de garder une trace de toutes les anomalies rencontrées duran
   Symptôme : En faisant une recherche sur Google ou en envoyant le lien par WhatsApp, c'était le logo par défaut de Vercel (le petit triangle noir) qui apparaissait.
   Problème : Le site web ne possédait pas de "favicon" officiel configuré avec notre logo.
   Solution : J'ai repris le code SVG du logo que j'avais dessiné pour la barre de menu (le "F" bleu/violet avec la flèche). Je l'ai converti en un véritable fichier image (`favicon.svg`, `favicon.png` et `favicon.ico`) que j'ai placé dans le dossier `mobile/public/` et `mobile/assets/images/`. C'est désormais notre identité visuelle officielle.
+
+  Bug 4 : Erreurs de syntaxe JSX (Fichiers en rouge dans l'éditeur)
+  ─────────────────────────────────────────────────────────
+  Symptôme : Les fichiers `index.tsx`, `send.tsx` et `convert.tsx` s'affichaient en rouge dans votre éditeur (erreurs de code bloquantes).
+  Problème : Des balises React (comme `<ActionCard />`) n'étaient pas correctement fermées. De plus, il y a eu une tentative d'utiliser des commentaires classiques `/* */` directement dans le rendu HTML/JSX, ce qui fait planter React Native.
+  Solution : J'ai harmonisé la syntaxe des fichiers, refermé toutes les balises correctement et utilisé la syntaxe de commentaire valide pour JSX : `{/* commentaire */}`.
+
+  Bug 5 : L'effet de brillance (Glow) absent sur les blocs principaux
+  ─────────────────────────────────────────────────────────
+  Symptôme : Vous m'aviez signalé que le grand bloc de l'interface "ne brillait pas" et manquait de dynamisme.
+  Problème : Les propriétés d'ombres (boxShadow, shadowColor, elevation) n'étaient pas correctement calibrées pour se superposer au fond sombre, rendant le bloc plat.
+  Solution : J'ai ajusté les valeurs de `shadowOpacity`, `shadowRadius` et ajouté des bordures lumineuses subtiles pour donner ce côté professionnel et "néon" à l'application.
+
+  Bug 6 : L'impossibilité de sélectionner/envoyer plusieurs fichiers (100 photos)
+  ─────────────────────────────────────────────────────────
+  Symptôme : L'application ne permettait pas de sélectionner plusieurs fichiers d'un coup, ce qui gâchait l'utilité pour les gros envois (saisons de séries, albums photos).
+  Problème : Le sélecteur de fichier (`DocumentPicker`) n'avait pas l'option multiple activée, et le backend ne savait gérer qu'un seul fichier à la fois.
+  Solution : J'ai activé `multiple: true` dans le DocumentPicker, et j'ai créé une toute nouvelle route backend (`/multiple`) capable de recevoir plusieurs fichiers et de les archiver en un seul fichier ZIP robuste avant de l'envoyer sur Supabase.
