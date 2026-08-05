@@ -65,6 +65,8 @@
     "subtitle": "Vos transferts récents",
     "sent": "Envoyés",
     "received": "Reçus",
-    "empty": "Aucun historique disponible"
+    "empty": "Aucun historique disponible",
+    "premium_title": "Historique Premium",
+    "premium_desc": "Créez un compte gratuitement pour conserver la trace de tous vos transferts et gérer vos fichiers depuis n'importe quel appareil."
   }
 }

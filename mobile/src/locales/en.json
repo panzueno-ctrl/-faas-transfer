@@ -65,6 +65,8 @@
     "subtitle": "Your recent transfers",
     "sent": "Sent",
     "received": "Received",
-    "empty": "No history available"
+    "empty": "No history available",
+    "premium_title": "Premium History",
+    "premium_desc": "Create a free account to keep track of all your transfers and manage your files from any device."
   }
 }

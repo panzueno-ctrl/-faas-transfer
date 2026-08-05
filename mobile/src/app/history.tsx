@@ -19,6 +19,8 @@ import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState, useCallback } from 'react';
 import { useTheme } from '../context/ThemeContext';
+import { supabase } from '../lib/supabase';
+import { Session } from '@supabase/supabase-js';
 import { useTranslation } from 'react-i18next';
 
 const STORAGE_KEY = 'faas_history';
@@ -42,10 +44,18 @@ export default function HistoryScreen() {
     const [sentFiles, setSentFiles] = useState<Transfer[]>([]);
     const [receivedFiles, setReceivedFiles] = useState<Transfer[]>([]);
     const [loading, setLoading] = useState(true);
+    const [session, setSession] = useState<Session | null>(null);
 
     useFocusEffect(
         useCallback(() => {
-            loadHistory();
+            supabase.auth.getSession().then(({ data: { session } }) => {
+                setSession(session);
+                if (session) {
+                    loadHistory();
+                } else {
+                    setLoading(false);
+                }
+            });
         }, [])
     );
 
@@ -141,7 +151,22 @@ export default function HistoryScreen() {
                     </Pressable>
                 </View>
 
-                {loading ? (
+                {!loading && !session ? (
+                    <View style={styles.premiumGate}>
+                        <View style={styles.premiumIconContainer}>
+                            <Ionicons name="lock-closed-outline" size={48} color={colors.primary} />
+                        </View>
+                        <Text style={styles.premiumTitle}>{t('history.premium_title')}</Text>
+                        <Text style={styles.premiumDesc}>
+                            {t('history.premium_desc')}
+                        </Text>
+                        <Pressable 
+                            style={styles.premiumButton} 
+                            onPress={() => router.push('/auth')}>
+                            <Text style={styles.premiumButtonText}>{t('auth.signup')}</Text>
+                        </Pressable>
+                    </View>
+                ) : loading ? (
                     <View style={styles.emptyContainer}>
                         <ActivityIndicator size="large" color={colors.primary} />
                     </View>
@@ -433,4 +458,54 @@ const getStyles = (colors: any) => StyleSheet.create({
         backgroundColor: 'rgba(239, 68, 68, 0.05)',
         borderRadius: 10,
     },
+    premiumGate: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+        backgroundColor: colors.card,
+        borderRadius: 24,
+        borderWidth: 1,
+        borderColor: colors.border,
+        width: '100%',
+        maxWidth: 500,
+        marginTop: 20,
+    },
+    premiumIconContainer: {
+        width: 96,
+        height: 96,
+        borderRadius: 48,
+        backgroundColor: colors.glow,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: colors.primary,
+    },
+    premiumTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: colors.text,
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    premiumDesc: {
+        fontSize: 15,
+        color: colors.textMuted,
+        textAlign: 'center',
+        marginBottom: 32,
+        lineHeight: 24,
+    },
+    premiumButton: {
+        backgroundColor: colors.primary,
+        paddingVertical: 14,
+        paddingHorizontal: 32,
+        borderRadius: 12,
+        width: '100%',
+        alignItems: 'center',
+    },
+    premiumButtonText: {
+        color: '#ffffff',
+        fontSize: 16,
+        fontWeight: '700',
+    }
 });

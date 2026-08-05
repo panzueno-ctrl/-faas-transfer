@@ -65,6 +65,8 @@
     "subtitle": "I tuoi trasferimenti recenti",
     "sent": "Inviati",
     "received": "Ricevuti",
-    "empty": "Nessuna cronologia disponibile"
+    "empty": "Nessuna cronologia disponibile",
+    "premium_title": "Cronologia Premium",
+    "premium_desc": "Crea un account gratuito per tenere traccia di tutti i tuoi trasferimenti e gestire i tuoi file da qualsiasi dispositivo."
   }
 }
