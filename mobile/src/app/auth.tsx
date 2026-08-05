@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
@@ -28,20 +28,28 @@ export default function AuthScreen() {
         });
     }, []);
 
+    const showAlert = (title: string, message: string) => {
+        if (Platform.OS === 'web') {
+            window.alert(`${title}\n${message}`);
+        } else {
+            Alert.alert(title, message);
+        }
+    };
+
     async function signInWithEmail() {
-        if (!email || !password) return Alert.alert(t('common.error'), 'Veuillez remplir tous les champs');
+        if (!email || !password) return showAlert(t('common.error'), 'Veuillez remplir tous les champs');
         setLoading(true);
         const { error } = await supabase.auth.signInWithPassword({
             email: email,
             password: password,
         });
 
-        if (error) Alert.alert(t('common.error'), error.message);
+        if (error) showAlert(t('common.error'), error.message);
         setLoading(false);
     }
 
     async function signUpWithEmail() {
-        if (!email || !password) return Alert.alert(t('common.error'), 'Veuillez remplir tous les champs');
+        if (!email || !password) return showAlert(t('common.error'), 'Veuillez remplir tous les champs');
         setLoading(true);
         const {
             data: { session },
@@ -51,14 +59,14 @@ export default function AuthScreen() {
             password: password,
         });
 
-        if (error) Alert.alert(t('common.error'), error.message);
-        else if (!session) Alert.alert(t('common.success'), 'Veuillez vérifier votre boîte mail pour confirmer votre inscription !');
+        if (error) showAlert(t('common.error'), error.message);
+        else if (!session) showAlert(t('common.success'), 'Veuillez vérifier votre boîte mail pour confirmer votre inscription !');
         setLoading(false);
     }
 
     async function signOut() {
         const { error } = await supabase.auth.signOut();
-        if (error) Alert.alert(t('common.error'), error.message);
+        if (error) showAlert(t('common.error'), error.message);
     }
 
     if (session && session.user) {

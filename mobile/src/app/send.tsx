@@ -108,7 +108,8 @@ export default function SendScreen() {
                 } else {
                     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
                     if (permissionResult.granted === false) {
-                        Alert.alert("Permission requise", "Vous devez autoriser l'accès à vos photos.");
+                        if (Platform.OS === 'web') window.alert("Permission requise\nVous devez autoriser l'accès à vos photos.");
+                        else Alert.alert("Permission requise", "Vous devez autoriser l'accès à vos photos.");
                         return;
                     }
 
@@ -147,7 +148,8 @@ export default function SendScreen() {
             }
 
         } catch (error) {
-            Alert.alert(t('common.error'), 'Impossible de sélectionner le(s) fichier(s).');
+            if (Platform.OS === 'web') window.alert(t('common.error') + '\nImpossible de sélectionner le(s) fichier(s).');
+            else Alert.alert(t('common.error'), 'Impossible de sélectionner le(s) fichier(s).');
         }
     };
 
@@ -183,13 +185,16 @@ export default function SendScreen() {
                     }
                 };
                 
+                const response_file = await fetch(file.uri);
+                const blob = await response_file.blob();
+
                 await new Promise((resolve, reject) => {
                     xhr.onload = () => {
                         if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response);
                         else reject(new Error('Erreur upload R2'));
                     };
                     xhr.onerror = () => reject(new Error('Erreur réseau'));
-                    xhr.send(file.file); 
+                    xhr.send(blob); 
                 });
 
             } else {
@@ -253,7 +258,8 @@ export default function SendScreen() {
             setStep('done');
 
         } catch (error) {
-            Alert.alert(t('common.error'), 'Le transfert a échoué. Vérifiez votre connexion et réessayez.');
+            if (Platform.OS === 'web') window.alert(t('common.error') + '\nLe transfert a échoué. Vérifiez votre connexion et réessayez.');
+            else Alert.alert(t('common.error'), 'Le transfert a échoué. Vérifiez votre connexion et réessayez.');
             setStep('category');
         }
     };
@@ -268,7 +274,9 @@ export default function SendScreen() {
             if (Platform.OS === 'web') {
                 const zip = new JSZip();
                 for (const file of files) {
-                    zip.file(file.name, file.file);
+                    const response_file = await fetch(file.uri);
+                    const blob = await response_file.blob();
+                    zip.file(file.name, blob);
                 }
                 const zipBlob = await zip.generateAsync({ type: 'blob' });
                 fileToUpload = {
@@ -297,7 +305,8 @@ export default function SendScreen() {
             await uploadFile(fileToUpload);
 
         } catch (error) {
-            Alert.alert(t('common.error'), 'Impossible de préparer l\'archive ZIP.');
+            if (Platform.OS === 'web') window.alert(t('common.error') + '\nImpossible de préparer l\'archive ZIP.');
+            else Alert.alert(t('common.error'), 'Impossible de préparer l\'archive ZIP.');
             setStep('category');
         }
     };
