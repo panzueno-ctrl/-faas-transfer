@@ -62,6 +62,15 @@ export default function AuthScreen() {
         setLoading(false);
     }
 
+    async function signInWithOAuth(provider: 'google' | 'azure') {
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: provider,
+        });
+        if (error) {
+            showAlert(t('common.error'), error.message);
+        }
+    }
+
     async function signOut() {
         const { error } = await supabase.auth.signOut();
         if (error) showAlert(t('common.error'), error.message);
@@ -127,6 +136,24 @@ export default function AuthScreen() {
                             <Text style={styles.switchModeText}>
                                 {isLogin ? t('auth.no_account') : t('auth.has_account')}
                             </Text>
+                        </Pressable>
+                    </View>
+
+                    <View style={styles.dividerContainer}>
+                        <View style={styles.dividerLine} />
+                        <Text style={styles.dividerText}>{t('auth.or')}</Text>
+                        <View style={styles.dividerLine} />
+                    </View>
+
+                    <View style={styles.oauthContainer}>
+                        <Pressable style={styles.oauthButton} onPress={() => signInWithOAuth('google')}>
+                            <Ionicons name="logo-google" size={20} color={colors.text} />
+                            <Text style={styles.oauthButtonText}>{t('auth.continue_google')}</Text>
+                        </Pressable>
+
+                        <Pressable style={styles.oauthButton} onPress={() => signInWithOAuth('azure')}>
+                            <Ionicons name="logo-windows" size={20} color={colors.text} />
+                            <Text style={styles.oauthButtonText}>{t('auth.continue_microsoft')}</Text>
                         </Pressable>
                     </View>
                 </View>
@@ -228,6 +255,41 @@ const getStyles = (colors: any) => StyleSheet.create({
     logoutButtonText: {
         color: colors.danger,
         fontSize: 16,
+        fontWeight: '600',
+    },
+    dividerContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: 16,
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: colors.border,
+    },
+    dividerText: {
+        marginHorizontal: 16,
+        color: colors.textMuted,
+        fontSize: 14,
+        fontWeight: '600',
+    },
+    oauthContainer: {
+        gap: 12,
+    },
+    oauthButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+        height: 56,
+        backgroundColor: colors.cardHovered,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    oauthButtonText: {
+        color: colors.text,
+        fontSize: 15,
         fontWeight: '600',
     },
 });

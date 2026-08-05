@@ -47,7 +47,10 @@
     "login_subtitle": "Connectez-vous pour gérer vos envois",
     "logged_in_as": "Connecté en tant que",
     "empty_fields": "Veuillez remplir tous les champs",
-    "check_email": "Veuillez vérifier votre boîte mail pour confirmer votre inscription !"
+    "check_email": "Veuillez vérifier votre boîte mail pour confirmer votre inscription !",
+    "or": "Ou",
+    "continue_google": "Continuer avec Google",
+    "continue_microsoft": "Continuer avec Microsoft"
   },
   "send": {
     "title": "Envoyer un fichier",

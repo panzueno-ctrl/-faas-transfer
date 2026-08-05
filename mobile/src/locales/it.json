@@ -47,7 +47,10 @@
     "login_subtitle": "Accedi per gestire i tuoi trasferimenti",
     "logged_in_as": "Connesso come",
     "empty_fields": "Si prega di compilare tutti i campi",
-    "check_email": "Controlla la tua email per confermare la registrazione!"
+    "check_email": "Controlla la tua email per confermare la registrazione!",
+    "or": "Oppure",
+    "continue_google": "Continua con Google",
+    "continue_microsoft": "Continua con Microsoft"
   },
   "send": {
     "title": "Invia un file",

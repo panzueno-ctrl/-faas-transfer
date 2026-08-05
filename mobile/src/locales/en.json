@@ -47,7 +47,10 @@
     "login_subtitle": "Log in to manage your transfers",
     "logged_in_as": "Logged in as",
     "empty_fields": "Please fill in all fields",
-    "check_email": "Please check your email to confirm your registration!"
+    "check_email": "Please check your email to confirm your registration!",
+    "or": "Or",
+    "continue_google": "Continue with Google",
+    "continue_microsoft": "Continue with Microsoft"
   },
   "send": {
     "title": "Send a file",
