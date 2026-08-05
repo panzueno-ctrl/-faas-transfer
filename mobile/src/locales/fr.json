@@ -43,7 +43,11 @@
     "no_account": "Pas encore de compte ? S'inscrire",
     "has_account": "Déjà un compte ? Se connecter",
     "logout": "Se déconnecter",
-    "account": "Mon Compte"
+    "account": "Mon Compte",
+    "login_subtitle": "Connectez-vous pour gérer vos envois",
+    "logged_in_as": "Connecté en tant que",
+    "empty_fields": "Veuillez remplir tous les champs",
+    "check_email": "Veuillez vérifier votre boîte mail pour confirmer votre inscription !"
   },
   "send": {
     "title": "Envoyer un fichier",

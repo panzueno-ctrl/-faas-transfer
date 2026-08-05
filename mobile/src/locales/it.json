@@ -43,7 +43,11 @@
     "no_account": "Non hai ancora un account? Registrati",
     "has_account": "Hai già un account? Accedi",
     "logout": "Esci",
-    "account": "Il Mio Account"
+    "account": "Il Mio Account",
+    "login_subtitle": "Accedi per gestire i tuoi trasferimenti",
+    "logged_in_as": "Connesso come",
+    "empty_fields": "Si prega di compilare tutti i campi",
+    "check_email": "Controlla la tua email per confermare la registrazione!"
   },
   "send": {
     "title": "Invia un file",

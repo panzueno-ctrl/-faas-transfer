@@ -37,7 +37,7 @@ export default function AuthScreen() {
     };
 
     async function signInWithEmail() {
-        if (!email || !password) return showAlert(t('common.error'), 'Veuillez remplir tous les champs');
+        if (!email || !password) return showAlert(t('common.error'), t('auth.empty_fields'));
         setLoading(true);
         const { error } = await supabase.auth.signInWithPassword({
             email: email,
@@ -49,7 +49,7 @@ export default function AuthScreen() {
     }
 
     async function signUpWithEmail() {
-        if (!email || !password) return showAlert(t('common.error'), 'Veuillez remplir tous les champs');
+        if (!email || !password) return showAlert(t('common.error'), t('auth.empty_fields'));
         setLoading(true);
         const {
             data: { session },
@@ -60,7 +60,7 @@ export default function AuthScreen() {
         });
 
         if (error) showAlert(t('common.error'), error.message);
-        else if (!session) showAlert(t('common.success'), 'Veuillez vérifier votre boîte mail pour confirmer votre inscription !');
+        else if (!session) showAlert(t('common.success'), t('auth.check_email'));
         setLoading(false);
     }
 
@@ -75,7 +75,7 @@ export default function AuthScreen() {
                 <View style={styles.content}>
                     <Ionicons name="person-circle-outline" size={80} color={colors.primary} />
                     <Text style={styles.title}>{t('auth.account')}</Text>
-                    <Text style={styles.subtitle}>Connecté en tant que</Text>
+                    <Text style={styles.subtitle}>{t('auth.logged_in_as')}</Text>
                     <Text style={styles.emailText}>{session.user.email}</Text>
 
                     <Pressable style={styles.logoutButton} onPress={signOut}>
@@ -92,7 +92,7 @@ export default function AuthScreen() {
             <View style={styles.content}>
                 <LogoFaaS size={60} showBackground />
                 <Text style={styles.title}>{t('auth.account')}</Text>
-                <Text style={styles.subtitle}>Connectez-vous pour gérer vos envois</Text>
+                <Text style={styles.subtitle}>{t('auth.login_subtitle')}</Text>
 
                 <View style={styles.formContainer}>
                     <View style={styles.inputGroup}>

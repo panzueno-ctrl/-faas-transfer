@@ -43,7 +43,11 @@
     "no_account": "Don't have an account? Sign Up",
     "has_account": "Already have an account? Log In",
     "logout": "Log out",
-    "account": "My Account"
+    "account": "My Account",
+    "login_subtitle": "Log in to manage your transfers",
+    "logged_in_as": "Logged in as",
+    "empty_fields": "Please fill in all fields",
+    "check_email": "Please check your email to confirm your registration!"
   },
   "send": {
     "title": "Send a file",
