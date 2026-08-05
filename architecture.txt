@@ -487,3 +487,20 @@ Comment déployer en local (après un ajout de librairie comme expo-image-picker
    npm cache clean --force
    npm install
    npx expo start
+
+============================================================
+  16. IMPLÉMENTATION FUTURE : THÈMES ET MULTILINGUISME
+============================================================
+
+A. Gestion des Thèmes (Mode Clair/Sombre)
+- Création d'un `ThemeContext` avec une fonction `useTheme()`.
+- Fourniture de deux palettes de couleurs (Clair: Fond blanc, textes sombres / Sombre: Fond noir/bleu, textes clairs).
+- L'utilisateur pourra sélectionner son thème préféré depuis les paramètres (Mode Clair, Sombre, ou Système).
+- Refactorisation de tous les écrans (`auth.tsx`, `send.tsx`, `settings.tsx`, etc.) pour remplacer les couleurs en dur par les couleurs dynamiques du thème.
+
+B. Internationalisation (i18n)
+- Installation des librairies standards `i18next` et `react-i18next`.
+- Création d'un fichier de configuration `mobile/src/lib/i18n.ts`.
+- Ajout de 3 fichiers de langues : `fr.json` (Français), `en.json` (Anglais), `it.json` (Italien).
+- Remplacement des textes statiques par la fonction de traduction `t('cle_texte')`.
+- Mise à jour du sélecteur de langue dans les paramètres pour qu'il applique réellement la traduction dans toute l'application.

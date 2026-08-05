@@ -3,7 +3,8 @@
  *
  * Écran des paramètres de l'application.
  * Permet à l'utilisateur de configurer :
- * - La langue de l'app
+ * - Le thème de l'application (Clair/Sombre/Système)
+ * - La langue de l'app (Français/Anglais/Italien)
  * - La durée d'expiration des liens
  * - La qualité du transfert
  * - La suppression de l'historique
@@ -22,31 +23,43 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme, ThemeType } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 const SETTINGS_KEY = 'faas_settings';
 
-const LANGUAGES = [
-    { id: 'fr', label: 'Français' },
-    { id: 'en', label: 'English' },
-];
-
-const EXPIRATION_OPTIONS = [
-    { id: '1h', label: '1 heure', value: 1 },
-    { id: '24h', label: '24 heures', value: 24 },
-    { id: '72h', label: '72 heures', value: 72 },
-];
-
-const QUALITY_OPTIONS = [
-    { id: 'original', label: 'Original', description: 'Qualité maximale sans compression' },
-    { id: 'compressed', label: 'Compressé', description: 'Idéal pour économiser de la bande passante' },
-];
-
 export default function SettingsScreen() {
     const router = useRouter();
+    const { colors, theme, setTheme } = useTheme();
+    const { t, i18n } = useTranslation();
+    const styles = getStyles(colors);
 
-    const [language, setLanguage] = useState('fr');
+    const [language, setLanguage] = useState(i18n.language || 'fr');
     const [expiration, setExpiration] = useState('24h');
     const [quality, setQuality] = useState('original');
+
+    const LANGUAGES = [
+        { id: 'fr', label: 'Français' },
+        { id: 'en', label: 'English' },
+        { id: 'it', label: 'Italiano' },
+    ];
+
+    const THEMES = [
+        { id: 'light', label: t('settings.light') },
+        { id: 'dark', label: t('settings.dark') },
+        { id: 'system', label: t('settings.system') },
+    ];
+
+    const EXPIRATION_OPTIONS = [
+        { id: '1h', label: '1 heure', value: 1 },
+        { id: '24h', label: '24 heures', value: 24 },
+        { id: '72h', label: '72 heures', value: 72 },
+    ];
+
+    const QUALITY_OPTIONS = [
+        { id: 'original', label: 'Original', description: 'Qualité maximale sans compression' },
+        { id: 'compressed', label: 'Compressé', description: 'Idéal pour économiser de la bande passante' },
+    ];
 
     const saveSettings = async (key: string, value: string) => {
         try {
@@ -59,18 +72,28 @@ export default function SettingsScreen() {
         }
     };
 
+    const handleLanguageChange = (langId: string) => {
+        setLanguage(langId);
+        i18n.changeLanguage(langId);
+        saveSettings('language', langId);
+    };
+
+    const handleThemeChange = (themeId: string) => {
+        setTheme(themeId as ThemeType);
+    };
+
     const clearHistory = async () => {
         Alert.alert(
-            'Supprimer l\'historique',
-            'Êtes-vous sûr de vouloir supprimer tout l\'historique de transfert ?',
+            t('settings.clear_history'),
+            t('settings.clear_history_desc'),
             [
-                { text: 'Annuler', style: 'cancel' },
+                { text: t('common.cancel'), style: 'cancel' },
                 {
-                    text: 'Supprimer',
+                    text: t('common.delete'),
                     style: 'destructive',
                     onPress: async () => {
                         await AsyncStorage.removeItem('faas_history');
-                        Alert.alert('Succès', 'Historique supprimé avec succès.');
+                        Alert.alert(t('common.success'), t('settings.clear_history_desc'));
                     },
                 },
             ]
@@ -88,19 +111,46 @@ export default function SettingsScreen() {
                         (pressed || hovered) && styles.backButtonHovered
                     ]}
                     onPress={() => router.push('/')}>
-                    <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
-                    <Text style={styles.backButtonText}>Accueil</Text>
+                    <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                    <Text style={styles.backButtonText}>{t('common.back')}</Text>
                 </Pressable>
 
                 <View style={styles.scrollContainer}>
                     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                         <View style={styles.headerContainer}>
-                            <Text style={styles.title}>Paramètres</Text>
-                            <Text style={styles.subtitle}>Personnalisez votre expérience</Text>
+                            <Text style={styles.title}>{t('settings.title')}</Text>
+                            <Text style={styles.subtitle}>{t('settings.subtitle')}</Text>
+                        </View>
+
+                        {/* ── Thème ── */}
+                        <Text style={styles.sectionTitle}>{t('settings.theme')}</Text>
+                        <View style={styles.optionsContainer}>
+                            {THEMES.map((tItem) => (
+                                <Pressable
+                                    key={tItem.id}
+                                    style={({ pressed, hovered }: any) => [
+                                        styles.optionCard,
+                                        theme === tItem.id && styles.optionCardActive,
+                                        (pressed || hovered) && styles.optionCardHovered,
+                                    ]}
+                                    onPress={() => handleThemeChange(tItem.id)}>
+                                    <Text style={[
+                                        styles.optionLabel,
+                                        theme === tItem.id && styles.optionLabelActive,
+                                    ]}>
+                                        {tItem.label}
+                                    </Text>
+                                    {theme === tItem.id ? (
+                                        <Ionicons name="radio-button-on" size={20} color={colors.primary} />
+                                    ) : (
+                                        <Ionicons name="radio-button-off" size={20} color={colors.textSubtle} />
+                                    )}
+                                </Pressable>
+                            ))}
                         </View>
 
                         {/* ── Langue ── */}
-                        <Text style={styles.sectionTitle}>Langue</Text>
+                        <Text style={styles.sectionTitle}>{t('settings.language')}</Text>
                         <View style={styles.optionsContainer}>
                             {LANGUAGES.map((lang) => (
                                 <Pressable
@@ -110,10 +160,7 @@ export default function SettingsScreen() {
                                         language === lang.id && styles.optionCardActive,
                                         (pressed || hovered) && styles.optionCardHovered,
                                     ]}
-                                    onPress={() => {
-                                        setLanguage(lang.id);
-                                        saveSettings('language', lang.id);
-                                    }}>
+                                    onPress={() => handleLanguageChange(lang.id)}>
                                     <Text style={[
                                         styles.optionLabel,
                                         language === lang.id && styles.optionLabelActive,
@@ -121,16 +168,16 @@ export default function SettingsScreen() {
                                         {lang.label}
                                     </Text>
                                     {language === lang.id ? (
-                                        <Ionicons name="radio-button-on" size={20} color="#3B82F6" />
+                                        <Ionicons name="radio-button-on" size={20} color={colors.primary} />
                                     ) : (
-                                        <Ionicons name="radio-button-off" size={20} color="#475569" />
+                                        <Ionicons name="radio-button-off" size={20} color={colors.textSubtle} />
                                     )}
                                 </Pressable>
                             ))}
                         </View>
 
                         {/* ── Durée d'expiration ── */}
-                        <Text style={styles.sectionTitle}>Durée d'expiration des liens</Text>
+                        <Text style={styles.sectionTitle}>{t('settings.expiration')}</Text>
                         <View style={styles.optionsContainer}>
                             {EXPIRATION_OPTIONS.map((option) => (
                                 <Pressable
@@ -151,16 +198,16 @@ export default function SettingsScreen() {
                                         {option.label}
                                     </Text>
                                     {expiration === option.id ? (
-                                        <Ionicons name="radio-button-on" size={20} color="#3B82F6" />
+                                        <Ionicons name="radio-button-on" size={20} color={colors.primary} />
                                     ) : (
-                                        <Ionicons name="radio-button-off" size={20} color="#475569" />
+                                        <Ionicons name="radio-button-off" size={20} color={colors.textSubtle} />
                                     )}
                                 </Pressable>
                             ))}
                         </View>
 
                         {/* ── Qualité transfert ── */}
-                        <Text style={styles.sectionTitle}>Qualité du transfert</Text>
+                        <Text style={styles.sectionTitle}>{t('settings.quality')}</Text>
                         <View style={styles.optionsContainer}>
                             {QUALITY_OPTIONS.map((option) => (
                                 <Pressable
@@ -184,9 +231,9 @@ export default function SettingsScreen() {
                                         <Text style={styles.optionDescription}>{option.description}</Text>
                                     </View>
                                     {quality === option.id ? (
-                                        <Ionicons name="radio-button-on" size={20} color="#3B82F6" />
+                                        <Ionicons name="radio-button-on" size={20} color={colors.primary} />
                                     ) : (
-                                        <Ionicons name="radio-button-off" size={20} color="#475569" />
+                                        <Ionicons name="radio-button-off" size={20} color={colors.textSubtle} />
                                     )}
                                 </Pressable>
                             ))}
@@ -194,7 +241,7 @@ export default function SettingsScreen() {
 
                         {/* ── Danger zone ── */}
                         <View style={styles.dangerZone}>
-                            <Text style={styles.sectionTitleDanger}>Zone de danger</Text>
+                            <Text style={styles.sectionTitleDanger}>{t('settings.danger_zone')}</Text>
                             <Pressable 
                                 style={({ pressed, hovered }: any) => [
                                     styles.dangerButton,
@@ -202,11 +249,11 @@ export default function SettingsScreen() {
                                 ]}
                                 onPress={clearHistory}>
                                 <View style={styles.dangerIconContainer}>
-                                    <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                                    <Ionicons name="trash-outline" size={20} color={colors.danger} />
                                 </View>
                                 <View>
-                                    <Text style={styles.dangerButtonText}>Effacer l'historique</Text>
-                                    <Text style={styles.dangerDescription}>Supprime toutes les traces de transferts locaux</Text>
+                                    <Text style={styles.dangerButtonText}>{t('settings.clear_history')}</Text>
+                                    <Text style={styles.dangerDescription}>{t('settings.clear_history_desc')}</Text>
                                 </View>
                             </Pressable>
                         </View>
@@ -218,22 +265,20 @@ export default function SettingsScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0B0C10',
+        backgroundColor: colors.background,
         padding: 32,
         position: 'relative',
         overflow: 'hidden',
     },
-
     contentWrapper: {
         flex: 1,
         width: '100%',
         alignItems: 'center',
         zIndex: 10,
     },
-
     backgroundGlow: {
         position: 'absolute',
         top: -150,
@@ -242,14 +287,13 @@ const styles = StyleSheet.create({
         width: 800,
         height: 800,
         borderRadius: 400,
-        backgroundColor: 'rgba(59, 130, 246, 0.03)',
-        shadowColor: '#3B82F6',
+        backgroundColor: colors.glow,
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 120,
         zIndex: 0,
     },
-
     backButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -259,130 +303,112 @@ const styles = StyleSheet.create({
         top: 32,
         left: 32,
         zIndex: 20,
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         paddingVertical: 10,
         paddingHorizontal: 16,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
         transitionDuration: '0.2s',
     },
-
     backButtonHovered: {
-        backgroundColor: '#1E2433',
-        borderColor: '#3B82F6',
-        shadowColor: '#3B82F6',
+        backgroundColor: colors.cardHovered,
+        borderColor: colors.primary,
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.3,
         shadowRadius: 10,
         transform: [{ translateY: -1 }],
     },
-
     backButtonText: {
-        color: '#94A3B8',
+        color: colors.textMuted,
         fontSize: 14,
         fontWeight: '600',
     },
-
     scrollContainer: {
         flex: 1,
         width: '100%',
         maxWidth: 600,
     },
-
     scrollContent: {
-        paddingTop: 100, // Espace pour le bouton absolu
+        paddingTop: 100, 
         paddingBottom: 60,
     },
-
     headerContainer: {
         alignItems: 'center',
         marginBottom: 40,
     },
-
     title: {
         fontSize: 32,
         fontWeight: '900',
-        color: '#F8FAFC',
+        color: colors.text,
         marginBottom: 8,
         letterSpacing: -0.5,
     },
-
     subtitle: {
         fontSize: 16,
-        color: '#94A3B8',
+        color: colors.textMuted,
     },
-
     sectionTitle: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#F8FAFC',
+        color: colors.text,
         marginBottom: 12,
         marginTop: 32,
     },
-
     optionsContainer: {
         gap: 12,
     },
-
     optionCard: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         borderRadius: 16,
         padding: 18,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
         transitionDuration: '0.2s',
     },
-
     optionCardHovered: {
-        backgroundColor: '#1E2433',
-        borderColor: '#3B82F6',
-        shadowColor: '#3B82F6',
+        backgroundColor: colors.cardHovered,
+        borderColor: colors.primary,
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.3,
         shadowRadius: 10,
         transform: [{ translateY: -1 }],
     },
-
     optionCardActive: {
-        borderColor: '#3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.05)',
+        borderColor: colors.primary,
+        backgroundColor: colors.glow,
     },
-
     optionLabel: {
-        color: '#94A3B8',
+        color: colors.textMuted,
         fontSize: 16,
         fontWeight: '500',
     },
-
     optionLabelActive: {
-        color: '#F8FAFC',
+        color: colors.text,
         fontWeight: '600',
     },
-
     optionDescription: {
-        color: '#475569',
+        color: colors.textSubtle,
         fontSize: 13,
         marginTop: 4,
     },
-
     dangerZone: {
         marginTop: 48,
         paddingTop: 32,
         borderTopWidth: 1,
-        borderTopColor: '#1F232D',
+        borderTopColor: colors.border,
     },
-
     sectionTitleDanger: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#EF4444',
+        color: colors.danger,
         marginBottom: 16,
     },
-
     dangerButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -394,31 +420,27 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(239, 68, 68, 0.2)',
         transitionDuration: '0.2s',
     },
-    
     dangerButtonHovered: {
         backgroundColor: 'rgba(239, 68, 68, 0.15)',
-        borderColor: '#EF4444',
-        shadowColor: '#EF4444',
+        borderColor: colors.danger,
+        shadowColor: colors.danger,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.3,
         shadowRadius: 10,
         transform: [{ translateY: -1 }],
     },
-    
     dangerIconContainer: {
         backgroundColor: 'rgba(239, 68, 68, 0.1)',
         padding: 10,
         borderRadius: 10,
     },
-
     dangerButtonText: {
-        color: '#EF4444',
+        color: colors.danger,
         fontSize: 16,
         fontWeight: '600',
     },
-    
     dangerDescription: {
-        color: '#475569',
+        color: colors.textSubtle,
         fontSize: 13,
         marginTop: 2,
     }

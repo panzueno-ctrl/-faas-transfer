@@ -2,9 +2,6 @@
  * app/convert.tsx
  *
  * Écran de conversion et traitement de fichiers.
- * Deux groupes : Conversions et Traitement PDF.
- * L'utilisateur sélectionne un service, choisit un fichier,
- * le serveur le traite et retourne le fichier transformé.
  */
 
 import { useState } from 'react';
@@ -22,6 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import ActionCard from '../components/ActionCard';
+import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 const SERVER_URL = 'http://localhost:3000';
 
@@ -154,6 +153,10 @@ const PDF_TOOLS = [
 
 export default function ConvertScreen() {
     const router = useRouter();
+    const { colors } = useTheme();
+    const { t } = useTranslation();
+    const styles = getStyles(colors);
+
     const [step, setStep] = useState<'menu' | 'processing' | 'done'>('menu');
     const [selectedService, setSelectedService] = useState<any>(null);
     const [fileName, setFileName] = useState('');
@@ -175,7 +178,7 @@ export default function ConvertScreen() {
             await processFile(service, file);
 
         } catch (error) {
-            Alert.alert('Erreur', 'Impossible de sélectionner le fichier.');
+            Alert.alert(t('common.error'), 'Impossible de sélectionner le fichier.');
         }
     };
 
@@ -213,7 +216,7 @@ export default function ConvertScreen() {
 
         } catch (error) {
             Alert.alert(
-                'Erreur',
+                t('common.error'),
                 'Le traitement a échoué. Vérifiez votre fichier et réessayez.'
             );
             setStep('menu');
@@ -246,17 +249,17 @@ export default function ConvertScreen() {
                             (pressed || hovered) && styles.backButtonHovered
                         ]}
                         onPress={() => router.push('/')}>
-                        <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
-                        <Text style={styles.backButtonText}>Accueil</Text>
+                        <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                        <Text style={styles.backButtonText}>{t('common.back')}</Text>
                     </Pressable>
 
                     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                         <View style={styles.headerContainer}>
-                            <Text style={styles.title}>Boîte à outils PDF</Text>
-                            <Text style={styles.subtitle}>Convertissez et modifiez vos fichiers</Text>
+                            <Text style={styles.title}>{t('convert.title')}</Text>
+                            <Text style={styles.subtitle}>{t('convert.subtitle')}</Text>
                         </View>
 
-                        <Text style={styles.groupTitle}>Conversions populaires</Text>
+                        <Text style={styles.groupTitle}>{t('convert.popular')}</Text>
                         <View style={styles.grid}>
                             {CONVERSIONS.map((service) => (
                                 <ActionCard
@@ -271,7 +274,7 @@ export default function ConvertScreen() {
                             ))}
                         </View>
 
-                        <Text style={styles.groupTitle}>Traitement PDF avancé</Text>
+                        <Text style={styles.groupTitle}>{t('convert.advanced')}</Text>
                         <View style={styles.grid}>
                             {PDF_TOOLS.map((service) => (
                                 <ActionCard
@@ -297,10 +300,10 @@ export default function ConvertScreen() {
                 <View style={styles.backgroundGlow} pointerEvents="none" />
                 <View style={styles.centerContent}>
                     <View style={styles.downloadIcon}>
-                        <Ionicons name="cog-outline" size={80} color="#3B82F6" />
+                        <Ionicons name="cog-outline" size={80} color={colors.primary} />
                     </View>
-                    <ActivityIndicator size="large" color="#3B82F6" />
-                    <Text style={styles.processingTitle}>Traitement en cours...</Text>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={styles.processingTitle}>{t('convert.processing')}</Text>
                     <Text style={styles.processingFile}>{fileName}</Text>
                 </View>
             </SafeAreaView>
@@ -311,28 +314,28 @@ export default function ConvertScreen() {
         <SafeAreaView style={styles.container}>
             <View style={styles.backgroundGlow} pointerEvents="none" />
             <View style={styles.centerContent}>
-                <Ionicons name="checkmark-circle" size={80} color="#10B981" />
-                <Text style={styles.successTitle}>Traitement terminé ✅</Text>
+                <Ionicons name="checkmark-circle" size={80} color={colors.success} />
+                <Text style={styles.successTitle}>{t('convert.done')}</Text>
                 <Text style={styles.successFile}>{fileName}</Text>
 
                 <Pressable style={styles.downloadButton} onPress={downloadResult}>
                     <Ionicons name="download-outline" size={20} color="#ffffff" />
-                    <Text style={styles.downloadButtonText}>Télécharger le fichier</Text>
+                    <Text style={styles.downloadButtonText}>{t('convert.download')}</Text>
                 </Pressable>
 
                 <Pressable style={styles.resetButton} onPress={reset}>
-                    <Ionicons name="arrow-back-outline" size={20} color="#94A3B8" />
-                    <Text style={styles.resetButtonText}>Nouveau traitement</Text>
+                    <Ionicons name="arrow-back-outline" size={20} color={colors.textMuted} />
+                    <Text style={styles.resetButtonText}>{t('convert.new')}</Text>
                 </Pressable>
             </View>
         </SafeAreaView>
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0B0C10',
+        backgroundColor: colors.background,
         padding: 32,
         position: 'relative',
         overflow: 'hidden',
@@ -353,8 +356,8 @@ const styles = StyleSheet.create({
         width: 800,
         height: 800,
         borderRadius: 400,
-        backgroundColor: 'rgba(59, 130, 246, 0.03)',
-        shadowColor: '#3B82F6',
+        backgroundColor: colors.glow,
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 120,
@@ -370,19 +373,19 @@ const styles = StyleSheet.create({
         top: 32,
         left: 32,
         zIndex: 20,
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         paddingVertical: 10,
         paddingHorizontal: 16,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
         transitionDuration: '0.2s',
     },
 
     backButtonHovered: {
-        backgroundColor: '#1E2433',
-        borderColor: '#3B82F6',
-        shadowColor: '#3B82F6',
+        backgroundColor: colors.cardHovered,
+        borderColor: colors.primary,
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.3,
         shadowRadius: 10,
@@ -390,13 +393,13 @@ const styles = StyleSheet.create({
     },
 
     backButtonText: {
-        color: '#94A3B8',
+        color: colors.textMuted,
         fontSize: 14,
         fontWeight: '600',
     },
 
     scrollContent: {
-        paddingTop: 100, // Espace pour le bouton retour absolu
+        paddingTop: 100, 
         paddingBottom: 40,
         alignItems: 'center',
         width: '100%',
@@ -411,7 +414,7 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 32,
         fontWeight: '900',
-        color: '#F8FAFC',
+        color: colors.text,
         marginBottom: 8,
         letterSpacing: -0.5,
         textAlign: 'center',
@@ -419,19 +422,19 @@ const styles = StyleSheet.create({
 
     subtitle: {
         fontSize: 16,
-        color: '#94A3B8',
+        color: colors.textMuted,
         textAlign: 'center',
     },
 
     groupTitle: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#F8FAFC',
+        color: colors.text,
         marginBottom: 16,
         alignSelf: 'flex-start',
         width: '100%',
         borderBottomWidth: 1,
-        borderBottomColor: '#1F232D',
+        borderBottomColor: colors.border,
         paddingBottom: 8,
     },
 
@@ -465,26 +468,26 @@ const styles = StyleSheet.create({
     processingTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: '#F8FAFC',
+        color: colors.text,
         textAlign: 'center',
     },
 
     processingFile: {
         fontSize: 16,
-        color: '#94A3B8',
+        color: colors.textMuted,
         textAlign: 'center',
     },
 
     successTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: '#F8FAFC',
+        color: colors.text,
         textAlign: 'center',
     },
 
     successFile: {
         fontSize: 16,
-        color: '#94A3B8',
+        color: colors.textMuted,
         textAlign: 'center',
         marginBottom: 24,
     },
@@ -494,7 +497,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        backgroundColor: '#3B82F6',
+        backgroundColor: colors.primary,
         paddingVertical: 16,
         paddingHorizontal: 32,
         borderRadius: 12,
@@ -512,18 +515,18 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         paddingVertical: 12,
         paddingHorizontal: 24,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
         width: '100%',
         justifyContent: 'center',
     },
 
     resetButtonText: {
-        color: '#F8FAFC',
+        color: colors.text,
         fontSize: 16,
         fontWeight: '600',
     },

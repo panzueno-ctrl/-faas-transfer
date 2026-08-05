@@ -1,0 +1,62 @@
+{
+  "home": {
+    "title": "FaaS Transfer",
+    "subtitle": "Fast and simple file sharing.",
+    "send": "Send",
+    "receive": "Receive",
+    "history": "History",
+    "explore": "Explore",
+    "settings": "Settings",
+    "convert": "Convert"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Customize your experience",
+    "language": "Language",
+    "theme": "Theme",
+    "expiration": "Link expiration time",
+    "quality": "Transfer quality",
+    "danger_zone": "Danger zone",
+    "clear_history": "Clear history",
+    "clear_history_desc": "Removes all local transfer records",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "common": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "success": "Success",
+    "error": "Error",
+    "loading": "Loading..."
+  },
+  "auth": {
+    "login": "Log In",
+    "signup": "Sign Up",
+    "email": "Email address",
+    "password": "Password",
+    "no_account": "Don't have an account? Sign Up",
+    "has_account": "Already have an account? Log In",
+    "logout": "Log out",
+    "account": "My Account"
+  },
+  "send": {
+    "title": "Send a file",
+    "subtitle": "Choose a category",
+    "uploading": "Transfer in progress...",
+    "done": "Transfer complete ✅",
+    "scan": "Scan to download",
+    "link": "Download link",
+    "copy": "Copied ✓",
+    "instruction": "Scan the QR code or copy the link and send it to the recipient.",
+    "new_transfer": "New transfer"
+  },
+  "history": {
+    "title": "History",
+    "subtitle": "Your recent transfers",
+    "sent": "Sent",
+    "received": "Received",
+    "empty": "No history available"
+  }
+}

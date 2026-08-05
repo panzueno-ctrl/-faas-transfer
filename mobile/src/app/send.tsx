@@ -2,14 +2,7 @@
  * app/send.tsx
  *
  * Écran d'envoi de fichiers.
- * Flux en 4 étapes :
- * 1. Sélection de la catégorie
- * 2. Sélection du fichier
- * 3. Upload avec barre de progression
- * 4. Résultat avec QR code et lien
  */
-
-
 
 import { useState } from 'react';
 import {
@@ -32,92 +25,79 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import ActionCard from '../components/ActionCard';
 
-// On importe AsyncStorage pour sauvegarder l'historique des envois
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../lib/supabase';
+import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
-// Adresse du serveur
 const SERVER_URL = 'https://faas-transfer.onrender.com';
-
-// Catégories de fichiers disponibles avec leurs types MIME
-const CATEGORIES = [
-    {
-        id: 'images',
-        label: 'Photos',
-        icon: 'image-outline',
-        mimeTypes: ['image/*'],
-    },
-    {
-        id: 'audio',
-        label: 'Audio',
-        icon: 'musical-notes-outline',
-        mimeTypes: ['audio/*'],
-    },
-    {
-        id: 'video',
-        label: 'Vidéos',
-        icon: 'videocam-outline',
-        mimeTypes: ['video/*'],
-    },
-    {
-        id: 'downloads',
-        label: 'Téléchargements',
-        icon: 'download-outline',
-        mimeTypes: ['*/*'],
-    },
-    {
-        id: 'documents',
-        label: 'Documents',
-        icon: 'document-outline',
-        mimeTypes: [
-            'application/pdf',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ],
-    },
-    {
-        id: 'all',
-        label: 'Tous les fichiers',
-        icon: 'folder-outline',
-        mimeTypes: ['*/*'],
-    },
-];
 
 export default function SendScreen() {
 
-    // Pour naviguer vers d'autres écrans
     const router = useRouter();
+    const { colors, isDark } = useTheme();
+    const { t } = useTranslation();
+    const styles = getStyles(colors, isDark);
 
-    // Étape actuelle du flux
     const [step, setStep] = useState<'category' | 'uploading' | 'done'>('category');
-
-    // Fichier sélectionné par l'utilisateur
     const [selectedFile, setSelectedFile] = useState<any>(null);
-
-    // Progression de l'upload de 0 à 100
     const [progress, setProgress] = useState(0);
-
-    // Résultat retourné par le serveur après upload
     const [result, setResult] = useState<{ id: string; downloadUrl: string } | null>(null);
-
-    // Contrôle l'affichage du toast "Copié ✓"
     const [copied, setCopied] = useState(false);
 
-    // Ouvre le sélecteur de fichier selon la catégorie choisie
+    const CATEGORIES = [
+        {
+            id: 'images',
+            label: 'Photos',
+            icon: 'image-outline',
+            mimeTypes: ['image/*'],
+        },
+        {
+            id: 'audio',
+            label: 'Audio',
+            icon: 'musical-notes-outline',
+            mimeTypes: ['audio/*'],
+        },
+        {
+            id: 'video',
+            label: 'Vidéos',
+            icon: 'videocam-outline',
+            mimeTypes: ['video/*'],
+        },
+        {
+            id: 'downloads',
+            label: 'Téléchargements',
+            icon: 'download-outline',
+            mimeTypes: ['*/*'],
+        },
+        {
+            id: 'documents',
+            label: 'Documents',
+            icon: 'document-outline',
+            mimeTypes: [
+                'application/pdf',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            ],
+        },
+        {
+            id: 'all',
+            label: 'Tous les fichiers',
+            icon: 'folder-outline',
+            mimeTypes: ['*/*'],
+        },
+    ];
+
     const pickFile = async (categoryId: string, mimeTypes: string[]) => {
         try {
             let files: any[] = [];
 
-            // Si c're photos ou vidéos, on utilise la galerie native
             if (categoryId === 'images' || categoryId === 'video' || categoryId === 'audio') {
                 let mediaTypes: ImagePicker.MediaType = 'images';
                 if (categoryId === 'video') mediaTypes = 'videos';
-                // Note: ImagePicker does not support purely Audio picking well on all platforms.
-                // But for photos and videos, it's perfect.
                 
                 if (categoryId === 'audio') {
-                    // Fallback sur DocumentPicker pour l'audio
                     const res = await DocumentPicker.getDocumentAsync({
                         type: mimeTypes,
                         copyToCacheDirectory: true,
@@ -140,7 +120,6 @@ export default function SendScreen() {
 
                     if (result.canceled) return;
                     
-                    // Format the assets to match DocumentPicker structure
                     files = result.assets.map(asset => ({
                         uri: asset.uri,
                         name: asset.fileName || asset.uri.split('/').pop() || 'media.jpg',
@@ -148,7 +127,6 @@ export default function SendScreen() {
                     }));
                 }
             } else {
-                // Pour les documents, fichiers libres, on utilise l'explorateur de fichiers standard
                 const res = await DocumentPicker.getDocumentAsync({
                     type: mimeTypes,
                     copyToCacheDirectory: true,
@@ -162,8 +140,6 @@ export default function SendScreen() {
 
             setSelectedFile(files[0]);
 
-            // Si un seul fichier → endpoint normal
-            // Si plusieurs fichiers → endpoint multiple (ZIP local)
             if (files.length === 1) {
                 await uploadFile(files[0]);
             } else {
@@ -171,17 +147,15 @@ export default function SendScreen() {
             }
 
         } catch (error) {
-            Alert.alert('Erreur', 'Impossible de sélectionner le(s) fichier(s).');
+            Alert.alert(t('common.error'), 'Impossible de sélectionner le(s) fichier(s).');
         }
     };
 
-    // Envoie le fichier via Direct Upload vers Supabase
     const uploadFile = async (file: any) => {
         setStep('uploading');
         setProgress(0);
 
         try {
-            // 1. Demander le ticket d'accès (Signed URL) au backend
             const { data: { session } } = await supabase.auth.getSession();
             const reqUrlResponse = await fetch(`${SERVER_URL}/upload/request-url`, {
                 method: 'POST',
@@ -199,9 +173,7 @@ export default function SendScreen() {
 
             const { fileId, storageName, signedUrl } = await reqUrlResponse.json();
 
-            // 2. Uploader directement vers Cloudflare R2 via FileSystem (avec vraie barre de progression)
             if (Platform.OS === 'web') {
-                // Sur Web, on utilise fetch/XMLHttpRequest pour le direct upload
                 const xhr = new XMLHttpRequest();
                 xhr.open('PUT', signedUrl);
                 xhr.setRequestHeader('Content-Type', file.mimeType || 'application/octet-stream');
@@ -217,11 +189,10 @@ export default function SendScreen() {
                         else reject(new Error('Erreur upload R2'));
                     };
                     xhr.onerror = () => reject(new Error('Erreur réseau'));
-                    xhr.send(file.file); // L'objet File natif du web
+                    xhr.send(file.file); 
                 });
 
             } else {
-                // Sur Mobile, on utilise expo-file-system pour un upload en background hyper rapide
                 const uploadTask = FileSystem.createUploadTask(
                     signedUrl,
                     file.uri,
@@ -245,7 +216,6 @@ export default function SendScreen() {
 
             setProgress(100);
 
-            // 3. Confirmer l'upload au backend pour qu'il sauvegarde dans la BDD
             const confirmResponse = await fetch(`${SERVER_URL}/upload/confirm`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -264,7 +234,6 @@ export default function SendScreen() {
             const data = await confirmResponse.json();
             setResult(data);
 
-            // On sauvegarde dans l'historique
             const transfer = {
                 id: data.id,
                 fileName: file.name,
@@ -284,12 +253,11 @@ export default function SendScreen() {
             setStep('done');
 
         } catch (error) {
-            Alert.alert('Erreur', 'Le transfert a échoué. Vérifiez votre connexion et réessayez.');
+            Alert.alert(t('common.error'), 'Le transfert a échoué. Vérifiez votre connexion et réessayez.');
             setStep('category');
         }
     };
 
-    // Zippe les fichiers en local puis fait un Direct Upload
     const uploadMultipleFiles = async (files: any[]) => {
         setStep('uploading');
         setProgress(0);
@@ -298,7 +266,6 @@ export default function SendScreen() {
             let fileToUpload: any;
 
             if (Platform.OS === 'web') {
-                // Création du zip sur le web
                 const zip = new JSZip();
                 for (const file of files) {
                     zip.file(file.name, file.file);
@@ -310,9 +277,7 @@ export default function SendScreen() {
                     mimeType: 'application/zip'
                 };
             } else {
-                // Création du zip sur mobile via base64
                 const zip = new JSZip();
-                // Astuce UX : on montre un "Faux 5%" pendant que le CPU zippe
                 setProgress(5); 
                 for (const file of files) {
                     const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.Base64 });
@@ -329,26 +294,20 @@ export default function SendScreen() {
                 };
             }
 
-            // Une fois le ZIP créé, on utilise la même fonction de Direct Upload !
             await uploadFile(fileToUpload);
 
-            // TODO: on pourrait supprimer le fichier zip temporaire du cache ici
-
         } catch (error) {
-            Alert.alert('Erreur', 'Impossible de préparer l\'archive ZIP.');
+            Alert.alert(t('common.error'), 'Impossible de préparer l\'archive ZIP.');
             setStep('category');
         }
     };
 
-    // Copie le lien dans le presse-papier et affiche le toast
     const copyLink = () => {
         Clipboard.setString(result?.downloadUrl || '');
-        // On affiche le toast pendant 3 secondes
         setCopied(true);
         setTimeout(() => setCopied(false), 3000);
     };
 
-    // Réinitialise le flux pour un nouveau transfert
     const reset = () => {
         setStep('category');
         setSelectedFile(null);
@@ -357,28 +316,24 @@ export default function SendScreen() {
         setCopied(false);
     };
 
-    // ── ÉTAPE 1 — Sélection de la catégorie ──
     if (step === 'category') {
         return (
             <View style={styles.container}>
-                {/* Orbe lumineux en fond */}
                 <View style={styles.backgroundGlow} pointerEvents="none" />
                 
-                {/* Conteneur principal avec zIndex élevé pour forcer le premier plan */}
                 <View style={styles.contentWrapper}>
-                    {/* Bouton retour hors du bloc centré */}
                     <Pressable 
                         style={({ pressed, hovered }: any) => [
                             styles.backButton,
                             (pressed || hovered) && styles.backButtonHovered
                         ]}
                         onPress={() => router.push('/')}>
-                        <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
-                        <Text style={styles.backButtonText}>Accueil</Text>
+                        <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                        <Text style={styles.backButtonText}>{t('common.back')}</Text>
                     </Pressable>
                     
-                    <Text style={styles.title}>Envoyer un fichier</Text>
-                    <Text style={styles.subtitle}>Choisissez une catégorie</Text>
+                    <Text style={styles.title}>{t('send.title')}</Text>
+                    <Text style={styles.subtitle}>{t('send.subtitle')}</Text>
                     
                     <View style={styles.categoriesGrid}>
                         {CATEGORIES.map((cat) => (
@@ -398,20 +353,17 @@ export default function SendScreen() {
         );
     }
 
-    // ── ÉTAPE 2 — Upload en cours ──
     if (step === 'uploading') {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.backgroundGlow} pointerEvents="none" />
                 <View style={styles.centerContent}>
 
-                    {/* Indicateur de chargement animé */}
-                    <ActivityIndicator size="large" color="#3B82F6" />
+                    <ActivityIndicator size="large" color={colors.primary} />
 
-                    <Text style={styles.uploadingTitle}>Transfert en cours...</Text>
+                    <Text style={styles.uploadingTitle}>{t('send.uploading')}</Text>
                     <Text style={styles.uploadingFile}>{selectedFile?.name}</Text>
 
-                    {/* Barre de progression */}
                     <View style={styles.progressBar}>
                         <View style={[styles.progressFill, { width: `${progress}%` }]} />
                     </View>
@@ -422,72 +374,61 @@ export default function SendScreen() {
         );
     }
 
-    // ── ÉTAPE 3 — Transfert effectué ──
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.backgroundGlow} pointerEvents="none" />
 
             <ScrollView style={{ flex: 1, zIndex: 10, width: '100%' }} contentContainerStyle={styles.resultContent}>
 
-                {/* Bouton pour recommencer un nouveau transfert */}
                 <Pressable style={styles.backButton} onPress={reset}>
-                    <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
-                    <Text style={styles.backButtonText}>Nouveau transfert</Text>
+                    <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                    <Text style={styles.backButtonText}>{t('send.new_transfer')}</Text>
                 </Pressable>
 
-                {/* Icône de succès */}
                 <View style={styles.successIcon}>
-                    <Ionicons name="checkmark-circle" size={80} color="#4caf50" />
+                    <Ionicons name="checkmark-circle" size={80} color={colors.success} />
                 </View>
 
-                <Text style={styles.successTitle}>Transfert effectué ✅</Text>
+                <Text style={styles.successTitle}>{t('send.done')}</Text>
                 <Text style={styles.successFile}>{selectedFile?.name}</Text>
 
-                {/* QR Code — le receiver scanne pour télécharger directement */}
                 <View style={styles.qrContainer}>
-                    <Text style={styles.qrLabel}>Scanner pour télécharger</Text>
+                    <Text style={styles.qrLabel}>{t('send.scan')}</Text>
                     <QRCode
                         value={result?.downloadUrl || ''}
                         size={180}
-                        color="#ffffff"
-                        backgroundColor="#1a1a1a"
+                        color={isDark ? '#ffffff' : '#0F172A'}
+                        backgroundColor={isDark ? '#1a1a1a' : '#ffffff'}
                     />
                 </View>
 
-                {/* Lien de téléchargement — affiché mais pas cliquable */}
-                {/* Non cliquable volontairement : évite que le sender déclenche */}
-                {/* le téléchargement par erreur et supprime le fichier */}
                 <View style={styles.linkContainer}>
-                    <Text style={styles.linkLabel}>Lien de téléchargement</Text>
+                    <Text style={styles.linkLabel}>{t('send.link')}</Text>
                     <View style={styles.linkRow}>
 
-                        {/* Texte du lien */}
                         <View style={styles.linkTextContainer}>
                             <Text style={styles.linkText} numberOfLines={2}>
                                 {result?.downloadUrl}
                             </Text>
                         </View>
 
-                        {/* Bouton copier — copie le lien et affiche le toast */}
                         <Pressable style={styles.copyButton} onPress={copyLink}>
-                            <Ionicons name="copy-outline" size={20} color="#4a9eff" />
+                            <Ionicons name="copy-outline" size={20} color={colors.primary} />
                         </Pressable>
 
                     </View>
                 </View>
 
                 <Text style={styles.shareInstruction}>
-                    Scannez le QR code ou copiez le lien et envoyez-le au destinataire.
+                    {t('send.instruction')}
                 </Text>
 
             </ScrollView>
 
-            {/* Toast "Copié ✓" — placé en dehors du ScrollView */}
-            {/* pour que position absolute fonctionne correctement */}
             {copied && (
                 <View style={styles.toast}>
-                    <Ionicons name="checkmark-circle" size={16} color="#4a9eff" />
-                    <Text style={styles.toastText}>Copié ✓</Text>
+                    <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
+                    <Text style={styles.toastText}>{t('send.copy')}</Text>
                 </View>
             )}
 
@@ -495,17 +436,14 @@ export default function SendScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0B0C10', // Deep Midnight
+        backgroundColor: colors.background,
         padding: 32,
         position: 'relative',
         overflow: 'hidden',
     },
-
-    // Nouveau wrapper qui force le contenu en haut
     contentWrapper: {
         flex: 1,
         width: '100%',
@@ -513,7 +451,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         zIndex: 10,
     },
-
     backgroundGlow: {
         position: 'absolute',
         top: -150,
@@ -522,15 +459,13 @@ const styles = StyleSheet.create({
         width: 800,
         height: 800,
         borderRadius: 400,
-        backgroundColor: 'rgba(59, 130, 246, 0.03)',
-        shadowColor: '#3B82F6',
+        backgroundColor: colors.glow,
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 120,
         zIndex: 0,
     },
-
-    // Bouton retour en haut à gauche
     backButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -540,48 +475,42 @@ const styles = StyleSheet.create({
         top: 32,
         left: 32,
         zIndex: 20,
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         paddingVertical: 10,
         paddingHorizontal: 16,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
         transitionDuration: '0.2s',
     },
-
     backButtonHovered: {
-        backgroundColor: '#1E2433',
-        borderColor: '#3B82F6',
-        shadowColor: '#3B82F6',
+        backgroundColor: colors.cardHovered,
+        borderColor: colors.primary,
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.3,
         shadowRadius: 10,
         transform: [{ translateY: -1 }],
     },
-
     backButtonText: {
-        color: '#94A3B8',
+        color: colors.textMuted,
         fontSize: 14,
         fontWeight: '600',
     },
-
     title: {
         fontSize: 32,
         fontWeight: '900',
-        color: '#F8FAFC',
+        color: colors.text,
         marginBottom: 8,
         letterSpacing: -0.5,
         zIndex: 1,
     },
-
     subtitle: {
         fontSize: 16,
-        color: '#94A3B8',
+        color: colors.textMuted,
         marginBottom: 40,
         zIndex: 1,
     },
-
-    // Grille des catégories — deux colonnes
     categoriesGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -589,151 +518,125 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         maxWidth: 900,
         width: '100%',
-        zIndex: 10, // FIX: s'assure que la grille est au-dessus du glow
+        zIndex: 10, 
     },
-
-    // On ne garde que la largeur pour forcer les cartes à s'aligner sur 2 colonnes
     categoryCard: {
         width: 260,
     },
-    // 🧹 MÉNAGE : Les styles internes (pressé, label, etc.) sont maintenant gérés par ActionCard !
-
-    // Centrage du contenu pour l'étape upload
     centerContent: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
         gap: 16,
         padding: 20,
-        zIndex: 10, // FIX
+        zIndex: 10,
     },
-
     uploadingTitle: {
         fontSize: 24,
         fontWeight: '800',
-        color: '#F8FAFC',
+        color: colors.text,
         marginTop: 16,
     },
-
     uploadingFile: {
         fontSize: 15,
-        color: '#94A3B8',
+        color: colors.textMuted,
         marginBottom: 24,
     },
-
-    // Barre de progression de l'upload
     progressBar: {
         width: '100%',
         maxWidth: 400,
         height: 8,
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         borderRadius: 4,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
     },
-
     progressFill: {
         height: '100%',
-        backgroundColor: '#3B82F6',
+        backgroundColor: colors.primary,
         borderRadius: 4,
     },
-
     progressText: {
-        color: '#3B82F6',
+        color: colors.primary,
         fontSize: 16,
         fontWeight: '700',
         marginTop: 8,
     },
-
-    // Contenu de l'étape résultat
     resultContent: {
         alignItems: 'center',
         gap: 24,
         paddingBottom: 40,
-        paddingTop: 80, // Laisse la place au bouton retour absolu
+        paddingTop: 80, 
         width: '100%',
         maxWidth: 500,
         alignSelf: 'center',
-        zIndex: 10, // FIX
+        zIndex: 10,
     },
-
     successIcon: {
         marginTop: 8,
         backgroundColor: 'rgba(74, 222, 128, 0.1)',
         padding: 20,
         borderRadius: 60,
     },
-
     successTitle: {
         fontSize: 32,
         fontWeight: '900',
-        color: '#F8FAFC',
+        color: colors.text,
         letterSpacing: -0.5,
     },
-
     successFile: {
         fontSize: 15,
-        color: '#94A3B8',
+        color: colors.textMuted,
         marginTop: -12,
     },
-
-    // Conteneur du QR code
     qrContainer: {
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         borderRadius: 24,
         padding: 32,
         alignItems: 'center',
         gap: 20,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
         width: '100%',
     },
-
     qrLabel: {
-        color: '#94A3B8',
+        color: colors.textMuted,
         fontSize: 11,
         textTransform: 'uppercase',
         letterSpacing: 1.5,
         fontWeight: '600',
     },
-
-    // Conteneur du lien avec bouton copier
     linkContainer: {
         width: '100%',
-        backgroundColor: '#0B0C10',
+        backgroundColor: colors.background,
         borderRadius: 16,
         padding: 16,
         gap: 12,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
     },
-
     linkLabel: {
         fontSize: 11,
-        color: '#94A3B8',
+        color: colors.textMuted,
         textTransform: 'uppercase',
         letterSpacing: 1.5,
         fontWeight: '600',
     },
-
     linkRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
     },
-
     linkTextContainer: {
         flex: 1,
     },
-
     linkText: {
-        color: '#3B82F6',
+        color: colors.primary,
         fontSize: 14,
         lineHeight: 20,
         fontWeight: '500',
     },
-
     copyButton: {
         padding: 10,
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -741,20 +644,17 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(59, 130, 246, 0.3)',
     },
-
     shareInstruction: {
         fontSize: 13,
-        color: '#888888',
+        color: colors.textSubtle,
         textAlign: 'center',
         lineHeight: 20,
     },
-
-    // Toast "Copié ✓" — apparaît en bas de l'écran pendant 3 secondes
     toast: {
         position: 'absolute',
         bottom: 40,
         alignSelf: 'center',
-        backgroundColor: '#1a1a1a',
+        backgroundColor: isDark ? '#1a1a1a' : '#ffffff',
         borderRadius: 20,
         paddingVertical: 10,
         paddingHorizontal: 20,
@@ -762,34 +662,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 8,
         borderWidth: 1,
-        borderColor: '#4a9eff',
+        borderColor: colors.primary,
     },
-
     toastText: {
-        color: '#4a9eff',
+        color: colors.primary,
         fontSize: 14,
         fontWeight: '600',
     },
-
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

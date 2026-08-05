@@ -2,8 +2,6 @@
  * app/history.tsx
  *
  * Écran historique des fichiers envoyés et reçus.
- * Les transferts sont stockés localement via AsyncStorage.
- * Chaque fichier envoyé a un statut : en attente, téléchargé ou expiré.
  */
 
 import { useFocusEffect } from 'expo-router';
@@ -20,6 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState, useCallback } from 'react';
+import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 const STORAGE_KEY = 'faas_history';
 const RECEIVED_STORAGE_KEY = 'faas_received_history';
@@ -34,6 +34,10 @@ type Transfer = {
 
 export default function HistoryScreen() {
     const router = useRouter();
+    const { colors } = useTheme();
+    const { t } = useTranslation();
+    const styles = getStyles(colors);
+
     const [activeTab, setActiveTab] = useState<'sent' | 'received'>('sent');
     const [sentFiles, setSentFiles] = useState<Transfer[]>([]);
     const [receivedFiles, setReceivedFiles] = useState<Transfer[]>([]);
@@ -84,19 +88,19 @@ export default function HistoryScreen() {
     const getStatusStyle = (status: Transfer['status']) => {
         switch (status) {
             case 'downloaded':
-                return { color: '#10B981', icon: 'checkmark-circle-outline' };
+                return { color: colors.success, icon: 'checkmark-circle-outline' };
             case 'expired':
-                return { color: '#EF4444', icon: 'time-outline' };
+                return { color: colors.danger, icon: 'time-outline' };
             default:
-                return { color: '#3B82F6', icon: 'hourglass-outline' };
+                return { color: colors.primary, icon: 'hourglass-outline' };
         }
     };
 
     const getStatusLabel = (status: Transfer['status']) => {
         switch (status) {
-            case 'downloaded': return 'Téléchargé';
-            case 'expired': return 'Expiré';
-            default: return 'En attente';
+            case 'downloaded': return t('history.status_downloaded');
+            case 'expired': return t('history.status_expired');
+            default: return t('history.status_pending');
         }
     };
 
@@ -111,13 +115,13 @@ export default function HistoryScreen() {
                         (pressed || hovered) && styles.backButtonHovered
                     ]}
                     onPress={() => router.push('/')}>
-                    <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
-                    <Text style={styles.backButtonText}>Accueil</Text>
+                    <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                    <Text style={styles.backButtonText}>{t('common.back')}</Text>
                 </Pressable>
 
                 <View style={styles.headerContainer}>
-                    <Text style={styles.title}>Historique</Text>
-                    <Text style={styles.subtitle}>Vos transferts récents</Text>
+                    <Text style={styles.title}>{t('history.title')}</Text>
+                    <Text style={styles.subtitle}>{t('history.subtitle')}</Text>
                 </View>
 
                 <View style={styles.tabs}>
@@ -125,29 +129,29 @@ export default function HistoryScreen() {
                         style={[styles.tab, activeTab === 'sent' && styles.tabActive]}
                         onPress={() => setActiveTab('sent')}>
                         <Text style={[styles.tabText, activeTab === 'sent' && styles.tabTextActive]}>
-                            Envoyés
+                            {t('history.sent')}
                         </Text>
                     </Pressable>
                     <Pressable
                         style={[styles.tab, activeTab === 'received' && styles.tabActive]}
                         onPress={() => setActiveTab('received')}>
                         <Text style={[styles.tabText, activeTab === 'received' && styles.tabTextActive]}>
-                            Reçus
+                            {t('history.received')}
                         </Text>
                     </Pressable>
                 </View>
 
                 {loading ? (
                     <View style={styles.emptyContainer}>
-                        <ActivityIndicator size="large" color="#3B82F6" />
+                        <ActivityIndicator size="large" color={colors.primary} />
                     </View>
                 ) : activeTab === 'sent' ? (
                     <View style={styles.listContainer}>
                         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                             {sentFiles.length === 0 ? (
                                 <View style={styles.emptyContainer}>
-                                    <Ionicons name="time-outline" size={64} color="#1F232D" />
-                                    <Text style={styles.emptyText}>Aucun fichier envoyé</Text>
+                                    <Ionicons name="time-outline" size={64} color={colors.border} />
+                                    <Text style={styles.emptyText}>{t('history.no_sent')}</Text>
                                 </View>
                             ) : (
                                 sentFiles.map((transfer) => {
@@ -155,7 +159,7 @@ export default function HistoryScreen() {
                                     return (
                                         <View key={transfer.id} style={styles.transferCard}>
                                             <View style={styles.fileIcon}>
-                                                <Ionicons name="document-outline" size={24} color="#3B82F6" />
+                                                <Ionicons name="document-outline" size={24} color={colors.primary} />
                                             </View>
                                             <View style={styles.fileInfo}>
                                                 <Text style={styles.fileName} numberOfLines={1}>
@@ -176,7 +180,7 @@ export default function HistoryScreen() {
                                             <Pressable
                                                 onPress={() => deleteTransfer(transfer.id, 'sent')}
                                                 style={styles.deleteButton}>
-                                                <Ionicons name="trash-outline" size={20} color="#475569" />
+                                                <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
                                             </Pressable>
                                         </View>
                                     );
@@ -189,8 +193,8 @@ export default function HistoryScreen() {
                         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                             {receivedFiles.length === 0 ? (
                                 <View style={styles.emptyContainer}>
-                                    <Ionicons name="download-outline" size={64} color="#1F232D" />
-                                    <Text style={styles.emptyText}>Aucun fichier reçu</Text>
+                                    <Ionicons name="download-outline" size={64} color={colors.border} />
+                                    <Text style={styles.emptyText}>{t('history.no_received')}</Text>
                                 </View>
                             ) : (
                                 receivedFiles.map((transfer) => {
@@ -198,7 +202,7 @@ export default function HistoryScreen() {
                                     return (
                                         <View key={transfer.id} style={styles.transferCard}>
                                             <View style={styles.fileIcon}>
-                                                <Ionicons name="document-outline" size={24} color="#10B981" />
+                                                <Ionicons name="document-outline" size={24} color={colors.success} />
                                             </View>
                                             <View style={styles.fileInfo}>
                                                 <Text style={styles.fileName} numberOfLines={1}>
@@ -219,7 +223,7 @@ export default function HistoryScreen() {
                                             <Pressable
                                                 onPress={() => deleteTransfer(transfer.id, 'received')}
                                                 style={styles.deleteButton}>
-                                                <Ionicons name="trash-outline" size={20} color="#475569" />
+                                                <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
                                             </Pressable>
                                         </View>
                                     );
@@ -233,10 +237,10 @@ export default function HistoryScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0B0C10',
+        backgroundColor: colors.background,
         padding: 32,
         position: 'relative',
         overflow: 'hidden',
@@ -257,8 +261,8 @@ const styles = StyleSheet.create({
         width: 800,
         height: 800,
         borderRadius: 400,
-        backgroundColor: 'rgba(59, 130, 246, 0.03)',
-        shadowColor: '#3B82F6',
+        backgroundColor: colors.glow,
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 120,
@@ -274,19 +278,19 @@ const styles = StyleSheet.create({
         top: 32,
         left: 32,
         zIndex: 20,
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         paddingVertical: 10,
         paddingHorizontal: 16,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
         transitionDuration: '0.2s',
     },
 
     backButtonHovered: {
-        backgroundColor: '#1E2433',
-        borderColor: '#3B82F6',
-        shadowColor: '#3B82F6',
+        backgroundColor: colors.cardHovered,
+        borderColor: colors.primary,
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.3,
         shadowRadius: 10,
@@ -294,7 +298,7 @@ const styles = StyleSheet.create({
     },
 
     backButtonText: {
-        color: '#94A3B8',
+        color: colors.textMuted,
         fontSize: 14,
         fontWeight: '600',
     },
@@ -308,24 +312,24 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 32,
         fontWeight: '900',
-        color: '#F8FAFC',
+        color: colors.text,
         marginBottom: 8,
         letterSpacing: -0.5,
     },
 
     subtitle: {
         fontSize: 16,
-        color: '#94A3B8',
+        color: colors.textMuted,
     },
 
     tabs: {
         flexDirection: 'row',
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         borderRadius: 12,
         padding: 6,
         marginBottom: 32,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
         width: '100%',
         maxWidth: 500,
     },
@@ -338,11 +342,11 @@ const styles = StyleSheet.create({
     },
 
     tabActive: {
-        backgroundColor: '#3B82F6',
+        backgroundColor: colors.primary,
     },
 
     tabText: {
-        color: '#94A3B8',
+        color: colors.textMuted,
         fontWeight: '600',
         fontSize: 14,
     },
@@ -370,7 +374,7 @@ const styles = StyleSheet.create({
     },
 
     emptyText: {
-        color: '#475569',
+        color: colors.textSubtle,
         fontSize: 16,
         fontWeight: '500',
     },
@@ -378,13 +382,13 @@ const styles = StyleSheet.create({
     transferCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         borderRadius: 16,
         padding: 16,
         marginBottom: 12,
         gap: 16,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
     },
 
     fileIcon: {
@@ -402,13 +406,13 @@ const styles = StyleSheet.create({
     },
 
     fileName: {
-        color: '#F8FAFC',
+        color: colors.text,
         fontSize: 16,
         fontWeight: '600',
     },
 
     fileDate: {
-        color: '#94A3B8',
+        color: colors.textMuted,
         fontSize: 13,
     },
 

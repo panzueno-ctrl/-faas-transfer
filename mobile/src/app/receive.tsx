@@ -2,10 +2,6 @@
  * app/receive.tsx
  *
  * Écran de réception de fichiers.
- * Flux en 3 étapes :
- * 1. Choix du mode — scanner QR code ou entrer le lien manuellement
- * 2. Téléchargement en cours avec animation
- * 3. Confirmation du téléchargement réussi
  */
 
 import { useState } from 'react';
@@ -25,11 +21,17 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ActionCard from '../components/ActionCard';
+import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 const SERVER_URL = 'https://faas-transfer.onrender.com';
 
 export default function ReceiveScreen() {
     const router = useRouter();
+    const { colors, isDark } = useTheme();
+    const { t } = useTranslation();
+    const styles = getStyles(colors, isDark);
+
     const [step, setStep] = useState<'choice' | 'scanning' | 'manual' | 'downloading' | 'done'>('choice');
     const [link, setLink] = useState('');
     const [fileName, setFileName] = useState('');
@@ -45,7 +47,7 @@ export default function ReceiveScreen() {
         const id = extractId(url);
 
         if (!id) {
-            Alert.alert('Erreur', 'Le lien est invalide. Vérifiez et réessayez.');
+            Alert.alert(t('common.error'), 'Le lien est invalide. Vérifiez et réessayez.');
             setStep('choice');
             return;
         }
@@ -63,7 +65,6 @@ export default function ReceiveScreen() {
             setFileName(id);
             setStep('done');
 
-            // Sauvegarde dans l'historique des réceptions
             const receivedTransfer = {
                 id: id,
                 fileName: `Fichier reçu (${id})`,
@@ -77,7 +78,6 @@ export default function ReceiveScreen() {
 
             const existing = await AsyncStorage.getItem('faas_received_history');
             const history = existing ? JSON.parse(existing) : [];
-            // Éviter les doublons
             if (!history.find((t: any) => t.id === id)) {
                 history.unshift(receivedTransfer);
                 await AsyncStorage.setItem('faas_received_history', JSON.stringify(history));
@@ -85,7 +85,7 @@ export default function ReceiveScreen() {
 
         } catch (error) {
             Alert.alert(
-                'Erreur',
+                t('common.error'),
                 'Le téléchargement a échoué. Le lien est peut-être expiré.'
             );
             setStep('choice');
@@ -117,31 +117,30 @@ export default function ReceiveScreen() {
                 <View style={styles.backgroundGlow} pointerEvents="none" />
                 
                 <View style={styles.contentWrapper}>
-                    {/* Bouton retour hors flux, positionné en absolu */}
                     <Pressable 
                         style={({ pressed, hovered }: any) => [
                             styles.backButton,
                             (pressed || hovered) && styles.backButtonHovered
                         ]}
                         onPress={() => router.push('/')}>
-                        <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
-                        <Text style={styles.backButtonText}>Accueil</Text>
+                        <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                        <Text style={styles.backButtonText}>{t('common.back')}</Text>
                     </Pressable>
 
-                    <Text style={styles.title}>Recevoir un fichier</Text>
-                    <Text style={styles.subtitle}>Comment voulez-vous recevoir ?</Text>
+                    <Text style={styles.title}>{t('receive.title')}</Text>
+                    <Text style={styles.subtitle}>{t('receive.subtitle')}</Text>
 
                     <View style={styles.choicesContainer}>
                         <ActionCard 
                             icon="qr-code-outline" 
-                            title="Scanner un QR code" 
-                            description="Scannez le QR code affiché sur l'écran de l'envoyeur" 
+                            title={t('receive.scan_qr')} 
+                            description={t('receive.scan_desc')} 
                             onPress={openScanner} 
                         />
                         <ActionCard 
                             icon="link-outline" 
-                            title="Entrer le lien" 
-                            description="Collez le lien reçu par message ou email" 
+                            title={t('receive.enter_link')} 
+                            description={t('receive.link_desc')} 
                             onPress={() => setStep('manual')} 
                         />
                     </View>
@@ -157,12 +156,12 @@ export default function ReceiveScreen() {
                 
                 <View style={styles.contentWrapper}>
                     <Pressable style={styles.backButton} onPress={() => setStep('choice')}>
-                        <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
-                        <Text style={styles.backButtonText}>Retour</Text>
+                        <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                        <Text style={styles.backButtonText}>{t('common.back')}</Text>
                     </Pressable>
 
-                    <Text style={styles.title}>Scanner le QR code</Text>
-                    <Text style={styles.subtitle}>Pointez la caméra vers le QR code</Text>
+                    <Text style={styles.title}>{t('receive.scan_qr')}</Text>
+                    <Text style={styles.subtitle}>{t('receive.scan_desc')}</Text>
 
                     <View style={styles.cameraContainer}>
                         <CameraView
@@ -190,19 +189,19 @@ export default function ReceiveScreen() {
                 
                 <View style={styles.contentWrapper}>
                     <Pressable style={styles.backButton} onPress={() => setStep('choice')}>
-                        <Ionicons name="arrow-back-outline" size={18} color="#94A3B8" />
-                        <Text style={styles.backButtonText}>Retour</Text>
+                        <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                        <Text style={styles.backButtonText}>{t('common.back')}</Text>
                     </Pressable>
 
-                    <Text style={styles.title}>Entrer le lien</Text>
-                    <Text style={styles.subtitle}>Collez le lien reçu de l'envoyeur</Text>
+                    <Text style={styles.title}>{t('receive.enter_link')}</Text>
+                    <Text style={styles.subtitle}>{t('receive.link_desc')}</Text>
 
                     <View style={styles.inputContainer}>
-                        <Ionicons name="link-outline" size={20} color="#94A3B8" />
+                        <Ionicons name="link-outline" size={20} color={colors.textMuted} />
                         <TextInput
                             style={styles.input}
                             placeholder="http://..."
-                            placeholderTextColor="#475569"
+                            placeholderTextColor={colors.textSubtle}
                             value={link}
                             onChangeText={setLink}
                             autoCapitalize="none"
@@ -220,7 +219,7 @@ export default function ReceiveScreen() {
                         onPress={() => downloadFile(link)}
                         disabled={!link}>
                         <Ionicons name="download-outline" size={20} color="#ffffff" />
-                        <Text style={styles.downloadButtonText}>Télécharger</Text>
+                        <Text style={styles.downloadButtonText}>{t('receive.download')}</Text>
                     </Pressable>
                 </View>
             </SafeAreaView>
@@ -233,10 +232,10 @@ export default function ReceiveScreen() {
                 <View style={styles.backgroundGlow} pointerEvents="none" />
                 <View style={styles.centerContent}>
                     <View style={styles.downloadIcon}>
-                        <Ionicons name="arrow-down-circle" size={80} color="#3B82F6" />
+                        <Ionicons name="arrow-down-circle" size={80} color={colors.primary} />
                     </View>
-                    <ActivityIndicator size="large" color="#3B82F6" />
-                    <Text style={styles.downloadingTitle}>Transfert en cours...</Text>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={styles.downloadingTitle}>{t('receive.downloading')}</Text>
                     <Text style={styles.downloadingSubtitle}>Veuillez patienter</Text>
                 </View>
             </SafeAreaView>
@@ -247,8 +246,8 @@ export default function ReceiveScreen() {
         <SafeAreaView style={styles.container}>
             <View style={styles.backgroundGlow} pointerEvents="none" />
             <View style={styles.centerContent}>
-                <Ionicons name="checkmark-circle" size={80} color="#10B981" />
-                <Text style={styles.successTitle}>Téléchargé avec succès ✅</Text>
+                <Ionicons name="checkmark-circle" size={80} color={colors.success} />
+                <Text style={styles.successTitle}>{t('receive.success')}</Text>
                 <Text style={styles.successSubtitle}>
                     Le fichier a été ouvert dans votre navigateur.
                 </Text>
@@ -260,18 +259,18 @@ export default function ReceiveScreen() {
                         setLink('');
                         setFileName('');
                     }}>
-                    <Ionicons name="arrow-back-outline" size={20} color="#94A3B8" />
-                    <Text style={styles.backButtonFullText}>Recevoir un autre fichier</Text>
+                    <Ionicons name="arrow-back-outline" size={20} color={colors.textMuted} />
+                    <Text style={styles.backButtonFullText}>{t('receive.another')}</Text>
                 </Pressable>
             </View>
         </SafeAreaView>
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0B0C10',
+        backgroundColor: colors.background,
         padding: 32,
         position: 'relative',
         overflow: 'hidden',
@@ -293,8 +292,8 @@ const styles = StyleSheet.create({
         width: 800,
         height: 800,
         borderRadius: 400,
-        backgroundColor: 'rgba(59, 130, 246, 0.03)',
-        shadowColor: '#3B82F6',
+        backgroundColor: colors.glow,
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 120,
@@ -310,19 +309,19 @@ const styles = StyleSheet.create({
         top: 32,
         left: 32,
         zIndex: 20,
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         paddingVertical: 10,
         paddingHorizontal: 16,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
         transitionDuration: '0.2s',
     },
 
     backButtonHovered: {
-        backgroundColor: '#1E2433',
-        borderColor: '#3B82F6',
-        shadowColor: '#3B82F6',
+        backgroundColor: colors.cardHovered,
+        borderColor: colors.primary,
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.3,
         shadowRadius: 10,
@@ -330,7 +329,7 @@ const styles = StyleSheet.create({
     },
 
     backButtonText: {
-        color: '#94A3B8',
+        color: colors.textMuted,
         fontSize: 14,
         fontWeight: '600',
     },
@@ -338,14 +337,14 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 32,
         fontWeight: '900',
-        color: '#F8FAFC',
+        color: colors.text,
         marginBottom: 8,
         letterSpacing: -0.5,
     },
 
     subtitle: {
         fontSize: 16,
-        color: '#94A3B8',
+        color: colors.textMuted,
         marginBottom: 40,
     },
 
@@ -366,7 +365,7 @@ const styles = StyleSheet.create({
         maxWidth: 500,
         maxHeight: 500,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
     },
 
     camera: {
@@ -387,19 +386,19 @@ const styles = StyleSheet.create({
         width: 200,
         height: 200,
         borderWidth: 2,
-        borderColor: '#3B82F6',
+        borderColor: colors.primary,
         borderRadius: 12,
     },
 
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         borderRadius: 12,
         padding: 16,
         gap: 12,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
         marginBottom: 24,
         width: '100%',
         maxWidth: 500,
@@ -407,7 +406,7 @@ const styles = StyleSheet.create({
 
     input: {
         flex: 1,
-        color: '#F8FAFC',
+        color: colors.text,
         fontSize: 16,
     },
 
@@ -416,7 +415,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        backgroundColor: '#3B82F6',
+        backgroundColor: colors.primary,
         paddingVertical: 16,
         borderRadius: 12,
         width: '100%',
@@ -424,11 +423,11 @@ const styles = StyleSheet.create({
     },
 
     downloadButtonPressed: {
-        backgroundColor: '#2563EB',
+        backgroundColor: colors.cardHovered,
     },
 
     downloadButtonDisabled: {
-        backgroundColor: '#1F232D',
+        backgroundColor: colors.border,
         opacity: 0.5,
     },
 
@@ -453,24 +452,24 @@ const styles = StyleSheet.create({
     downloadingTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: '#F8FAFC',
+        color: colors.text,
     },
 
     downloadingSubtitle: {
         fontSize: 16,
-        color: '#94A3B8',
+        color: colors.textMuted,
     },
 
     successTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: '#F8FAFC',
+        color: colors.text,
         textAlign: 'center',
     },
 
     successSubtitle: {
         fontSize: 16,
-        color: '#94A3B8',
+        color: colors.textMuted,
         textAlign: 'center',
         lineHeight: 24,
         marginBottom: 24,
@@ -480,18 +479,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         paddingVertical: 12,
         paddingHorizontal: 24,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
     },
 
     backButtonFullText: {
-        color: '#F8FAFC',
+        color: colors.text,
         fontSize: 16,
         fontWeight: '600',
     },
 });
-

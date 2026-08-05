@@ -1,19 +1,21 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 
-// 1. Définition des propriétés (props) acceptées par le composant
 interface ActionCardProps {
     title: string;
     description: string;
-    icon: keyof typeof Ionicons.glyphMap; // Validation stricte du nom de l'icône
+    icon: keyof typeof Ionicons.glyphMap; 
     onPress: () => void;
-    style?: StyleProp<ViewStyle>; // Permet de passer des marges (marginTop, etc.) de l'extérieur
-    compact?: boolean; // ← NOUVEAU : Option pour réduire la taille sur l'accueil
+    style?: StyleProp<ViewStyle>;
+    compact?: boolean; 
 }
 
-// 2. Le composant
 export default function ActionCard({ title, description, icon, onPress, style, compact = false }: ActionCardProps) {
+    const { colors } = useTheme();
+    const styles = getStyles(colors);
+
     return (
         <Pressable
             style={({ pressed, hovered }: any) => [
@@ -25,7 +27,7 @@ export default function ActionCard({ title, description, icon, onPress, style, c
             onPress={onPress}
         >
             <View style={styles.iconWrapper}>
-                <Ionicons name={icon} size={32} color="#4a9eff" />
+                <Ionicons name={icon} size={32} color={colors.primary} />
             </View>
 
             <View style={styles.textContainer}>
@@ -36,51 +38,50 @@ export default function ActionCard({ title, description, icon, onPress, style, c
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
     choiceCard: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 20,
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         borderRadius: 16,
         padding: 32,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
         width: '100%',
         maxWidth: 700,
-        transitionDuration: '0.2s', // Effet de transition fluide sur web
+        transitionDuration: '0.2s', 
     },
     choiceCardHovered: {
-        backgroundColor: '#1E2433',
-        borderColor: '#3B82F6',
-        shadowColor: '#3B82F6',
+        backgroundColor: colors.cardHovered,
+        borderColor: colors.primary,
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 0 },
         shadowOpacity: 0.5,
         shadowRadius: 15,
         elevation: 8,
-        transform: [{ translateY: -2 }], // Soulèvement subtil
+        transform: [{ translateY: -2 }], 
     },
-    // NOUVEAU : Style appliqué uniquement si compact = true
     choiceCardCompact: {
         padding: 18,
         gap: 14,
     },
     iconWrapper: {
-        backgroundColor: 'rgba(59, 130, 246, 0.1)', // #3B82F6 avec opacité
+        backgroundColor: colors.glow, 
         padding: 14,
         borderRadius: 50,
     },
     textContainer: {
-        flex: 1, // Permet au texte de prendre toute la largeur restante sans pousser l'icône
+        flex: 1, 
     },
     choiceLabel: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#F8FAFC', // Slate 50
+        color: colors.text, 
     },
     choiceDescription: {
         fontSize: 13,
-        color: '#94A3B8', // Slate 400
+        color: colors.textMuted, 
         marginTop: 4,
         lineHeight: 20,
     },

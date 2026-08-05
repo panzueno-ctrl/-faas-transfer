@@ -1,0 +1,62 @@
+{
+  "home": {
+    "title": "FaaS Transfer",
+    "subtitle": "Partage de fichiers simple et rapide.",
+    "send": "Envoyer",
+    "receive": "Recevoir",
+    "history": "Historique",
+    "explore": "Explorer",
+    "settings": "Paramètres",
+    "convert": "Convertir"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "subtitle": "Personnalisez votre expérience",
+    "language": "Langue",
+    "theme": "Thème",
+    "expiration": "Durée d'expiration des liens",
+    "quality": "Qualité du transfert",
+    "danger_zone": "Zone de danger",
+    "clear_history": "Effacer l'historique",
+    "clear_history_desc": "Supprime toutes les traces de transferts locaux",
+    "light": "Clair",
+    "dark": "Sombre",
+    "system": "Système"
+  },
+  "common": {
+    "back": "Retour",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "success": "Succès",
+    "error": "Erreur",
+    "loading": "Chargement..."
+  },
+  "auth": {
+    "login": "Se connecter",
+    "signup": "S'inscrire",
+    "email": "Adresse e-mail",
+    "password": "Mot de passe",
+    "no_account": "Pas encore de compte ? S'inscrire",
+    "has_account": "Déjà un compte ? Se connecter",
+    "logout": "Se déconnecter",
+    "account": "Mon Compte"
+  },
+  "send": {
+    "title": "Envoyer un fichier",
+    "subtitle": "Choisissez une catégorie",
+    "uploading": "Transfert en cours...",
+    "done": "Transfert effectué ✅",
+    "scan": "Scanner pour télécharger",
+    "link": "Lien de téléchargement",
+    "copy": "Copié ✓",
+    "instruction": "Scannez le QR code ou copiez le lien et envoyez-le au destinataire.",
+    "new_transfer": "Nouveau transfert"
+  },
+  "history": {
+    "title": "Historique",
+    "subtitle": "Vos transferts récents",
+    "sent": "Envoyés",
+    "received": "Reçus",
+    "empty": "Aucun historique disponible"
+  }
+}

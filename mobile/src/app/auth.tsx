@@ -5,12 +5,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import LogoFaaS from '../components/LogoFaaS';
+import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 export default function AuthScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [session, setSession] = useState<Session | null>(null);
+
+    const { colors } = useTheme();
+    const { t } = useTranslation();
+    const styles = getStyles(colors);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -23,19 +29,19 @@ export default function AuthScreen() {
     }, []);
 
     async function signInWithEmail() {
-        if (!email || !password) return Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+        if (!email || !password) return Alert.alert(t('common.error'), 'Veuillez remplir tous les champs');
         setLoading(true);
         const { error } = await supabase.auth.signInWithPassword({
             email: email,
             password: password,
         });
 
-        if (error) Alert.alert('Erreur de connexion', error.message);
+        if (error) Alert.alert(t('common.error'), error.message);
         setLoading(false);
     }
 
     async function signUpWithEmail() {
-        if (!email || !password) return Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+        if (!email || !password) return Alert.alert(t('common.error'), 'Veuillez remplir tous les champs');
         setLoading(true);
         const {
             data: { session },
@@ -45,28 +51,28 @@ export default function AuthScreen() {
             password: password,
         });
 
-        if (error) Alert.alert('Erreur d\'inscription', error.message);
-        else if (!session) Alert.alert('Succès', 'Veuillez vérifier votre boîte mail pour confirmer votre inscription !');
+        if (error) Alert.alert(t('common.error'), error.message);
+        else if (!session) Alert.alert(t('common.success'), 'Veuillez vérifier votre boîte mail pour confirmer votre inscription !');
         setLoading(false);
     }
 
     async function signOut() {
         const { error } = await supabase.auth.signOut();
-        if (error) Alert.alert('Erreur', error.message);
+        if (error) Alert.alert(t('common.error'), error.message);
     }
 
     if (session && session.user) {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.content}>
-                    <Ionicons name="person-circle-outline" size={80} color="#3B82F6" />
-                    <Text style={styles.title}>Mon Compte</Text>
+                    <Ionicons name="person-circle-outline" size={80} color={colors.primary} />
+                    <Text style={styles.title}>{t('auth.account')}</Text>
                     <Text style={styles.subtitle}>Connecté en tant que</Text>
                     <Text style={styles.emailText}>{session.user.email}</Text>
 
                     <Pressable style={styles.logoutButton} onPress={signOut}>
-                        <Ionicons name="log-out-outline" size={20} color="#EF4444" />
-                        <Text style={styles.logoutButtonText}>Se déconnecter</Text>
+                        <Ionicons name="log-out-outline" size={20} color={colors.danger} />
+                        <Text style={styles.logoutButtonText}>{t('auth.logout')}</Text>
                     </Pressable>
                 </View>
             </SafeAreaView>
@@ -77,16 +83,16 @@ export default function AuthScreen() {
         <SafeAreaView style={styles.container}>
             <View style={styles.content}>
                 <LogoFaaS size={60} showBackground />
-                <Text style={styles.title}>Bienvenue</Text>
+                <Text style={styles.title}>{t('auth.account')}</Text>
                 <Text style={styles.subtitle}>Connectez-vous pour gérer vos envois</Text>
 
                 <View style={styles.formContainer}>
                     <View style={styles.inputGroup}>
-                        <Ionicons name="mail-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+                        <Ionicons name="mail-outline" size={20} color={colors.textMuted} style={styles.inputIcon} />
                         <TextInput
                             style={styles.input}
-                            placeholder="Adresse email"
-                            placeholderTextColor="#64748B"
+                            placeholder={t('auth.email')}
+                            placeholderTextColor={colors.textSubtle}
                             value={email}
                             onChangeText={setEmail}
                             autoCapitalize="none"
@@ -95,11 +101,11 @@ export default function AuthScreen() {
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Ionicons name="lock-closed-outline" size={20} color="#94A3B8" style={styles.inputIcon} />
+                        <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} style={styles.inputIcon} />
                         <TextInput
                             style={styles.input}
-                            placeholder="Mot de passe"
-                            placeholderTextColor="#64748B"
+                            placeholder={t('auth.password')}
+                            placeholderTextColor={colors.textSubtle}
                             value={password}
                             onChangeText={setPassword}
                             secureTextEntry
@@ -108,11 +114,11 @@ export default function AuthScreen() {
 
                     <View style={styles.buttonsContainer}>
                         <Pressable style={styles.primaryButton} onPress={signInWithEmail} disabled={loading}>
-                            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Se connecter</Text>}
+                            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{t('auth.login')}</Text>}
                         </Pressable>
 
                         <Pressable style={styles.secondaryButton} onPress={signUpWithEmail} disabled={loading}>
-                            <Text style={styles.secondaryButtonText}>Créer un compte</Text>
+                            <Text style={styles.secondaryButtonText}>{t('auth.signup')}</Text>
                         </Pressable>
                     </View>
                 </View>
@@ -121,10 +127,10 @@ export default function AuthScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0B0C10',
+        backgroundColor: colors.background,
     },
     content: {
         flex: 1,
@@ -135,20 +141,20 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 32,
         fontWeight: '900',
-        color: '#F8FAFC',
+        color: colors.text,
         marginTop: 20,
         marginBottom: 8,
     },
     subtitle: {
         fontSize: 16,
-        color: '#94A3B8',
+        color: colors.textMuted,
         marginBottom: 40,
         textAlign: 'center',
     },
     emailText: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: '#3B82F6',
+        color: colors.primary,
         marginTop: 8,
         marginBottom: 40,
     },
@@ -160,9 +166,9 @@ const styles = StyleSheet.create({
     inputGroup: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#13151A',
+        backgroundColor: colors.card,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
         borderRadius: 12,
         paddingHorizontal: 16,
         height: 56,
@@ -172,7 +178,7 @@ const styles = StyleSheet.create({
     },
     input: {
         flex: 1,
-        color: '#F8FAFC',
+        color: colors.text,
         fontSize: 16,
     },
     buttonsContainer: {
@@ -180,7 +186,7 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     primaryButton: {
-        backgroundColor: '#3B82F6',
+        backgroundColor: colors.primary,
         height: 56,
         borderRadius: 12,
         alignItems: 'center',
@@ -196,12 +202,12 @@ const styles = StyleSheet.create({
         height: 56,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: '#1F232D',
+        borderColor: colors.border,
         alignItems: 'center',
         justifyContent: 'center',
     },
     secondaryButtonText: {
-        color: '#94A3B8',
+        color: colors.textMuted,
         fontSize: 16,
         fontWeight: '600',
     },
@@ -216,7 +222,7 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(239, 68, 68, 0.2)',
     },
     logoutButtonText: {
-        color: '#EF4444',
+        color: colors.danger,
         fontSize: 16,
         fontWeight: '600',
     },
