@@ -69,7 +69,7 @@ export default function HomeScreen() {
     {
       icon: 'repeat-outline',
       title: t('home.convert'),
-      description: 'Changez le format de vos documents',
+      description: t('home.convert_desc'),
       route: '/convert',
       color: colors.primary,
     },
@@ -194,9 +194,9 @@ export default function HomeScreen() {
                   <Ionicons name="folder-open-outline" size={40} color={colors.primary} />
                 </View>
 
-                <Text style={styles.welcomeTitle}>Bienvenue sur FaaS Transfer !</Text>
+                <Text style={styles.welcomeTitle}>{t('home.welcome_title')}</Text>
                 <Text style={styles.welcomeSubtitle}>
-                  Vous n'avez pas encore de fichiers récents.
+                  {t('home.welcome_subtitle')}
                 </Text>
 
                 <View style={[
@@ -205,7 +205,7 @@ export default function HomeScreen() {
                 ]}>
                   <Ionicons name="cloud-upload-outline" size={18} color="#ffffff" />
                   <Text style={[styles.ctaButtonText, (pressed || hovered) && { color: '#ffffff' }]}>
-                    Commencer votre premier transfert
+                    {t('home.welcome_cta')}
                   </Text>
                 </View>
               </>

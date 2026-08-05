@@ -7,7 +7,11 @@
     "history": "Cronologia",
     "explore": "Esplora",
     "settings": "Impostazioni",
-    "convert": "Converti"
+    "convert": "Converti",
+    "convert_desc": "Cambia il formato dei tuoi documenti",
+    "welcome_title": "Benvenuti su FaaS Transfer!",
+    "welcome_subtitle": "Non hai ancora file recenti.",
+    "welcome_cta": "Inizia il tuo primo trasferimento"
   },
   "settings": {
     "title": "Impostazioni",
