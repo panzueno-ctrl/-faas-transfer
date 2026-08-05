@@ -1,103 +1,55 @@
-/**
- * routes/download.js
- *
- * Gère le téléchargement des fichiers.
- * Le receiver arrive avec un id unique → on vérifie en DB
- * → on récupère le fichier depuis Supabase Storage
- * → on l'envoie au receiver → on met à jour le statut
- * → on supprime le fichier après un délai
- */
-
-// On importe Express pour créer le router
 const express = require('express');
-
-// On importe notre connexion Supabase
 const supabase = require('../services/supabase');
+const { s3Client } = require('../services/r2');
+const { GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
-// On crée le router
 const router = express.Router();
 
-// GET /download/:id
-// Vérifie l'id, récupère et envoie le fichier au receiver
 router.get('/:id', async (req, res) => {
-
-    // On récupère l'id depuis l'URL
     const { id } = req.params;
-    console.log('Download demandé pour id:', id);
 
-    // On cherche le transfert dans la table transfers
     const { data: transfer, error } = await supabase
         .from('transfers')
         .select('*')
         .eq('id', id)
         .single();
 
-    console.log('transfer:', transfer);
-    console.log('error:', error);
-
-    // Si pas trouvé ou erreur → lien invalide
     if (error || !transfer) {
         return res.status(404).json({ error: 'Lien expiré ou invalide' });
     }
 
-    // On vérifie si le lien n'a pas expiré
     if (new Date() > new Date(transfer.expires_at)) {
         return res.status(410).json({ error: 'Lien expiré' });
     }
 
-    // On télécharge le fichier depuis Supabase Storage
-    const { data: fileData, error: downloadError } = await supabase.storage
-        .from('transfers')
-        .download(transfer.file_url.split('/').pop());
+    // Le fichier a été consulté, on marque downloaded = true
+    await supabase.from('transfers').update({ downloaded: true }).eq('id', id);
 
-    // Si le fichier n'est pas trouvé dans le storage
-    if (downloadError) {
-        return res.status(500).json({ error: 'Erreur lors de la récupération du fichier' });
+    // Rétrocompatibilité : si l'URL commence par http (vieux fichiers Supabase)
+    if (transfer.file_url.startsWith('http')) {
+        return res.redirect(transfer.file_url);
     }
 
-    // On convertit le fichier en buffer pour l'envoyer
-    const buffer = Buffer.from(await fileData.arrayBuffer());
+    try {
+        const safeFileName = transfer.file_name.split('(')[0].trim();
+        
+        const command = new GetObjectCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Key: transfer.file_url, // Contient le storageName généré par upload.js
+            ResponseContentDisposition: `attachment; filename="${safeFileName}"`
+        });
 
-    // On envoie le fichier au receiver
-    // On extrait juste le nom du fichier sans les métadonnées entre parenthèses
-    // ex: "faas-transfer.zip (2 fichiers)" → "faas-transfer.zip"
-    const safeFileName = transfer.file_name.split('(')[0].trim();
+        // Génère un lien de téléchargement direct R2 valide pendant 1 heure
+        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+        
+        // Redirection 302 vers le CDN ultra-rapide de Cloudflare
+        res.redirect(signedUrl);
 
-    // Debug — on affiche les infos du fichier
-    console.log('file_name:', transfer.file_name);
-    console.log('fileData.type:', fileData.type);
-    console.log('safeFileName:', safeFileName);
-
-    // On envoie le fichier au receiver
-    res.setHeader('Content-Disposition', `attachment; filename="${safeFileName}"`);
-    res.setHeader('Content-Type', fileData.type || 'application/octet-stream');
-
-    // On attend que la réponse soit complètement envoyée avant de supprimer
-    res.on('finish', async () => {
-
-        // On met downloaded = true dans la table
-        await supabase
-            .from('transfers')
-            .update({ downloaded: true })
-            .eq('id', id);
-
-        // On supprime le fichier après 60 secondes
-        // pour s'assurer que le receiver a bien reçu le fichier
-        setTimeout(async () => {
-            await supabase.storage
-                .from('transfers')
-                .remove([transfer.file_url.split('/').pop()]);
-
-            await supabase
-                .from('transfers')
-                .delete()
-                .eq('id', id);
-        }, 60000);
-
-    });
-
-    res.send(buffer);
+    } catch (err) {
+        console.error('Erreur génération lien R2:', err);
+        return res.status(500).json({ error: 'Erreur lors de la récupération du fichier' });
+    }
 });
 
-// On exporte le router
 module.exports = router;

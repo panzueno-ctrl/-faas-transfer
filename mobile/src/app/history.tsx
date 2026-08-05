@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useState, useCallback } from 'react';
 
 const STORAGE_KEY = 'faas_history';
+const RECEIVED_STORAGE_KEY = 'faas_received_history';
 
 type Transfer = {
     id: string;
@@ -35,6 +36,7 @@ export default function HistoryScreen() {
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<'sent' | 'received'>('sent');
     const [sentFiles, setSentFiles] = useState<Transfer[]>([]);
+    const [receivedFiles, setReceivedFiles] = useState<Transfer[]>([]);
     const [loading, setLoading] = useState(true);
 
     useFocusEffect(
@@ -45,9 +47,16 @@ export default function HistoryScreen() {
 
     const loadHistory = async () => {
         try {
-            const data = await AsyncStorage.getItem(STORAGE_KEY);
-            if (data) {
-                setSentFiles(JSON.parse(data));
+            const [sentData, receivedData] = await Promise.all([
+                AsyncStorage.getItem(STORAGE_KEY),
+                AsyncStorage.getItem(RECEIVED_STORAGE_KEY)
+            ]);
+            
+            if (sentData) {
+                setSentFiles(JSON.parse(sentData));
+            }
+            if (receivedData) {
+                setReceivedFiles(JSON.parse(receivedData));
             }
         } catch (error) {
             console.log('Erreur chargement historique:', error);
@@ -56,11 +65,17 @@ export default function HistoryScreen() {
         }
     };
 
-    const deleteTransfer = async (id: string) => {
+    const deleteTransfer = async (id: string, type: 'sent' | 'received' = 'sent') => {
         try {
-            const updated = sentFiles.filter(f => f.id !== id);
-            setSentFiles(updated);
-            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+            if (type === 'sent') {
+                const updated = sentFiles.filter(f => f.id !== id);
+                setSentFiles(updated);
+                await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+            } else {
+                const updated = receivedFiles.filter(f => f.id !== id);
+                setReceivedFiles(updated);
+                await AsyncStorage.setItem(RECEIVED_STORAGE_KEY, JSON.stringify(updated));
+            }
         } catch (error) {
             console.log('Erreur suppression:', error);
         }
@@ -159,7 +174,7 @@ export default function HistoryScreen() {
                                                 </View>
                                             </View>
                                             <Pressable
-                                                onPress={() => deleteTransfer(transfer.id)}
+                                                onPress={() => deleteTransfer(transfer.id, 'sent')}
                                                 style={styles.deleteButton}>
                                                 <Ionicons name="trash-outline" size={20} color="#475569" />
                                             </Pressable>
@@ -171,10 +186,46 @@ export default function HistoryScreen() {
                     </View>
                 ) : (
                     <View style={styles.listContainer}>
-                        <View style={styles.emptyContainer}>
-                            <Ionicons name="download-outline" size={64} color="#1F232D" />
-                            <Text style={styles.emptyText}>Aucun fichier reçu</Text>
-                        </View>
+                        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+                            {receivedFiles.length === 0 ? (
+                                <View style={styles.emptyContainer}>
+                                    <Ionicons name="download-outline" size={64} color="#1F232D" />
+                                    <Text style={styles.emptyText}>Aucun fichier reçu</Text>
+                                </View>
+                            ) : (
+                                receivedFiles.map((transfer) => {
+                                    const statusStyle = getStatusStyle(transfer.status);
+                                    return (
+                                        <View key={transfer.id} style={styles.transferCard}>
+                                            <View style={styles.fileIcon}>
+                                                <Ionicons name="document-outline" size={24} color="#10B981" />
+                                            </View>
+                                            <View style={styles.fileInfo}>
+                                                <Text style={styles.fileName} numberOfLines={1}>
+                                                    {transfer.fileName}
+                                                </Text>
+                                                <Text style={styles.fileDate}>{transfer.sentAt}</Text>
+                                                <View style={styles.statusRow}>
+                                                    <Ionicons
+                                                        name={statusStyle.icon as any}
+                                                        size={14}
+                                                        color={statusStyle.color}
+                                                    />
+                                                    <Text style={[styles.statusText, { color: statusStyle.color }]}>
+                                                        {getStatusLabel(transfer.status)}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            <Pressable
+                                                onPress={() => deleteTransfer(transfer.id, 'received')}
+                                                style={styles.deleteButton}>
+                                                <Ionicons name="trash-outline" size={20} color="#475569" />
+                                            </Pressable>
+                                        </View>
+                                    );
+                                })
+                            )}
+                        </ScrollView>
                     </View>
                 )}
             </View>

@@ -23,6 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ActionCard from '../components/ActionCard';
 
 const SERVER_URL = 'https://faas-transfer.onrender.com';
@@ -61,6 +62,26 @@ export default function ReceiveScreen() {
 
             setFileName(id);
             setStep('done');
+
+            // Sauvegarde dans l'historique des réceptions
+            const receivedTransfer = {
+                id: id,
+                fileName: `Fichier reçu (${id})`,
+                downloadUrl: downloadUrl,
+                sentAt: new Date().toLocaleDateString('fr-FR', {
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                }),
+                status: 'downloaded',
+            };
+
+            const existing = await AsyncStorage.getItem('faas_received_history');
+            const history = existing ? JSON.parse(existing) : [];
+            // Éviter les doublons
+            if (!history.find((t: any) => t.id === id)) {
+                history.unshift(receivedTransfer);
+                await AsyncStorage.setItem('faas_received_history', JSON.stringify(history));
+            }
 
         } catch (error) {
             Alert.alert(

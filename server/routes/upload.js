@@ -1,211 +1,95 @@
-/**
- * routes/upload.js
- * 
- * Gère la réception et le stockage des fichiers uploadés.
- * Le client envoie un fichier → on le stocke dans Supabase Storage
- * → on sauvegarde les métadonnées dans la table transfers
- * → on retourne un id unique et un lien de téléchargement.
- */
-
-
-
-
-// On importe Express pour créer le router
 const express = require('express');
-
-// On importe multer pour gérer la réception des fichiers
 const multer = require('multer');
-
-// On importe path et fs pour gérer les fichiers temporaires sur le disque
 const path = require('path');
 const fs = require('fs');
-
-// On  importe uuid pour générer des ids uniques
 const { v4: uuidv4 } = require('uuid');
-
-// On importe notre connexion Supabase
 const supabase = require('../services/supabase');
-
-// On importe le middleware de validation des fichiers
+const { s3Client } = require('../services/r2');
+const { PutObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { Upload } = require('@aws-sdk/lib-storage');
 const validateFile = require('../middlewares/fileHandler');
 
-// On crée le router — c'est lui qui gère les routes de ce fichier
 const router = express.Router();
 
-// On configure multer pour stocker les fichiers sur le disque
-// Beaucoup plus stable que memoryStorage pour les gros volumes
 const storage = multer.diskStorage({
-    // Dossier temporaire
     destination: (req, file, cb) => {
         cb(null, '/tmp');
     },
-    // Nom unique pour éviter les conflits
     filename: (req, file, cb) => {
         const cleanName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
         cb(null, `${Date.now()}-${cleanName}`);
     }
 });
-
 const upload = multer({ storage });
 
-// POST /upload
-// Reçoit le fichier, le stocke dans Supabase, retourne un lien
-router.post('/', upload.single('file'), validateFile, async (req, res) => {
-
-    // On vérifie qu'un fichier a bien été envoyé
-    if (!req.file) {
-        return res.status(400).json({ error: 'Aucun fichier reçu' });
-    }
-
-    // On génère un nom unique pour le fichier
-    // pour éviter les conflits si deux fichiers ont le même nom
-    const fileId = uuidv4();
-    const fileName = `${fileId}-${req.file.originalname}`;
-
-    // On lit le fichier depuis le disque (en flux) et on l'uploade dans Supabase
-    const { data, error } = await supabase.storage
-        .from('transfers')
-        .upload(fileName, fs.createReadStream(req.file.path), {
-            contentType: req.file.mimetype,
-            duplex: 'half'
-        });
-
-    console.log('data:', data);
-    console.log('error:', error);
-
-    // Si l'upload échoue on retourne une erreur
-    if (error) {
-        console.log(error);
-        return res.status(500).json({ error: 'Erreur lors du stockage du fichier' });
-    }
-
-    // On supprime le fichier temporaire du disque après l'upload
-    fs.unlinkSync(req.file.path);
-
-    // On récupère l'URL publique du fichier dans Supabase
-    const { data: urlData } = supabase.storage
-        .from('transfers')
-        .getPublicUrl(fileName);
-
-    // On calcule la date d'expiration — 24 heures à partir de maintenant
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-    // On sauvegarde les métadonnées dans la table transfers
-    const { error: dbError, data: dbData } = await supabase
-        .from('transfers')
-        .insert({
-            id: fileId,
-            file_name: req.file.originalname,
-            file_url: urlData.publicUrl,
-            expires_at: expiresAt,
-            downloaded: false
-        })
-        .select();
-
-    console.log('dbData:', dbData);
-    console.log('dbError:', dbError);
-
-    if (dbError) {
-        console.log('dbError details:', JSON.stringify(dbError));
-        return res.status(500).json({ error: 'Erreur lors de la sauvegarde des métadonnées' });
-    }
-    console.log('Insert réussi, id:', fileId);
-
-    // Tout s'est bien passé — on retourne l'id et le lien de téléchargement
-    res.status(201).json({
-        id: fileId,
-        downloadUrl: `https://faas-transfer.onrender.com/download/${fileId}`
-    });
-
-});
-
 // ─────────────────────────────────────────────
-// POST /upload-multiple
-// Reçoit plusieurs fichiers, les zippe et les stocke dans Supabase
-// Retourne un id unique et un lien de téléchargement pour le ZIP
+// POST /upload/multiple
+// Reçoit plusieurs fichiers, les zippe et les stocke dans Cloudflare R2
 // ─────────────────────────────────────────────
 router.post('/multiple', upload.array('files'), async (req, res) => {
-
-    // On vérifie qu'au moins un fichier a été envoyé
     if (!req.files || req.files.length === 0) {
         return res.status(400).json({ message: 'Aucun fichier reçu.' });
     }
 
-    // On importe les modules nécessaires
-    const fs = require('fs');
-    const path = require('path');
     const { exec } = require('child_process');
 
     try {
-        // Les fichiers sont déjà sur le disque grâce à diskStorage
-        // On récupère juste leurs chemins
         const tempFiles = req.files.map(file => file.path);
-
-        // On crée un ZIP avec tous les fichiers
         const zipPath = `/tmp/${Date.now()}-faas-transfer.zip`;
-        
-        // On entoure les chemins de guillemets pour gérer les espaces dans les noms de fichiers
         const fileList = tempFiles.map(f => `"${f}"`).join(' ');
 
         await new Promise((resolve, reject) => {
-            // L'option -j permet de ne pas inclure l'arborescence des dossiers dans le zip
             exec(`zip -j "${zipPath}" ${fileList}`, (error) => {
                 if (error) reject(error);
                 else resolve(true);
             });
         });
 
-        // On génère un id unique pour ce transfert
         const fileId = uuidv4();
         const zipName = `${fileId}-faas-transfer.zip`;
 
-        // On lit le ZIP en stream pour ne pas saturer la RAM (très important pour les gros zips)
         const fileStream = fs.createReadStream(zipPath);
-        const { data, error } = await supabase.storage
-            .from('transfers')
-            .upload(zipName, fileStream, {
-                contentType: 'application/zip',
-                duplex: 'half'
-            });
 
-        if (error) {
-            return res.status(500).json({ message: 'Erreur lors du stockage des fichiers.' });
-        }
+        // Upload stream vers Cloudflare R2
+        const parallelUpload = new Upload({
+            client: s3Client,
+            params: {
+                Bucket: process.env.R2_BUCKET_NAME,
+                Key: zipName,
+                Body: fileStream,
+                ContentType: 'application/zip'
+            },
+        });
 
-        // On récupère l'URL publique du ZIP
-        const { data: urlData } = supabase.storage
-            .from('transfers')
-            .getPublicUrl(zipName);
+        await parallelUpload.done();
 
-        // On calcule la date d'expiration — 24 heures
         const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-        // On sauvegarde les métadonnées dans la table transfers
-        const { error: dbError, data: dbData } = await supabase
-            .from('transfers')
-            .insert({
-                id: fileId,
-                file_name: `Archive de ${req.files.length} fichiers.zip`, // FIX: req.file est undefined ici
-                file_url: urlData.publicUrl,
-                expires_at: expiresAt,
-                downloaded: false
-            })
-            .select();
+        // On sauvegarde `zipName` au lieu d'une URL publique
+        const insertData = {
+            id: fileId,
+            file_name: `Archive de ${req.files.length} fichiers.zip`,
+            file_url: zipName, 
+            expires_at: expiresAt,
+            downloaded: false
+        };
 
-        console.log('dbData:', dbData);
-        console.log('dbError:', dbError);
+        if (req.body.userId) {
+            insertData.user_id = req.body.userId;
+        }
+
+        const { error: dbError } = await supabase
+            .from('transfers')
+            .insert(insertData);
 
         if (dbError) {
-            console.log('dbError details:', JSON.stringify(dbError));
             return res.status(500).json({ error: 'Erreur lors de la sauvegarde des métadonnées' });
         }
-        console.log('Insert réussi, id:', fileId);
 
-        // On supprime les fichiers temporaires
         tempFiles.forEach(f => fs.unlinkSync(f));
         fs.unlinkSync(zipPath);
 
-        // On retourne l'id et le lien de téléchargement
         res.status(201).json({
             id: fileId,
             downloadUrl: `https://faas-transfer.onrender.com/download/${fileId}`,
@@ -213,16 +97,14 @@ router.post('/multiple', upload.array('files'), async (req, res) => {
         });
 
     } catch (error) {
-        console.log('Erreur upload multiple:', error);
-        return res.status(500).json({ message: 'Une erreur est survenue. Veuillez réessayer.' });
+        console.log('Erreur upload multiple R2:', error);
+        return res.status(500).json({ message: 'Une erreur est survenue.' });
     }
-
 });
 
 // ─────────────────────────────────────────────
 // POST /upload/request-url
-// Génère un ticket sécurisé (Signed URL) pour uploader directement vers Supabase
-// Le client envoie un nom de fichier, et reçoit l'URL où l'uploader sans passer par ce serveur.
+// Génère un ticket sécurisé (Signed URL) R2 pour uploader directement
 // ─────────────────────────────────────────────
 router.post('/request-url', async (req, res) => {
     try {
@@ -232,75 +114,70 @@ router.post('/request-url', async (req, res) => {
         }
 
         const fileId = uuidv4();
-        // On nettoie le nom de fichier pour éviter les erreurs d'URL
         const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
         const storageName = `${fileId}-${cleanName}`;
 
-        // Supabase génère l'URL pré-signée valable 60 secondes pour uploader le fichier
-        const { data, error } = await supabase.storage
-            .from('transfers')
-            .createSignedUploadUrl(storageName);
+        const command = new PutObjectCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Key: storageName,
+            ContentType: contentType
+        });
 
-        if (error) {
-            console.error('Erreur createSignedUploadUrl:', error);
-            return res.status(500).json({ error: 'Impossible de générer le ticket d\'accès' });
-        }
+        // URL pré-signée valable 3600 secondes (1 heure)
+        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
 
         res.status(200).json({
             fileId,
             storageName,
-            signedUrl: data.signedUrl,
-            token: data.token
+            signedUrl: signedUrl
         });
     } catch (err) {
-        console.error('Exception dans /request-url:', err);
+        console.error('Exception dans /request-url R2:', err);
         res.status(500).json({ error: 'Erreur interne du serveur' });
     }
 });
 
 // ─────────────────────────────────────────────
 // POST /upload/confirm
-// Le client appelle cette route une fois l'upload direct terminé.
-// On sauvegarde alors les métadonnées dans la base de données.
 // ─────────────────────────────────────────────
 router.post('/confirm', async (req, res) => {
     try {
-        const { fileId, originalName, storageName } = req.body;
+        const { fileId, originalName, storageName, userId } = req.body;
         
         if (!fileId || !originalName || !storageName) {
             return res.status(400).json({ error: 'Paramètres manquants' });
         }
         
-        // On récupère l'URL publique finale (le fichier est déjà dans Supabase)
-        const { data: urlData } = supabase.storage
-            .from('transfers')
-            .getPublicUrl(storageName);
-
         const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-        // On insère l'entrée dans la BDD pour qu'elle soit téléchargeable
+        // On sauvegarde storageName dans file_url, download.js gèrera la redirection R2
+        const insertData = {
+            id: fileId,
+            file_name: originalName,
+            file_url: storageName,
+            expires_at: expiresAt,
+            downloaded: false
+        };
+
+        if (userId) {
+            insertData.user_id = userId;
+        }
+
         const { error: dbError } = await supabase
             .from('transfers')
-            .insert({
-                id: fileId,
-                file_name: originalName,
-                file_url: urlData.publicUrl,
-                expires_at: expiresAt,
-                downloaded: false
-            });
+            .insert(insertData);
 
         if (dbError) {
             console.error('Erreur insertion confirm:', dbError);
             return res.status(500).json({ error: 'Erreur lors de la sauvegarde des métadonnées' });
         }
 
-        // On renvoie l'URL de la page de téléchargement
         res.status(201).json({
             id: fileId,
             downloadUrl: `https://faas-transfer.onrender.com/download/${fileId}`
         });
     } catch (err) {
-        console.error('Exception dans /confirm:', err);
+        console.error('Exception dans /confirm R2:', err);
         res.status(500).json({ error: 'Erreur interne du serveur' });
     }
 });

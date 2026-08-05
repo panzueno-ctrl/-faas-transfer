@@ -33,6 +33,7 @@ const MENU_ITEMS = [
   { icon: 'download-outline', label: 'Recevoir', route: '/receive' },
   { icon: 'repeat-outline', label: 'Convertir', route: '/convert' },
   { icon: 'time-outline', label: 'Récents', route: '/history' },
+  { icon: 'person-outline', label: 'Mon Compte', route: '/auth' },
   { icon: 'settings-outline', label: 'Paramètres', route: '/settings' },
 ];
 

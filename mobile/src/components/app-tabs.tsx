@@ -98,6 +98,18 @@ export default function AppTabs() {
           ),
         }}
       />
+      
+      {/* Onglet Compte → src/app/auth.jsx */}
+      <Tabs.Screen
+        name="auth"
+        options={{
+          title: 'Mon Compte',
+          tabBarLabel: 'Mon Compte',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-outline" size={size} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }

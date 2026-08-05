@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import JSZip from 'jszip';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,9 +34,8 @@ import ActionCard from '../components/ActionCard';
 
 // On importe AsyncStorage pour sauvegarder l'historique des envois
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// On importe QRCode pour générer le QR code du lien de téléchargement
 import QRCode from 'react-native-qrcode-svg';
+import { supabase } from '../lib/supabase';
 
 // Adresse du serveur
 const SERVER_URL = 'https://faas-transfer.onrender.com';
@@ -105,22 +105,65 @@ export default function SendScreen() {
     const [copied, setCopied] = useState(false);
 
     // Ouvre le sélecteur de fichier selon la catégorie choisie
-    const pickFile = async (mimeTypes: string[]) => {
+    const pickFile = async (categoryId: string, mimeTypes: string[]) => {
         try {
-            const res = await DocumentPicker.getDocumentAsync({
-                type: mimeTypes,
-                copyToCacheDirectory: true,
-                // On autorise la sélection de plusieurs fichiers
-                multiple: true,
-            });
+            let files: any[] = [];
 
-            if (res.canceled) return;
+            // Si c're photos ou vidéos, on utilise la galerie native
+            if (categoryId === 'images' || categoryId === 'video' || categoryId === 'audio') {
+                let mediaTypes: ImagePicker.MediaType = 'images';
+                if (categoryId === 'video') mediaTypes = 'videos';
+                // Note: ImagePicker does not support purely Audio picking well on all platforms.
+                // But for photos and videos, it's perfect.
+                
+                if (categoryId === 'audio') {
+                    // Fallback sur DocumentPicker pour l'audio
+                    const res = await DocumentPicker.getDocumentAsync({
+                        type: mimeTypes,
+                        copyToCacheDirectory: true,
+                        multiple: true,
+                    });
+                    if (res.canceled) return;
+                    files = res.assets;
+                } else {
+                    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                    if (permissionResult.granted === false) {
+                        Alert.alert("Permission requise", "Vous devez autoriser l'accès à vos photos.");
+                        return;
+                    }
 
-            const files = res.assets;
+                    const result = await ImagePicker.launchImageLibraryAsync({
+                        mediaTypes: mediaTypes,
+                        allowsMultipleSelection: true,
+                        quality: 1,
+                    });
+
+                    if (result.canceled) return;
+                    
+                    // Format the assets to match DocumentPicker structure
+                    files = result.assets.map(asset => ({
+                        uri: asset.uri,
+                        name: asset.fileName || asset.uri.split('/').pop() || 'media.jpg',
+                        mimeType: asset.mimeType || (categoryId === 'video' ? 'video/mp4' : 'image/jpeg')
+                    }));
+                }
+            } else {
+                // Pour les documents, fichiers libres, on utilise l'explorateur de fichiers standard
+                const res = await DocumentPicker.getDocumentAsync({
+                    type: mimeTypes,
+                    copyToCacheDirectory: true,
+                    multiple: true,
+                });
+                if (res.canceled) return;
+                files = res.assets;
+            }
+
+            if (!files || files.length === 0) return;
+
             setSelectedFile(files[0]);
 
             // Si un seul fichier → endpoint normal
-            // Si plusieurs fichiers → endpoint multiple
+            // Si plusieurs fichiers → endpoint multiple (ZIP local)
             if (files.length === 1) {
                 await uploadFile(files[0]);
             } else {
@@ -128,7 +171,7 @@ export default function SendScreen() {
             }
 
         } catch (error) {
-            Alert.alert('Erreur', 'Impossible de sélectionner le fichier.');
+            Alert.alert('Erreur', 'Impossible de sélectionner le(s) fichier(s).');
         }
     };
 
@@ -139,12 +182,14 @@ export default function SendScreen() {
 
         try {
             // 1. Demander le ticket d'accès (Signed URL) au backend
+            const { data: { session } } = await supabase.auth.getSession();
             const reqUrlResponse = await fetch(`${SERVER_URL}/upload/request-url`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     fileName: file.name,
-                    contentType: file.mimeType || 'application/octet-stream'
+                    contentType: file.mimeType || 'application/octet-stream',
+                    userId: session?.user?.id || null
                 })
             });
 
@@ -154,11 +199,12 @@ export default function SendScreen() {
 
             const { fileId, storageName, signedUrl } = await reqUrlResponse.json();
 
-            // 2. Uploader directement vers Supabase via FileSystem (avec vraie barre de progression)
+            // 2. Uploader directement vers Cloudflare R2 via FileSystem (avec vraie barre de progression)
             if (Platform.OS === 'web') {
                 // Sur Web, on utilise fetch/XMLHttpRequest pour le direct upload
                 const xhr = new XMLHttpRequest();
                 xhr.open('PUT', signedUrl);
+                xhr.setRequestHeader('Content-Type', file.mimeType || 'application/octet-stream');
                 xhr.upload.onprogress = (event) => {
                     if (event.lengthComputable) {
                         setProgress(Math.round((event.loaded / event.total) * 100));
@@ -168,7 +214,7 @@ export default function SendScreen() {
                 await new Promise((resolve, reject) => {
                     xhr.onload = () => {
                         if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response);
-                        else reject(new Error('Erreur upload Supabase'));
+                        else reject(new Error('Erreur upload R2'));
                     };
                     xhr.onerror = () => reject(new Error('Erreur réseau'));
                     xhr.send(file.file); // L'objet File natif du web
@@ -204,9 +250,10 @@ export default function SendScreen() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    fileId,
+                    fileId: fileId,
                     originalName: file.name,
-                    storageName
+                    storageName: storageName,
+                    userId: session?.user?.id || null
                 })
             });
 
@@ -340,7 +387,7 @@ export default function SendScreen() {
                                 title={cat.label}
                                 description="" 
                                 icon={cat.icon as any}
-                                onPress={() => pickFile(cat.mimeTypes)}
+                                onPress={() => pickFile(cat.id, cat.mimeTypes)}
                                 style={styles.categoryCard} 
                                 compact={true} 
                             />

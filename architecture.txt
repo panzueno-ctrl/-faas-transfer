@@ -405,3 +405,35 @@ Modifications techniques appliquées :
 - `server/routes/upload.js` : Création d'une route pour générer des Signed URLs Supabase (retrait de `multer` pour les gros fichiers).
 - `mobile/src/app/send.tsx` : Utilisation de `FileSystem.createUploadTask` d'Expo au lieu de `fetch()` pour un suivi de progression 100% réel.
 - Librairie `react-native-zip-archive` : Ajoutée pour zipper les fichiers multiples directement en local sur le téléphone avant de les envoyer sur "l'autoroute" Direct Upload.
+
+============================================================
+  12. ANALYSE DE L'INFRASTRUCTURE ET LIMITES (CLOUD)
+============================================================
+Les "nuages" utilisés ne sont pas nos serveurs physiques, mais des services partagés. Sur le plan gratuit, voici les limites exactes qui dictent nos choix d'architecture :
+
+1. Le Disque Dur (Storage Supabase)
+   - Limite : 1 Go maximum. Si l'on upload plus de 1 Go de fichiers cumulés, Supabase bloquera les envois suivants.
+
+2. Le Trafic / Bande Passante (Egress Supabase)
+   - Limite : 2 Go par mois. Le trafic est consommé uniquement lors des TÉLÉCHARGEMENTS par les destinataires. Si on upload 1 fichier de 500 Mo, et que 4 personnes le téléchargent, on consomme 2 Go (4 x 500 Mo) et le forfait est épuisé.
+
+Solution validée pour repousser ces limites :
+Migration future vers Cloudflare R2 qui offre 10 Go d'espace gratuit et une bande passante (trafic de téléchargement) 100% illimitée et gratuite.
+
+============================================================
+  13. FEUILLE DE ROUTE (ROADMAP V2) VALIDÉE
+============================================================
+
+1. Système d'Authentification (Comptes Utilisateurs)
+   - Séparer les données par utilisateur via Supabase Auth.
+   - Création d'un espace personnel pour gérer ses propres envois et annuler des liens.
+
+2. Refonte de la Sélection de Fichiers (Galerie Native)
+   - Remplacement de `DocumentPicker` par `expo-image-picker` pour une sélection fluide, rapide et visuelle de dizaines de photos/vidéos.
+
+3. Correction de l'Historique des Réceptions
+   - Enregistrer localement (`AsyncStorage`) chaque lien ouvert depuis l'onglet "Recevoir" ou via scan de QR Code pour peupler la "Boîte de réception".
+
+4. Gestion du Téléchargement Multiple (Lien Multi-usage)
+   - Problème actuel : L'API (`download.js`) supprime le fichier 60 secondes après le tout PREMIER téléchargement réussi. Le lien est donc à "Usage Unique".
+   - Solution future : Ne supprimer les fichiers que par un "Cron Job" (script de nettoyage) basé sur la date d'expiration (24h/48h), permettant un téléchargement par de multiples destinataires.
