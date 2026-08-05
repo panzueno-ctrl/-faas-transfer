@@ -29,3 +29,30 @@ Ce fichier répertorie les commandes système et git que j'utilise pour travaill
 
 8. `cp fichier1 fichier2`
    - À quoi ça sert : "Copy". Permet de copier/coller un fichier en ligne de commande. Je l'ai utilisé pour copier le logo SVG en favicon.ico.
+
+9. `npx expo install expo-image-picker`
+   - À quoi ça sert : Installe une bibliothèque native pour Expo (React Native). `npx expo install` s'assure d'installer la version exacte qui est compatible avec la version d'Expo utilisée dans le projet, contrairement à `npm install` qui prendrait juste la dernière version au hasard.
+
+10. `npm install @aws-sdk/client-s3`
+    - À quoi ça sert : Installe le SDK (Software Development Kit) officiel d'Amazon Web Services pour Node.js. C'est ce qu'on a utilisé pour permettre à notre backend de discuter avec Cloudflare R2 (car R2 utilise le standard AWS S3).
+
+11. `wsl -d Ubuntu -e bash -c "cd /home/daven/faas-transfer && git add . && git commit -m '...' && git push"`
+    - À quoi ça sert : C'est une commande Windows (PowerShell) qui ordonne à WSL (Ubuntu) d'exécuter une suite de commandes Linux. Ça permet de "pousser" le code sur GitHub depuis l'intérieur de la machine virtuelle Linux, ce qui évite les problèmes de droits (dubious ownership) avec Windows.
+
+12. `ls` ou `ls -la`
+    - À quoi ça sert : "List". Affiche tout le contenu d'un dossier. Le `-la` permet de voir les fichiers cachés (comme `.env` ou `.git`) et la taille des fichiers. C'est l'équivalent d'ouvrir un dossier dans l'explorateur Windows.
+
+13. `cat nom_du_fichier.txt`
+    - À quoi ça sert : "Concatenate". Permet de lire rapidement le contenu d'un fichier et de l'afficher directement dans le terminal (très utile pour lire un fichier de configuration sans l'ouvrir dans un éditeur).
+
+14. `grep "mot-clé" fichier` ou `ripgrep`
+    - À quoi ça sert : Recherche un mot-clé précis dans un fichier ou dans tous les fichiers d'un dossier. Je l'utilise souvent pour trouver "où est-ce que cette fonction a été utilisée dans tout le code".
+
+15. `mkdir nom_du_dossier`
+    - À quoi ça sert : "Make Directory". Crée un nouveau dossier vide.
+
+16. `rm -rf nom_du_dossier`
+    - À quoi ça sert : Supprime DÉFINITIVEMENT un dossier et tout son contenu sans demander de confirmation. C'est dangereux, mais très utile pour supprimer le dossier `node_modules` et le réinstaller avec `npm install`.
+
+17. `sed -i 's/ancien_mot/nouveau_mot/g' fichier.js`
+    - À quoi ça sert : Remplace automatiquement un mot par un autre dans un fichier sans l'ouvrir. Je l'utilise souvent pour faire des corrections rapides (comme changer l'URL de votre serveur).

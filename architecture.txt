@@ -102,11 +102,15 @@ project/
    - Limites (Plan Gratuit) : 512 Mo de RAM. Le serveur s'endort après 15 min d'inactivité (spin down), ce qui cause un délai de ~50s au premier chargement de la journée (cold start).
    - NB : Bien surveiller la consommation de RAM lors des conversions de gros fichiers.
 
-🗄️ Base de données & Stockage : Supabase
-   - Rôle : PostgreSQL pour stocker les métadonnées (table `transfers`), et Buckets pour les fichiers.
+🗄️ Base de données : Supabase
+   - Rôle : PostgreSQL pour stocker les métadonnées (table `transfers` et système d'authentification `auth.users`).
    - Pourquoi : L'alternative backend-as-a-service gratuite la plus puissante du marché.
-   - Limites (Plan Gratuit) : 500 Mo de base de données. Stockage de fichiers de 1 Go.
-   - NB : Le stockage limité (1 Go) justifie l'importance de notre suppression automatique (cron/fin de download). Si le quota est atteint, l'application crashera lors des uploads.
+   - Limites (Plan Gratuit) : 500 Mo de base de données.
+
+☁️ Stockage de Fichiers : Cloudflare R2
+   - Rôle : Héberge physiquement tous les gros fichiers uploadés (vidéos, photos, ZIP).
+   - Pourquoi : Stockage cloud ultra-rapide avec CDN mondial intégré.
+   - Limites (Plan Gratuit) : 10 Go de stockage. Bande passante (Trafic) 100% ILLIMITÉE !
 
 💾 Code source : GitHub
    - Rôle : Versionnement (Git) et sauvegarde du code.
@@ -151,20 +155,20 @@ Tab bar (barre en bas)
 
   TRANSFERT (Flux End-to-End)
   ─────────────────────────────────────────────────────────
-  POST /upload
-  1. Le client envoie le fichier (après une éventuelle conversion locale).
-  2. Le serveur stocke le fichier dans Supabase Storage.
-  3. Le serveur crée une entrée dans la table `transfers`.
-  4. Le serveur retourne l'id unique à l'app.
-  5. L'app affiche le QR code / Lien / Code à 6 chiffres.
+  POST /upload/request-url (Direct Upload via R2)
+  1. Le client envoie le nom du fichier.
+  2. Le serveur génère une "Signed URL" Cloudflare R2 valide 1h (GetObject/PutObject).
+  3. Le serveur retourne l'URL.
+  4. L'app upload le fichier directement vers Cloudflare R2 en PUT.
+  
+  POST /upload/confirm
+  5. L'app confirme l'upload. Le serveur sauvegarde l'ID et l'ID utilisateur dans Supabase DB.
 
   GET /download/:id
-  1. Le destinataire visite le lien ou entre le code.
-  2. Le serveur récupère le fichier depuis Supabase et l'envoie.
-  3. Le fichier est marqué `downloaded = true` et supprimé après 60 secondes.
-
-  DELETE /expire/:id
-  - Supprime manuellement le fichier de Supabase et de la base de données.
+  1. Le destinataire visite le lien.
+  2. Le serveur vérifie Supabase DB.
+  3. Le serveur génère une "Signed URL" de téléchargement R2 et redirige l'utilisateur (Redirect 302).
+  4. Le fichier est marqué `downloaded = true`.
 
   CONVERSION (Flux End-to-End)
   ─────────────────────────────────────────────────────────
@@ -411,18 +415,19 @@ Modifications techniques appliquées :
 ============================================================
 Les "nuages" utilisés ne sont pas nos serveurs physiques, mais des services partagés. Sur le plan gratuit, voici les limites exactes qui dictent nos choix d'architecture :
 
-1. Le Disque Dur (Storage Supabase)
-   - Limite : 1 Go maximum. Si l'on upload plus de 1 Go de fichiers cumulés, Supabase bloquera les envois suivants.
+1. Le Disque Dur (Storage Cloudflare R2)
+   - Limite : 10 Go maximum. Si l'on dépasse, le prix est dérisoire (0.015$/Go). Pour un usage gratuit, la suppression automatique des fichiers après 24h garantit qu'on ne dépasse jamais les 10 Go simultanés.
 
-2. Le Trafic / Bande Passante (Egress Supabase)
-   - Limite : 2 Go par mois. Le trafic est consommé uniquement lors des TÉLÉCHARGEMENTS par les destinataires. Si on upload 1 fichier de 500 Mo, et que 4 personnes le téléchargent, on consomme 2 Go (4 x 500 Mo) et le forfait est épuisé.
-
-Solution validée pour repousser ces limites :
-Migration future vers Cloudflare R2 qui offre 10 Go d'espace gratuit et une bande passante (trafic de téléchargement) 100% illimitée et gratuite.
+2. Le Trafic / Bande Passante (Egress Cloudflare R2)
+   - Limite : 100% ILLIMITÉ ET GRATUIT. (C'est la révolution de Cloudflare R2 par rapport à Amazon S3 ou Supabase).
+   - Conséquence : Si 1 million de personnes téléchargent vos vidéos, vous ne payez rien.
 
 ============================================================
-  13. FEUILLE DE ROUTE (ROADMAP V2) VALIDÉE
+  13. FEUILLE DE ROUTE (ROADMAP V3) À VENIR
 ============================================================
+
+1. Nettoyage Automatique Global (Cron Job)
+   - Mettre en place un script de nettoyage global pour supprimer réellement les fichiers expirés sur Cloudflare R2 et Supabase DB chaque nuit.
 
 1. Système d'Authentification (Comptes Utilisateurs)
    - Séparer les données par utilisateur via Supabase Auth.
@@ -437,3 +442,48 @@ Migration future vers Cloudflare R2 qui offre 10 Go d'espace gratuit et une band
 4. Gestion du Téléchargement Multiple (Lien Multi-usage)
    - Problème actuel : L'API (`download.js`) supprime le fichier 60 secondes après le tout PREMIER téléchargement réussi. Le lien est donc à "Usage Unique".
    - Solution future : Ne supprimer les fichiers que par un "Cron Job" (script de nettoyage) basé sur la date d'expiration (24h/48h), permettant un téléchargement par de multiples destinataires.
+
+============================================================
+  14. FEUILLE DE ROUTE DÉTAILLÉE (TASKS & SUIVI)
+============================================================
+
+- [x] Backend : Multi-Téléchargement
+  - [x] Modifier `download.js` pour ne plus supprimer les fichiers 60s après le premier téléchargement.
+  - [x] Vérifier que `cleanup.js` ou Supabase supprime bien à l'expiration.
+- [x] Frontend : Historique des Réceptions
+  - [x] Modifier `receive.tsx` pour sauvegarder les liens scannés/ouverts dans `AsyncStorage` (`faas_received_history`).
+  - [x] Modifier `history.tsx` pour afficher les "Fichiers Envoyés" et les "Fichiers Reçus".
+- [x] Frontend : Nouvelle Galerie Native
+  - [x] Installer `expo-image-picker`.
+  - [x] Intégrer la sélection multiple de photos/vidéos dans `send.tsx` avec une belle interface.
+- [x] Système de Comptes (Auth)
+  - [x] Configurer Supabase Auth sur l'application mobile.
+  - [x] Créer un écran de Connexion / Inscription.
+  - [x] Lier les transferts à l'ID de l'utilisateur connecté.
+- [x] Migration Cloudflare R2
+  - [x] Ajouter le SDK AWS S3.
+  - [x] Configurer `r2.js` avec les clés d'API.
+  - [x] Refactoriser `upload.js` pour les envois directs vers R2.
+  - [x] Refactoriser `download.js` pour rediriger vers un lien pré-signé R2.
+
+============================================================
+  15. GUIDE DE DÉPLOIEMENT ET TEST (WALKTHROUGH)
+============================================================
+
+Ce qui est prêt à être testé :
+1. Le Système de Comptes (Auth) :
+   - Onglet "Mon Compte" permet de s'inscrire ou se connecter. Les transferts y seront liés.
+2. La Nouvelle Galerie Native :
+   - Sélection multiple fluide de photos et vidéos depuis la galerie native du téléphone.
+3. L'Historique des Réceptions :
+   - Onglets "Envoyés" et "Reçus" disponibles dans l'Historique.
+4. Le Multi-Téléchargement :
+   - Le lien ne s'autodétruit plus à la 1ère lecture.
+
+Comment déployer en local (après un ajout de librairie comme expo-image-picker) :
+1. Pousser sur Github (git add ., git commit, git push) pour mettre à jour Render/Vercel.
+2. Sur votre PC (WSL), vider le cache et réinstaller les modules :
+   cd mobile
+   npm cache clean --force
+   npm install
+   npx expo start
