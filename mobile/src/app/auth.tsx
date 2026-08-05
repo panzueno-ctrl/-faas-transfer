@@ -13,6 +13,7 @@ export default function AuthScreen() {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [session, setSession] = useState<Session | null>(null);
+    const [isLogin, setIsLogin] = useState(true);
 
     const { colors } = useTheme();
     const { t } = useTranslation();
@@ -36,31 +37,28 @@ export default function AuthScreen() {
         }
     };
 
-    async function signInWithEmail() {
+    async function handleAuth() {
         if (!email || !password) return showAlert(t('common.error'), t('auth.empty_fields'));
         setLoading(true);
-        const { error } = await supabase.auth.signInWithPassword({
-            email: email,
-            password: password,
-        });
 
-        if (error) showAlert(t('common.error'), error.message);
-        setLoading(false);
-    }
-
-    async function signUpWithEmail() {
-        if (!email || !password) return showAlert(t('common.error'), t('auth.empty_fields'));
-        setLoading(true);
-        const {
-            data: { session },
-            error,
-        } = await supabase.auth.signUp({
-            email: email,
-            password: password,
-        });
-
-        if (error) showAlert(t('common.error'), error.message);
-        else if (!session) showAlert(t('common.success'), t('auth.check_email'));
+        if (isLogin) {
+            const { error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+            });
+            if (error) showAlert(t('common.error'), error.message);
+        } else {
+            const {
+                data: { session },
+                error,
+            } = await supabase.auth.signUp({
+                email: email,
+                password: password,
+            });
+            if (error) showAlert(t('common.error'), error.message);
+            else if (!session) showAlert(t('common.success'), t('auth.check_email'));
+        }
+        
         setLoading(false);
     }
 
@@ -91,7 +89,7 @@ export default function AuthScreen() {
         <SafeAreaView style={styles.container}>
             <View style={styles.content}>
                 <LogoFaaS size={60} showBackground />
-                <Text style={styles.title}>{t('auth.account')}</Text>
+                <Text style={styles.title}>{isLogin ? t('auth.login') : t('auth.signup')}</Text>
                 <Text style={styles.subtitle}>{t('auth.login_subtitle')}</Text>
 
                 <View style={styles.formContainer}>
@@ -121,12 +119,14 @@ export default function AuthScreen() {
                     </View>
 
                     <View style={styles.buttonsContainer}>
-                        <Pressable style={styles.primaryButton} onPress={signInWithEmail} disabled={loading}>
-                            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{t('auth.login')}</Text>}
+                        <Pressable style={styles.primaryButton} onPress={handleAuth} disabled={loading}>
+                            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{isLogin ? t('auth.login') : t('auth.signup')}</Text>}
                         </Pressable>
 
-                        <Pressable style={styles.secondaryButton} onPress={signUpWithEmail} disabled={loading}>
-                            <Text style={styles.secondaryButtonText}>{t('auth.signup')}</Text>
+                        <Pressable style={styles.switchModeButton} onPress={() => setIsLogin(!isLogin)} disabled={loading}>
+                            <Text style={styles.switchModeText}>
+                                {isLogin ? t('auth.no_account') : t('auth.has_account')}
+                            </Text>
                         </Pressable>
                     </View>
                 </View>
@@ -205,18 +205,14 @@ const getStyles = (colors: any) => StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
     },
-    secondaryButton: {
-        backgroundColor: 'transparent',
-        height: 56,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: colors.border,
+    switchModeButton: {
+        paddingVertical: 12,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    secondaryButtonText: {
-        color: colors.textMuted,
-        fontSize: 16,
+    switchModeText: {
+        color: colors.primary,
+        fontSize: 14,
         fontWeight: '600',
     },
     logoutButton: {
