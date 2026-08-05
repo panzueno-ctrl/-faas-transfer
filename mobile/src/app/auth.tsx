@@ -62,7 +62,7 @@ export default function AuthScreen() {
         setLoading(false);
     }
 
-    async function signInWithOAuth(provider: 'google' | 'azure') {
+    async function signInWithOAuth(provider: 'google' | 'azure' | 'apple') {
         const { error } = await supabase.auth.signInWithOAuth({
             provider: provider,
         });
@@ -154,6 +154,11 @@ export default function AuthScreen() {
                         <Pressable style={styles.oauthButton} onPress={() => signInWithOAuth('azure')}>
                             <Ionicons name="logo-windows" size={20} color={colors.text} />
                             <Text style={styles.oauthButtonText}>{t('auth.continue_microsoft')}</Text>
+                        </Pressable>
+
+                        <Pressable style={styles.oauthButton} onPress={() => signInWithOAuth('apple')}>
+                            <Ionicons name="logo-apple" size={20} color={colors.text} />
+                            <Text style={styles.oauthButtonText}>{t('auth.continue_apple')}</Text>
                         </Pressable>
                     </View>
                 </View>
