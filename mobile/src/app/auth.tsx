@@ -65,6 +65,9 @@ export default function AuthScreen() {
     async function signInWithOAuth(provider: 'google' | 'azure') {
         const { error } = await supabase.auth.signInWithOAuth({
             provider: provider,
+            options: {
+                redirectTo: Platform.OS === 'web' ? window.location.origin : 'faastransfer://'
+            }
         });
         if (error) {
             showAlert(t('common.error'), error.message);
