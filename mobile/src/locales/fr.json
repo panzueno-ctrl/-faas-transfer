@@ -50,8 +50,7 @@
     "check_email": "Veuillez vérifier votre boîte mail pour confirmer votre inscription !",
     "or": "Ou",
     "continue_google": "Continuer avec Google",
-    "continue_microsoft": "Continuer avec Microsoft",
-    "continue_apple": "Continuer avec Apple"
+    "continue_microsoft": "Continuer avec Microsoft"
   },
   "send": {
     "title": "Envoyer un fichier",

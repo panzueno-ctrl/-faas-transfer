@@ -50,8 +50,7 @@
     "check_email": "Please check your email to confirm your registration!",
     "or": "Or",
     "continue_google": "Continue with Google",
-    "continue_microsoft": "Continue with Microsoft",
-    "continue_apple": "Continue with Apple"
+    "continue_microsoft": "Continue with Microsoft"
   },
   "send": {
     "title": "Send a file",
