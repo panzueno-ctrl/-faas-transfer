@@ -47,6 +47,7 @@ router.get('/:id', async (req, res) => {
                     console.error('Archive error:', err);
                 });
 
+                const https = require('https');
                 archive.pipe(res);
 
                 for (const file of files) {
@@ -55,14 +56,21 @@ router.get('/:id', async (req, res) => {
                             Bucket: process.env.R2_BUCKET_NAME,
                             Key: file.storageName
                         });
-                        const s3Res = await s3Client.send(command);
+                        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
                         
-                        archive.append(s3Res.Body, { name: file.originalName });
-                        
-                        // Wait for the stream to finish before opening the next connection
                         await new Promise((resolve, reject) => {
-                            s3Res.Body.on('end', resolve);
-                            s3Res.Body.on('error', reject);
+                            https.get(signedUrl, (httpRes) => {
+                                if (httpRes.statusCode !== 200) {
+                                    httpRes.resume(); // free memory
+                                    return reject(new Error(`HTTP ${httpRes.statusCode}`));
+                                }
+                                
+                                archive.append(httpRes, { name: file.originalName });
+                                
+                                // Attendre que le fichier soit totalement traité et envoyé dans le ZIP
+                                archive.once('entry', () => resolve());
+                                httpRes.on('error', reject);
+                            }).on('error', reject);
                         });
                     } catch (err) {
                         console.error('Error streaming file to ZIP:', file.originalName, err);
