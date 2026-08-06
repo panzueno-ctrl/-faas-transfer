@@ -4,7 +4,7 @@
  * Écran de conversion et traitement de fichiers.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -18,6 +18,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
+import { supabase } from '../lib/supabase';
+import { Session } from '@supabase/supabase-js';
 import ActionCard from '../components/ActionCard';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -161,6 +163,22 @@ export default function ConvertScreen() {
     const [selectedService, setSelectedService] = useState<any>(null);
     const [fileName, setFileName] = useState('');
     const [resultUrl, setResultUrl] = useState('');
+    
+    const [session, setSession] = useState<Session | null>(null);
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+            setIsCheckingAuth(false);
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+        });
+        
+        return () => subscription.unsubscribe();
+    }, []);
 
     const handleServicePress = async (service: any) => {
         setSelectedService(service);
@@ -236,6 +254,55 @@ export default function ConvertScreen() {
         setFileName('');
         setResultUrl('');
     };
+
+    if (isCheckingAuth) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                <View style={styles.centerContent}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (!session) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                
+                <View style={styles.contentWrapper}>
+                    <Pressable 
+                        style={({ pressed, hovered }: any) => [
+                            styles.backButton,
+                            (pressed || hovered) && styles.backButtonHovered
+                        ]}
+                        onPress={() => router.push('/')}>
+                        <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                        <Text style={styles.backButtonText}>{t('common.back')}</Text>
+                    </Pressable>
+
+                    <View style={styles.authWallContainer}>
+                        <View style={styles.lockIconContainer}>
+                            <Ionicons name="lock-closed" size={50} color={colors.primary} />
+                        </View>
+                        <Text style={styles.authWallTitle}>Débloquez la puissance de FaaS Transfer</Text>
+                        <Text style={styles.authWallSubtitle}>Créez un compte gratuit pour accéder à nos outils professionnels de conversion et manipulation de fichiers.</Text>
+                        
+                        <Pressable 
+                            style={({ pressed, hovered }: any) => [
+                                styles.authWallButton,
+                                (pressed || hovered) && { opacity: 0.8 }
+                            ]}
+                            onPress={() => router.push('/auth')}>
+                            <Ionicons name="person-add-outline" size={20} color="#ffffff" />
+                            <Text style={styles.authWallButtonText}>Créer un compte</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     if (step === 'menu') {
         return (
@@ -529,5 +596,65 @@ const getStyles = (colors: any) => StyleSheet.create({
         color: colors.text,
         fontSize: 16,
         fontWeight: '600',
+    },
+
+    authWallContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 24,
+        maxWidth: 500,
+        width: '100%',
+        alignSelf: 'center',
+    },
+    lockIconContainer: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: colors.card,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 32,
+        borderWidth: 1,
+        borderColor: colors.border,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.2,
+        shadowRadius: 30,
+    },
+    authWallTitle: {
+        fontSize: 32,
+        fontWeight: '900',
+        color: colors.text,
+        marginBottom: 16,
+        textAlign: 'center',
+        letterSpacing: -0.5,
+    },
+    authWallSubtitle: {
+        fontSize: 16,
+        color: colors.textMuted,
+        marginBottom: 40,
+        textAlign: 'center',
+        lineHeight: 24,
+    },
+    authWallButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: colors.primary,
+        paddingVertical: 16,
+        paddingHorizontal: 32,
+        borderRadius: 12,
+        width: '100%',
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+    },
+    authWallButtonText: {
+        color: '#ffffff',
+        fontWeight: '700',
+        fontSize: 16,
     },
 });
