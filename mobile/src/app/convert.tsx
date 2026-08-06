@@ -294,7 +294,7 @@ export default function ConvertScreen() {
                                 styles.authWallButton,
                                 (pressed || hovered) && { opacity: 0.8 }
                             ]}
-                            onPress={() => router.push('/auth')}>
+                            onPress={() => router.push({ pathname: '/auth', params: { returnTo: '/convert' } } as any)}>
                             <Ionicons name="person-add-outline" size={20} color="#ffffff" />
                             <Text style={styles.authWallButtonText}>Créer un compte</Text>
                         </Pressable>
@@ -310,15 +310,28 @@ export default function ConvertScreen() {
                 <View style={styles.backgroundGlow} pointerEvents="none" />
                 
                 <View style={styles.contentWrapper}>
-                    <Pressable 
-                        style={({ pressed, hovered }: any) => [
-                            styles.backButton,
-                            (pressed || hovered) && styles.backButtonHovered
-                        ]}
-                        onPress={() => router.push('/')}>
-                        <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
-                        <Text style={styles.backButtonText}>{t('common.back')}</Text>
-                    </Pressable>
+                    <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', paddingHorizontal: 32, paddingTop: 32, position: 'absolute', top: 0, zIndex: 20 }}>
+                        <Pressable 
+                            style={({ pressed, hovered }: any) => [
+                                styles.backButton,
+                                (pressed || hovered) && styles.backButtonHovered,
+                                { position: 'relative', top: 0, left: 0 }
+                            ]}
+                            onPress={() => router.push('/')}>
+                            <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                            <Text style={styles.backButtonText}>{t('common.back')}</Text>
+                        </Pressable>
+
+                        <Pressable 
+                            style={({ pressed, hovered }: any) => [
+                                styles.backButton,
+                                (pressed || hovered) && styles.backButtonHovered,
+                                { position: 'relative', top: 0, left: 0, paddingHorizontal: 12 }
+                            ]}
+                            onPress={() => router.push({ pathname: '/auth', params: { isProfile: 'true', returnTo: '/convert' } } as any)}>
+                            <Ionicons name="person-circle-outline" size={22} color={colors.primary} />
+                        </Pressable>
+                    </View>
 
                     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                         <View style={styles.headerContainer}>
