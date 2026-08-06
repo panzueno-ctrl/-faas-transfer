@@ -73,25 +73,25 @@ router.get('/:id', async (req, res) => {
                 const command = new GetObjectCommand({
                     Bucket: process.env.R2_BUCKET_NAME,
                     Key: file.storageName,
-                    ResponseContentDisposition: \`attachment; filename="\${safeFileName}"\`
+                    ResponseContentDisposition: `attachment; filename="${safeFileName}"`
                 });
                 
                 const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
                 
-                html += \`
+                html += `
                     <li class="file-item">
-                        <span class="file-name">\${file.originalName}</span>
-                        <a href="\${signedUrl}" class="btn">Télécharger</a>
+                        <span class="file-name">${file.originalName}</span>
+                        <a href="${signedUrl}" class="btn">Télécharger</a>
                     </li>
-                \`;
+                `;
             }
 
-            html += \`
+            html += `
                     </ul>
                 </div>
             </body>
             </html>
-            \`;
+            `;
             
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
             return res.send(html);
