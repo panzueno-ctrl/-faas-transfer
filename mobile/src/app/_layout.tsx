@@ -29,13 +29,25 @@ function RootContent() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
+    // Si on revient d'une connexion OAuth (Google/Microsoft), l'URL contient un token.
+    // Il faut attendre que Supabase parse ce token et déclenche onAuthStateChange
+    // avant d'arrêter le loader, sinon la page de connexion flashe à l'écran.
+    const isOAuthRedirect = typeof window !== 'undefined' && 
+      (window.location.hash.includes('access_token=') || window.location.hash.includes('error='));
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setIsCheckingAuth(false);
+      // On arrête le loader uniquement si ce n'est pas un retour OAuth
+      // ou si on a déjà une session valide.
+      if (!isOAuthRedirect || session) {
+        setIsCheckingAuth(false);
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      // Quand l'événement est reçu (ex: SIGNED_IN après OAuth), on arrête le loader
+      setIsCheckingAuth(false);
     });
     
     return () => subscription.unsubscribe();
