@@ -165,12 +165,10 @@ export default function ConvertScreen() {
     const [resultUrl, setResultUrl] = useState('');
     
     const [session, setSession] = useState<Session | null>(null);
-    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
-            setIsCheckingAuth(false);
         });
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -255,54 +253,6 @@ export default function ConvertScreen() {
         setResultUrl('');
     };
 
-    if (isCheckingAuth) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.backgroundGlow} pointerEvents="none" />
-                <View style={styles.centerContent}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                </View>
-            </SafeAreaView>
-        );
-    }
-
-    if (!session) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.backgroundGlow} pointerEvents="none" />
-                
-                <View style={styles.contentWrapper}>
-                    <Pressable 
-                        style={({ pressed, hovered }: any) => [
-                            styles.backButton,
-                            (pressed || hovered) && styles.backButtonHovered
-                        ]}
-                        onPress={() => router.push('/')}>
-                        <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
-                        <Text style={styles.backButtonText}>{t('common.back')}</Text>
-                    </Pressable>
-
-                    <View style={styles.authWallContainer}>
-                        <View style={styles.lockIconContainer}>
-                            <Ionicons name="lock-closed" size={50} color={colors.primary} />
-                        </View>
-                        <Text style={styles.authWallTitle}>Débloquez la puissance de FaaS Transfer</Text>
-                        <Text style={styles.authWallSubtitle}>Créez un compte gratuit pour accéder à nos outils professionnels de conversion et manipulation de fichiers.</Text>
-                        
-                        <Pressable 
-                            style={({ pressed, hovered }: any) => [
-                                styles.authWallButton,
-                                (pressed || hovered) && { opacity: 0.8 }
-                            ]}
-                            onPress={() => router.push({ pathname: '/auth', params: { returnTo: '/convert' } } as any)}>
-                            <Ionicons name="person-add-outline" size={20} color="#ffffff" />
-                            <Text style={styles.authWallButtonText}>Créer un compte</Text>
-                        </Pressable>
-                    </View>
-                </View>
-            </SafeAreaView>
-        );
-    }
 
     if (step === 'menu') {
         return (
@@ -320,16 +270,6 @@ export default function ConvertScreen() {
                             onPress={() => router.push('/')}>
                             <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
                             <Text style={styles.backButtonText}>{t('common.back')}</Text>
-                        </Pressable>
-
-                        <Pressable 
-                            style={({ pressed, hovered }: any) => [
-                                styles.backButton,
-                                (pressed || hovered) && styles.backButtonHovered,
-                                { position: 'relative', top: 0, left: 0, paddingHorizontal: 12 }
-                            ]}
-                            onPress={() => router.push({ pathname: '/auth', params: { isProfile: 'true', returnTo: '/convert' } } as any)}>
-                            <Ionicons name="person-circle-outline" size={22} color={colors.primary} />
                         </Pressable>
                     </View>
 

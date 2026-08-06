@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import LogoFaaS from '../components/LogoFaaS';
@@ -20,26 +19,17 @@ export default function AuthScreen() {
     const { t } = useTranslation();
     const styles = getStyles(colors);
 
-    const router = useRouter();
-    const { returnTo, isProfile } = useLocalSearchParams();
-
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session);
-            if (session && !isProfile) {
-                router.replace((returnTo as any) || '/');
-            }
         });
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             setSession(session);
-            if (event === 'SIGNED_IN' && session && !isProfile) {
-                router.replace((returnTo as any) || '/');
-            }
         });
         
         return () => subscription.unsubscribe();
-    }, [isProfile, returnTo]);
+    }, []);
 
     const showAlert = (title: string, message: string) => {
         if (Platform.OS === 'web') {

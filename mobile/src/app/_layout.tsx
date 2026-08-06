@@ -17,8 +17,49 @@ import Toast from 'react-native-toast-message';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import '../lib/i18n';
 
+import { useEffect, useState } from 'react';
+import { View, ActivityIndicator } from 'react-native';
+import { supabase } from '../lib/supabase';
+import { Session } from '@supabase/supabase-js';
+import AuthScreen from './auth';
+
 function RootContent() {
-  const { isDark } = useTheme();
+  const { isDark, colors } = useTheme();
+  const [session, setSession] = useState<Session | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsCheckingAuth(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (isCheckingAuth) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!session) {
+    return (
+      <NavigationThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
+        <Head>
+          <title>FaaS Transfer - Connexion</title>
+        </Head>
+        <AuthScreen />
+        <Toast />
+      </NavigationThemeProvider>
+    );
+  }
 
   return (
     <NavigationThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
