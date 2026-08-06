@@ -42,15 +42,32 @@ router.get('/:id', async (req, res) => {
                 res.setHeader('Content-Disposition', `attachment; filename="faas-transfer-${id}.zip"`);
                 
                 const archive = archiver('zip', { store: true });
+                
+                archive.on('error', (err) => {
+                    console.error('Archive error:', err);
+                });
+
                 archive.pipe(res);
 
                 for (const file of files) {
-                    const command = new GetObjectCommand({
-                        Bucket: process.env.R2_BUCKET_NAME,
-                        Key: file.storageName
-                    });
-                    const s3Res = await s3Client.send(command);
-                    archive.append(s3Res.Body, { name: file.originalName });
+                    try {
+                        const command = new GetObjectCommand({
+                            Bucket: process.env.R2_BUCKET_NAME,
+                            Key: file.storageName
+                        });
+                        const s3Res = await s3Client.send(command);
+                        
+                        archive.append(s3Res.Body, { name: file.originalName });
+                        
+                        // Wait for the stream to finish before opening the next connection
+                        await new Promise((resolve, reject) => {
+                            s3Res.Body.on('end', resolve);
+                            s3Res.Body.on('error', reject);
+                        });
+                    } catch (err) {
+                        console.error('Error streaming file to ZIP:', file.originalName, err);
+                        // On continue avec le fichier suivant si un échoue
+                    }
                 }
                 
                 await archive.finalize();
