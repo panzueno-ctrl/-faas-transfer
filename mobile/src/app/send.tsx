@@ -185,15 +185,20 @@ export default function SendScreen() {
                     }
                 };
                 
-                const response_file = await fetch(file.uri);
-                const blob = await response_file.blob();
+                let blob;
+                if (file.file instanceof Blob) {
+                    blob = file.file;
+                } else {
+                    const response_file = await fetch(file.uri);
+                    blob = await response_file.blob();
+                }
 
                 await new Promise((resolve, reject) => {
                     xhr.onload = () => {
                         if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response);
-                        else reject(new Error('Erreur upload R2'));
+                        else reject(new Error('Erreur upload R2: ' + xhr.status));
                     };
-                    xhr.onerror = () => reject(new Error('Erreur réseau'));
+                    xhr.onerror = () => reject(new Error('Erreur réseau lors de l\'upload'));
                     xhr.send(blob); 
                 });
 
@@ -257,9 +262,10 @@ export default function SendScreen() {
 
             setStep('done');
 
-        } catch (error) {
-            if (Platform.OS === 'web') window.alert(t('common.error') + '\nLe transfert a échoué. Vérifiez votre connexion et réessayez.');
-            else Alert.alert(t('common.error'), 'Le transfert a échoué. Vérifiez votre connexion et réessayez.');
+        } catch (error: any) {
+            console.error('Upload Error:', error);
+            if (Platform.OS === 'web') window.alert(t('common.error') + '\nLe transfert a échoué: ' + error.message);
+            else Alert.alert(t('common.error'), 'Le transfert a échoué: ' + error.message);
             setStep('category');
         }
     };
@@ -281,6 +287,7 @@ export default function SendScreen() {
                 const zipBlob = await zip.generateAsync({ type: 'blob' });
                 fileToUpload = {
                     file: zipBlob,
+                    uri: URL.createObjectURL(zipBlob),
                     name: 'faas-transfer.zip',
                     mimeType: 'application/zip'
                 };
