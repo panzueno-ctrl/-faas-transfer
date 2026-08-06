@@ -36,6 +36,26 @@ router.get('/:id', async (req, res) => {
     if (transfer.file_url.startsWith('[')) {
         try {
             const files = JSON.parse(transfer.file_url);
+
+            if (req.query.zip === 'true') {
+                res.setHeader('Content-Type', 'application/zip');
+                res.setHeader('Content-Disposition', `attachment; filename="faas-transfer-${id}.zip"`);
+                
+                const archive = archiver('zip', { store: true });
+                archive.pipe(res);
+
+                for (const file of files) {
+                    const command = new GetObjectCommand({
+                        Bucket: process.env.R2_BUCKET_NAME,
+                        Key: file.storageName
+                    });
+                    const s3Res = await s3Client.send(command);
+                    archive.append(s3Res.Body, { name: file.originalName });
+                }
+                
+                await archive.finalize();
+                return;
+            }
             
             let html = `
             <!DOCTYPE html>
@@ -55,6 +75,8 @@ router.get('/:id', async (req, res) => {
                     .file-name { font-weight: 500; font-size: 14px; word-break: break-all; flex: 1; }
                     .btn { background: #3B82F6; color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; white-space: nowrap; transition: background 0.2s; }
                     .btn:hover { background: #2563EB; }
+                    .btn-zip { background: #10B981; display: block; text-align: center; font-size: 16px; padding: 14px; margin-bottom: 24px; width: 100%; box-sizing: border-box; }
+                    .btn-zip:hover { background: #059669; }
                     @media (max-width: 480px) {
                         .file-item { flex-direction: column; align-items: flex-start; gap: 12px; }
                         .btn { width: 100%; text-align: center; box-sizing: border-box; }
@@ -64,7 +86,10 @@ router.get('/:id', async (req, res) => {
             <body>
                 <div class="container">
                     <h1>Vos fichiers sont prêts</h1>
-                    <p>Ce transfert contient ${files.length} fichiers. Cliquez sur "Télécharger" pour récupérer chaque fichier via notre CDN ultra-rapide.</p>
+                    <p>Ce transfert contient ${files.length} fichiers. Téléchargez l'archive complète ou choisissez chaque fichier individuellement.</p>
+                    
+                    <a href="/download/${id}?zip=true" class="btn btn-zip">⬇️ Télécharger tout en .zip</a>
+                    
                     <ul class="file-list">
             `;
 

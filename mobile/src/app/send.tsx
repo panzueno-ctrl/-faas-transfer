@@ -163,8 +163,7 @@ export default function SendScreen() {
     };
 
     const uploadFile = async (file: any) => {
-        setIsPreparing(false);
-        setStep('uploading');
+        // La préparation continue
         setProgress(0);
 
         try {
@@ -184,6 +183,9 @@ export default function SendScreen() {
             }
 
             const { fileId, storageName, signedUrl } = await reqUrlResponse.json();
+
+            setIsPreparing(false);
+            setStep('uploading');
 
             if (Platform.OS === 'web') {
                 const xhr = new XMLHttpRequest();
@@ -282,8 +284,7 @@ export default function SendScreen() {
     };
 
     const uploadMultipleFiles = async (files: any[]) => {
-        setIsPreparing(false);
-        setStep('uploading');
+        // La préparation (génération des tickets) continue
         setProgress(0);
 
         try {
@@ -306,6 +307,10 @@ export default function SendScreen() {
             }
 
             const { batchId, uploadTickets } = await reqUrlResponse.json();
+
+            // Les tickets sont générés, on affiche l'interface d'upload
+            setIsPreparing(false);
+            setStep('uploading');
 
             // 2. Préparer le suivi de progression
             const progressMap = new Array(files.length).fill(0);
