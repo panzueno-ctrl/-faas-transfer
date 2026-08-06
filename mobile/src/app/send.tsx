@@ -316,11 +316,6 @@ export default function SendScreen() {
             const progressMap = new Array(files.length).fill(0);
             const totalFiles = files.length;
 
-            const updateGlobalProgress = () => {
-                const totalProgress = progressMap.reduce((acc, curr) => acc + curr, 0);
-                setProgress(Math.round(totalProgress / totalFiles));
-            };
-
             // 3. Upload en parallèle (limité à 5 en même temps)
             const CONCURRENCY_LIMIT = 5;
             let currentIndex = 0;
