@@ -504,3 +504,140 @@ B. Internationalisation (i18n)
 - Trois fichiers de langues sont disponibles : `fr.json` (Français), `en.json` (Anglais), `it.json` (Italien).
 - Les textes statiques de l'application utilisent la fonction de traduction `t('cle_texte')`.
 - Le choix de la langue de l'utilisateur est conservé localement via `AsyncStorage` depuis l'écran des paramètres.
+============================================================
+  17. IMPLÉMENTATION ET ARCHITECTURE DE L'AUTHENTIFICATION (OAUTH)
+============================================================
+
+A. CONTEXTE ET OBJECTIFS
+L'objectif initial était de fournir aux utilisateurs de FaaS Transfer une méthode d'authentification fluide, moderne et sécurisée, sans les obliger à retenir un énième mot de passe. Bien que l'authentification par email/mot de passe soit fonctionnelle, l'ajout du "Social Login" (OAuth) via les géants du web (Google et Microsoft) permet de réduire la friction à l'inscription et d'augmenter le taux de conversion des utilisateurs. Cette section documente de manière exhaustive l'intégralité du processus, les défis rencontrés et les solutions techniques apportées.
+
+B. INTÉGRATION DE GOOGLE OAUTH
+Le choix de Google comme premier fournisseur d'identité s'imposait de par son omniprésence. L'intégration s'est déroulée en plusieurs phases critiques :
+1. Configuration de la Google Cloud Console (GCP) :
+   - Création d'un nouveau projet GCP dédié à FaaS Transfer.
+   - Configuration de l'écran de consentement OAuth (OAuth Consent Screen). Il a fallu définir le type d'utilisateur sur "Externe" pour permettre à n'importe quel compte Gmail de se connecter.
+   - Ajout des domaines autorisés, notamment le domaine fourni par Supabase (ex: trmpgdkxtuvomobagdvr.supabase.co) pour garantir que Google accepte les requêtes de redirection venant de notre backend.
+2. Création des identifiants (Credentials) :
+   - Génération d'un ID Client OAuth 2.0 pour une application Web.
+   - Configuration stricte de l'"URI de redirection autorisée" (Callback URL) pointant vers l'endpoint de Supabase : `https://[PROJECT-ID].supabase.co/auth/v1/callback`.
+3. Liaison avec Supabase :
+   - Récupération du Client ID et du Client Secret fournis par Google.
+   - Injection de ces clés dans le tableau de bord Supabase (Authentication > Providers > Google).
+   - Activation du fournisseur. Dès lors, le backend Supabase est devenu capable de négocier les jetons d'accès (Access Tokens) avec Google.
+
+C. INTÉGRATION DE MICROSOFT AZURE / ENTRA ID (LE PARCOURS DU COMBATTANT)
+L'intégration de Microsoft s'est révélée beaucoup plus complexe et stricte que celle de Google. Microsoft a récemment durci ses politiques de sécurité, exigeant une structure bien précise pour les développeurs.
+
+1. Le problème du "Tenant" (Espace de travail) et les erreurs AADSTS :
+   - Lors de notre première tentative avec un compte personnel, nous avons fait face aux erreurs `AADSTS50058` et `AADSTS50020`. Microsoft refusait l'accès au portail Azure car le compte n'était rattaché à aucun "Tenant" (répertoire/espace de travail) actif, tentant par défaut de se connecter au tenant interne "Microsoft Services" (live.com).
+   - Pour contourner cela, la procédure standard exige l'inscription au programme "Azure Free Account" avec validation par carte bancaire (pour vérification d'identité).
+
+2. La solution et le contournement technique :
+   - Nous avons réussi à contourner la demande de carte bancaire d'Azure en passant directement par le "Microsoft Entra Admin Center" (entra.microsoft.com), le nouveau portail dédié à la gestion des identités qui remplace l'ancien portail Azure AD.
+   - En se connectant directement à ce portail d'administration, le compte personnel a pu générer sa "Directory predefinita" (Default Directory) et obtenir le rôle d'"Amministratore globale".
+
+3. Création de l'App Registration (FaaS Transfer) :
+   - Dans Microsoft Entra, nous avons créé une "Nouvelle inscription d'application".
+   - Le point le plus critique de cette étape a été le choix des types de comptes supportés. Nous avons explicitement sélectionné l'option : "Account in qualsiasi directory dell'organizzazione (multi-tenant) e account Microsoft personali (Skype, Xbox)". Si nous avions choisi le mono-tenant, seuls les utilisateurs de l'organisation auraient pu se connecter.
+   - Configuration de l'URI de redirection en type "Web" pointant vers l'URL callback de Supabase.
+
+4. Configuration Supabase pour Microsoft :
+   - Récupération de l'"ID applicazione (client)".
+
+C. GOOGLE SEARCH CONSOLE (Référencement & SEO)
+- Lien : https://search.google.com/search-console
+- Rôle : C'est l'outil officiel de Google pour les webmasters (créateurs de sites). Il permet de suivre, maintenir et optimiser la présence d'un site web dans les résultats de recherche Google.
+- Utilisation dans FaaS Transfer : 
+  Nous l'avons utilisé pour valider la propriété du site et soumettre FaaS Transfer à l'indexation Google. Ce tableau de bord sera votre meilleur allié à l'avenir : il vous montrera combien de personnes trouvent votre site sur Google, quels mots-clés ils ont tapés pour vous trouver, et si vos pages sont bien optimisées (vitesse, affichage mobile, etc.).
+
+
+============================================================
+  19. SCHÉMAS DE L'ARCHITECTURE D'ENVOI ET RÉCEPTION
+============================================================
+
+Ci-dessous se trouvent les schémas explicatifs de l'évolution de notre architecture.
+
+### 1. Le problème actuel sur le Web : Le blocage CORS
+Quand on utilise un stockage "Cloud" sécurisé comme Cloudflare R2, il possède un vigile à l'entrée. Par défaut, ce vigile refuse les paquets qui viennent d'un site inconnu.
+
+```mermaid
+sequenceDiagram
+    participant User as Navigateur Web (Vercel)
+    participant Serveur as Backend (Render)
+    participant R2 as Cloudflare R2
+
+    User->>Serveur: 1. Demande d'autorisation d'upload
+    Serveur-->>User: 2. Retourne le "Signed URL" (Billet d'accès)
+    User->>R2: 3. Tente d'envoyer le fichier directement sur R2
+    R2--xUser: 4. BLOCAGE CORS (Je ne connais pas vercel.app !)
+    Note over User,R2: ERREUR RÉSEAU ! L'upload échoue à 0%
+```
+
+> **Note :** La solution est de configurer R2 pour autoriser les requêtes venant de faas-transfer.vercel.app.
+
+### 2. Le problème actuel sur Mobile : L'explosion de la mémoire (OOM)
+Quand on envoie plusieurs fichiers (ex: 3 vidéos), l'application actuelle essaie de les "zipper" avant de les envoyer. Sur un ordinateur, c'est facile. Sur un téléphone, c'est catastrophique.
+
+```mermaid
+sequenceDiagram
+    participant Mobile as Téléphone (App)
+    participant RAM as Mémoire Vive (RAM)
+    
+    Mobile->>RAM: 1. Chargement Vidéo 1 (500 Mo)
+    Mobile->>RAM: 2. Chargement Vidéo 2 (500 Mo)
+    Note over Mobile,RAM: 3. L'application essaie de créer le ZIP en mémoire
+    RAM--xMobile: CRASH (Out of Memory)
+    Note over Mobile,RAM: Le téléphone manque de mémoire, l'application se ferme.
+```
+
+> **La cause :** La bibliothèque JSZip stocke tout dans la RAM pour travailler. Un téléphone n'a pas la capacité d'un ordinateur.
+
+### 3. Architecture V1 (Séquentielle "File d'attente")
+Pour éviter le crash, on n'utilise plus de ZIP local. On envoie les fichiers strictement un par un. C'est sûr, mais très lent pour 100 fichiers.
+
+```mermaid
+sequenceDiagram
+    participant App as App (Web/Mobile)
+    participant Serveur as Backend (Render)
+    participant R2 as Cloudflare R2
+
+    App->>Serveur: 1. J'ai 3 fichiers. Crée un "Dossier".
+    Serveur-->>App: OK, Dossier n° 890
+    
+    loop File d'attente (1 par 1)
+        App->>Serveur: Demande autorisation Fichier X
+        Serveur-->>App: Signed URL (Fichier X)
+        App->>R2: Upload Direct Fichier X
+    end
+    
+    App->>Serveur: 4. Validation de la fin d'envoi
+```
+
+### 4. Architecture V2 (Ultime : Parallélisme & Streaming)
+C'est l'architecture que nous allons coder pour allier vitesse et légèreté.
+
+**PHASE ENVOI (Batch Upload) :**
+```mermaid
+sequenceDiagram
+    participant App as App (Web/Mobile)
+    participant Serveur as Backend (Render)
+    participant R2 as Cloudflare R2
+
+    App->>Serveur: 1. Demande 100 tickets d'un coup
+    Serveur-->>App: 100 Signed URLs générés
+    App=>>R2: 2. Upload de 5 fichiers EN PARALLÈLE
+    Note over App,R2: Zéro Zip local, vitesse réseau max, mémoire préservée
+```
+
+**PHASE RÉCEPTION (Zip Streaming) :**
+```mermaid
+sequenceDiagram
+    participant Navigateur as Navigateur Destinataire
+    participant Serveur as Backend (Render)
+    participant R2 as Cloudflare R2
+
+    Navigateur->>Serveur: 1. Clic sur "Tout télécharger en ZIP"
+    Serveur->>R2: 2. Aspire les fichiers depuis R2
+    Serveur->>Navigateur: 3. Recrache les fichiers compressés EN DIRECT (Flux Zip)
+    Note over Serveur,Navigateur: Le serveur ne sauvegarde rien sur le disque dur, il zippe au vol.
+```

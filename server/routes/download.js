@@ -3,6 +3,7 @@ const supabase = require('../services/supabase');
 const { s3Client } = require('../services/r2');
 const { GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const archiver = require('archiver');
 
 const router = express.Router();
 
@@ -31,6 +32,53 @@ router.get('/:id', async (req, res) => {
         return res.redirect(transfer.file_url);
     }
 
+    // NOUVEAU: Si file_url est un JSON, c'est un lot (Batch Upload V2)
+    if (transfer.file_url.startsWith('[')) {
+        try {
+            const files = JSON.parse(transfer.file_url);
+            
+            res.setHeader('Content-Type', 'application/zip');
+            res.setHeader('Content-Disposition', `attachment; filename="FaaS-Transfer-Lot-${id.substring(0, 5)}.zip"`);
+
+            const archive = archiver('zip', {
+                zlib: { level: 5 } // Niveau de compression équilibré
+            });
+
+            archive.on('error', function(err) {
+                console.error('Erreur Archiver:', err);
+                if (!res.headersSent) {
+                    res.status(500).json({ error: err.message });
+                }
+            });
+
+            // On branche l'archive directement sur la réponse HTTP
+            archive.pipe(res);
+
+            // On ajoute chaque fichier au stream de l'archive
+            for (const file of files) {
+                const command = new GetObjectCommand({
+                    Bucket: process.env.R2_BUCKET_NAME,
+                    Key: file.storageName
+                });
+                
+                const response = await s3Client.send(command);
+                // response.Body est un ReadableStream
+                archive.append(response.Body, { name: file.originalName });
+            }
+
+            // Finalise l'archive (ferme le flux Zip)
+            await archive.finalize();
+            return;
+        } catch (err) {
+            console.error('Erreur lors du streaming ZIP:', err);
+            if (!res.headersSent) {
+                return res.status(500).json({ error: 'Erreur lors de la création du ZIP' });
+            }
+            return;
+        }
+    }
+
+    // ANCIEN: Mode Fichier Unique
     try {
         const safeFileName = transfer.file_name.split('(')[0].trim();
         

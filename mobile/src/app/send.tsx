@@ -20,7 +20,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
-import JSZip from 'jszip';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import ActionCard from '../components/ActionCard';
@@ -275,45 +274,154 @@ export default function SendScreen() {
         setProgress(0);
 
         try {
-            let fileToUpload: any;
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            // 1. Demander les tickets pour tous les fichiers
+            const filePayload = files.map(f => ({
+                fileName: f.name,
+                contentType: f.mimeType || 'application/octet-stream'
+            }));
 
-            if (Platform.OS === 'web') {
-                const zip = new JSZip();
-                for (const file of files) {
-                    const response_file = await fetch(file.uri);
-                    const blob = await response_file.blob();
-                    zip.file(file.name, blob);
-                }
-                const zipBlob = await zip.generateAsync({ type: 'blob' });
-                fileToUpload = {
-                    file: zipBlob,
-                    uri: URL.createObjectURL(zipBlob),
-                    name: 'faas-transfer.zip',
-                    mimeType: 'application/zip'
-                };
-            } else {
-                const zip = new JSZip();
-                setProgress(5); 
-                for (const file of files) {
-                    const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.Base64 });
-                    zip.file(file.name, base64, { base64: true });
-                }
-                const zipBase64 = await zip.generateAsync({ type: 'base64' });
-                const zipUri = FileSystem.cacheDirectory + `faas-transfer-${Date.now()}.zip`;
-                await FileSystem.writeAsStringAsync(zipUri, zipBase64, { encoding: FileSystem.EncodingType.Base64 });
-                
-                fileToUpload = {
-                    uri: zipUri,
-                    name: 'faas-transfer.zip',
-                    mimeType: 'application/zip'
-                };
+            const reqUrlResponse = await fetch(`${SERVER_URL}/upload/request-urls`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: filePayload })
+            });
+
+            if (!reqUrlResponse.ok) {
+                throw new Error('Erreur lors de la demande de tickets au serveur');
             }
 
-            await uploadFile(fileToUpload);
+            const { batchId, uploadTickets } = await reqUrlResponse.json();
+
+            // 2. Préparer le suivi de progression
+            const progressMap = new Array(files.length).fill(0);
+            const totalFiles = files.length;
+
+            const updateGlobalProgress = () => {
+                const totalProgress = progressMap.reduce((acc, curr) => acc + curr, 0);
+                setProgress(Math.round(totalProgress / totalFiles));
+            };
+
+            // 3. Upload en parallèle (limité à 5 en même temps)
+            const CONCURRENCY_LIMIT = 5;
+            let currentIndex = 0;
+
+            const uploadTaskWorker = async () => {
+                while (currentIndex < files.length) {
+                    const i = currentIndex++;
+                    const file = files[i];
+                    const ticket = uploadTickets[i];
+
+                    if (Platform.OS === 'web') {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('PUT', ticket.signedUrl);
+                        xhr.setRequestHeader('Content-Type', file.mimeType || 'application/octet-stream');
+                        
+                        xhr.upload.onprogress = (event) => {
+                            if (event.lengthComputable) {
+                                progressMap[i] = (event.loaded / event.total) * 100;
+                                updateGlobalProgress();
+                            }
+                        };
+                        
+                        let blob;
+                        if (file.file instanceof Blob) {
+                            blob = file.file;
+                        } else {
+                            const response_file = await fetch(file.uri);
+                            blob = await response_file.blob();
+                        }
+
+                        await new Promise((resolve, reject) => {
+                            xhr.onload = () => {
+                                if (xhr.status >= 200 && xhr.status < 300) {
+                                    progressMap[i] = 100;
+                                    updateGlobalProgress();
+                                    resolve(xhr.response);
+                                } else reject(new Error('Erreur upload R2: ' + xhr.status));
+                            };
+                            xhr.onerror = () => reject(new Error('Erreur réseau'));
+                            xhr.send(blob); 
+                        });
+
+                    } else {
+                        const uploadTask = FileSystem.createUploadTask(
+                            ticket.signedUrl,
+                            file.uri,
+                            {
+                                httpMethod: 'PUT',
+                                headers: {
+                                    'Content-Type': file.mimeType || 'application/octet-stream'
+                                }
+                            },
+                            (progressData) => {
+                                progressMap[i] = (progressData.totalBytesSent / progressData.totalBytesExpectedToSend) * 100;
+                                updateGlobalProgress();
+                            }
+                        );
+                        
+                        const uploadResult = await uploadTask.uploadAsync();
+                        if (uploadResult?.status !== 200) {
+                            throw new Error('Erreur upload Cloudflare R2 (Mobile)');
+                        }
+                        progressMap[i] = 100;
+                        updateGlobalProgress();
+                    }
+                }
+            };
+
+            const workers = Array(Math.min(CONCURRENCY_LIMIT, files.length)).fill(null).map(() => uploadTaskWorker());
+            await Promise.all(workers);
+
+            setProgress(100);
+
+            // 4. Confirmation finale
+            const confirmResponse = await fetch(`${SERVER_URL}/upload/confirm`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fileId: batchId,
+                    files: uploadTickets.map((t: any) => ({
+                        originalName: t.originalName,
+                        storageName: t.storageName
+                    })),
+                    userId: session?.user?.id || null
+                })
+            });
+
+            if (!confirmResponse.ok) {
+                throw new Error('Erreur lors de la confirmation serveur');
+            }
+
+            const data = await confirmResponse.json();
+            
+            // Simulation d'un fichier fictif pour afficher le nom du lot sur l'écran "done"
+            setSelectedFile({ name: `Lot de ${files.length} fichiers` });
+            setResult(data);
+
+            const transfer = {
+                id: data.id,
+                fileName: `Lot de ${files.length} fichiers`,
+                downloadUrl: data.downloadUrl,
+                sentAt: new Date().toLocaleDateString('fr-FR', {
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                }),
+                status: 'pending',
+            };
+
+            const existing = await AsyncStorage.getItem('faas_history');
+            const history = existing ? JSON.parse(existing) : [];
+            history.unshift(transfer);
+            await AsyncStorage.setItem('faas_history', JSON.stringify(history));
+
+            setStep('done');
 
         } catch (error) {
-            if (Platform.OS === 'web') window.alert(t('common.error') + '\nImpossible de préparer l\'archive ZIP.');
-            else Alert.alert(t('common.error'), 'Impossible de préparer l\'archive ZIP.');
+            console.error(error);
+            if (Platform.OS === 'web') window.alert(t('common.error') + '\nImpossible d\'envoyer le lot.');
+            else Alert.alert(t('common.error'), 'Impossible d\'envoyer le lot.');
             setStep('category');
         }
     };
