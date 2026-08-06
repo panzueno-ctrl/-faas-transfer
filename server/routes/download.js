@@ -37,42 +37,69 @@ router.get('/:id', async (req, res) => {
         try {
             const files = JSON.parse(transfer.file_url);
             
-            res.setHeader('Content-Type', 'application/zip');
-            res.setHeader('Content-Disposition', `attachment; filename="FaaS-Transfer-Lot-${id.substring(0, 5)}.zip"`);
+            let html = `
+            <!DOCTYPE html>
+            <html lang="fr">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Télécharger le lot - FaaS Transfer</title>
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #F8FAFC; color: #0F172A; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; margin: 0; }
+                    .container { background: #fff; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); max-width: 600px; width: 100%; box-sizing: border-box; }
+                    h1 { font-size: 24px; margin-top: 0; color: #1E293B; }
+                    p { color: #64748B; line-height: 1.5; margin-bottom: 24px; }
+                    .file-list { list-style: none; padding: 0; margin: 0; }
+                    .file-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid #E2E8F0; gap: 16px; }
+                    .file-item:last-child { border-bottom: none; }
+                    .file-name { font-weight: 500; font-size: 14px; word-break: break-all; flex: 1; }
+                    .btn { background: #3B82F6; color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; white-space: nowrap; transition: background 0.2s; }
+                    .btn:hover { background: #2563EB; }
+                    @media (max-width: 480px) {
+                        .file-item { flex-direction: column; align-items: flex-start; gap: 12px; }
+                        .btn { width: 100%; text-align: center; box-sizing: border-box; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>Vos fichiers sont prêts</h1>
+                    <p>Ce transfert contient ${files.length} fichiers. Cliquez sur "Télécharger" pour récupérer chaque fichier via notre CDN ultra-rapide.</p>
+                    <ul class="file-list">
+            `;
 
-            const archive = archiver('zip', {
-                zlib: { level: 5 } // Niveau de compression équilibré
-            });
-
-            archive.on('error', function(err) {
-                console.error('Erreur Archiver:', err);
-                if (!res.headersSent) {
-                    res.status(500).json({ error: err.message });
-                }
-            });
-
-            // On branche l'archive directement sur la réponse HTTP
-            archive.pipe(res);
-
-            // On ajoute chaque fichier au stream de l'archive
             for (const file of files) {
+                const safeFileName = file.originalName.replace(/"/g, '');
                 const command = new GetObjectCommand({
                     Bucket: process.env.R2_BUCKET_NAME,
-                    Key: file.storageName
+                    Key: file.storageName,
+                    ResponseContentDisposition: \`attachment; filename="\${safeFileName}"\`
                 });
                 
-                const response = await s3Client.send(command);
-                // response.Body est un ReadableStream
-                archive.append(response.Body, { name: file.originalName });
+                const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+                
+                html += \`
+                    <li class="file-item">
+                        <span class="file-name">\${file.originalName}</span>
+                        <a href="\${signedUrl}" class="btn">Télécharger</a>
+                    </li>
+                \`;
             }
 
-            // Finalise l'archive (ferme le flux Zip)
-            await archive.finalize();
-            return;
+            html += \`
+                    </ul>
+                </div>
+            </body>
+            </html>
+            \`;
+            
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            return res.send(html);
+
         } catch (err) {
-            console.error('Erreur lors du streaming ZIP:', err);
+            console.error('Erreur lors de la génération de la page de lot:', err);
             if (!res.headersSent) {
-                return res.status(500).json({ error: 'Erreur lors de la création du ZIP' });
+                return res.status(500).json({ error: 'Erreur lors de la préparation des liens' });
             }
             return;
         }

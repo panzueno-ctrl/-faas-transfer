@@ -4,7 +4,7 @@
  * Écran d'envoi de fichiers.
  */
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -21,7 +21,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import ActionCard from '../components/ActionCard';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -44,6 +44,15 @@ export default function SendScreen() {
     const [progress, setProgress] = useState(0);
     const [result, setResult] = useState<{ id: string; downloadUrl: string } | null>(null);
     const [copied, setCopied] = useState(false);
+    const [isPreparing, setIsPreparing] = useState(false);
+
+    useFocusEffect(
+        useCallback(() => {
+            if (step === 'uploading') {
+                reset();
+            }
+        }, [step])
+    );
 
     const CATEGORIES = [
         {
@@ -138,6 +147,7 @@ export default function SendScreen() {
 
             if (!files || files.length === 0) return;
 
+            setIsPreparing(true);
             setSelectedFile(files[0]);
 
             if (files.length === 1) {
@@ -153,6 +163,7 @@ export default function SendScreen() {
     };
 
     const uploadFile = async (file: any) => {
+        setIsPreparing(false);
         setStep('uploading');
         setProgress(0);
 
@@ -262,6 +273,7 @@ export default function SendScreen() {
             setStep('done');
 
         } catch (error: any) {
+            setIsPreparing(false);
             console.error('Upload Error:', error);
             if (Platform.OS === 'web') window.alert(t('common.error') + '\nLe transfert a échoué: ' + error.message);
             else Alert.alert(t('common.error'), 'Le transfert a échoué: ' + error.message);
@@ -270,6 +282,7 @@ export default function SendScreen() {
     };
 
     const uploadMultipleFiles = async (files: any[]) => {
+        setIsPreparing(false);
         setStep('uploading');
         setProgress(0);
 
@@ -419,6 +432,7 @@ export default function SendScreen() {
             setStep('done');
 
         } catch (error) {
+            setIsPreparing(false);
             console.error(error);
             if (Platform.OS === 'web') window.alert(t('common.error') + '\nImpossible d\'envoyer le lot.');
             else Alert.alert(t('common.error'), 'Impossible d\'envoyer le lot.');
@@ -438,6 +452,7 @@ export default function SendScreen() {
         setProgress(0);
         setResult(null);
         setCopied(false);
+        setIsPreparing(false);
     };
 
     if (step === 'category') {
@@ -472,6 +487,13 @@ export default function SendScreen() {
                             />
                         ))}
                     </View>
+                    
+                    {isPreparing && (
+                        <View style={styles.preparingOverlay}>
+                            <ActivityIndicator size="large" color={colors.primary} />
+                            <Text style={styles.preparingText}>Préparation des fichiers...</Text>
+                        </View>
+                    )}
                 </View>
             </View>
         );
@@ -646,6 +668,21 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     },
     categoryCard: {
         width: 260,
+    },
+    preparingOverlay: {
+        position: 'absolute',
+        top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(255,255,255,0.8)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 50,
+        borderRadius: 16,
+    },
+    preparingText: {
+        marginTop: 16,
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: colors.text,
     },
     centerContent: {
         flex: 1,
