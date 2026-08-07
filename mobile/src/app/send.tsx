@@ -4,7 +4,7 @@
  * Écran d'envoi de fichiers.
  */
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import {
     View,
     Text,
@@ -23,7 +23,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import ActionCard from '../components/ActionCard';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
