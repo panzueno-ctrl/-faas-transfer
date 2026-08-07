@@ -108,7 +108,7 @@ export default function SendScreen() {
                 if (categoryId === 'audio') {
                     const res = await DocumentPicker.getDocumentAsync({
                         type: mimeTypes,
-                        copyToCacheDirectory: true,
+                        copyToCacheDirectory: false,
                         multiple: true,
                     });
                     if (res.canceled) return;
@@ -138,7 +138,7 @@ export default function SendScreen() {
             } else {
                 const res = await DocumentPicker.getDocumentAsync({
                     type: mimeTypes,
-                    copyToCacheDirectory: true,
+                    copyToCacheDirectory: false,
                     multiple: true,
                 });
                 if (res.canceled) return;
@@ -187,53 +187,31 @@ export default function SendScreen() {
             setIsPreparing(false);
             setStep('uploading');
 
-            if (Platform.OS === 'web') {
                 const xhr = new XMLHttpRequest();
                 xhr.open('PUT', signedUrl);
                 xhr.setRequestHeader('Content-Type', file.mimeType || 'application/octet-stream');
+                
                 xhr.upload.onprogress = (event) => {
                     if (event.lengthComputable) {
                         setProgress(Math.round((event.loaded / event.total) * 100));
                     }
                 };
                 
-                let blob;
-                if (file.file instanceof Blob) {
-                    blob = file.file;
-                } else {
-                    const response_file = await fetch(file.uri);
-                    blob = await response_file.blob();
-                }
-
                 await new Promise((resolve, reject) => {
                     xhr.onload = () => {
                         if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response);
                         else reject(new Error('Erreur upload R2: ' + xhr.status));
                     };
                     xhr.onerror = () => reject(new Error('Erreur réseau lors de l\'upload'));
-                    xhr.send(blob); 
-                });
-
-            } else {
-                const uploadTask = FileSystem.createUploadTask(
-                    signedUrl,
-                    file.uri,
-                    {
-                        httpMethod: 'PUT',
-                        headers: {
-                            'Content-Type': file.mimeType || 'application/octet-stream'
-                        }
-                    },
-                    (progressData) => {
-                        const percent = (progressData.totalBytesSent / progressData.totalBytesExpectedToSend) * 100;
-                        setProgress(Math.round(percent));
+                    
+                    if (Platform.OS === 'web') {
+                        xhr.send(file.file || file);
+                    } else {
+                        // Utiliser xhr.send avec l'URI permet à React Native de streamer le fichier 
+                        // sans le charger en RAM, contrairement à expo-file-system qui crashe sur les gros fichiers.
+                        xhr.send({ uri: file.uri, type: file.mimeType, name: file.name } as any);
                     }
-                );
-                
-                const uploadResult = await uploadTask.uploadAsync();
-                if (uploadResult?.status !== 200) {
-                    throw new Error('Erreur upload Supabase (Mobile)');
-                }
+                });
             }
 
             setProgress(100);
@@ -326,61 +304,41 @@ export default function SendScreen() {
                     const file = files[i];
                     const ticket = uploadTickets[i];
 
-                    if (Platform.OS === 'web') {
-                        const xhr = new XMLHttpRequest();
-                        xhr.open('PUT', ticket.signedUrl);
-                        xhr.setRequestHeader('Content-Type', file.mimeType || 'application/octet-stream');
-                        
-                        xhr.upload.onprogress = (event) => {
-                            if (event.lengthComputable) {
-                                progressMap[i] = (event.loaded / event.total) * 100;
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('PUT', ticket.signedUrl);
+                    xhr.setRequestHeader('Content-Type', file.mimeType || 'application/octet-stream');
+                    
+                    xhr.upload.onprogress = (event) => {
+                        if (event.lengthComputable) {
+                            progressMap[i] = (event.loaded / event.total) * 100;
+                            updateGlobalProgress();
+                        }
+                    };
+
+                    await new Promise(async (resolve, reject) => {
+                        xhr.onload = () => {
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                progressMap[i] = 100;
                                 updateGlobalProgress();
-                            }
+                                resolve(xhr.response);
+                            } else reject(new Error('Erreur upload R2: ' + xhr.status));
                         };
-                        
-                        let blob;
-                        if (file.file instanceof Blob) {
-                            blob = file.file;
-                        } else {
-                            const response_file = await fetch(file.uri);
-                            blob = await response_file.blob();
-                        }
+                        xhr.onerror = () => reject(new Error('Erreur réseau'));
 
-                        await new Promise((resolve, reject) => {
-                            xhr.onload = () => {
-                                if (xhr.status >= 200 && xhr.status < 300) {
-                                    progressMap[i] = 100;
-                                    updateGlobalProgress();
-                                    resolve(xhr.response);
-                                } else reject(new Error('Erreur upload R2: ' + xhr.status));
-                            };
-                            xhr.onerror = () => reject(new Error('Erreur réseau'));
-                            xhr.send(blob); 
-                        });
-
-                    } else {
-                        const uploadTask = FileSystem.createUploadTask(
-                            ticket.signedUrl,
-                            file.uri,
-                            {
-                                httpMethod: 'PUT',
-                                headers: {
-                                    'Content-Type': file.mimeType || 'application/octet-stream'
-                                }
-                            },
-                            (progressData) => {
-                                progressMap[i] = (progressData.totalBytesSent / progressData.totalBytesExpectedToSend) * 100;
-                                updateGlobalProgress();
+                        if (Platform.OS === 'web') {
+                            let blob;
+                            if (file.file instanceof Blob) {
+                                blob = file.file;
+                            } else {
+                                const response_file = await fetch(file.uri);
+                                blob = await response_file.blob();
                             }
-                        );
-                        
-                        const uploadResult = await uploadTask.uploadAsync();
-                        if (uploadResult?.status !== 200) {
-                            throw new Error('Erreur upload Cloudflare R2 (Mobile)');
+                            xhr.send(blob);
+                        } else {
+                            // React Native gère nativement l'envoi depuis une URI content://
+                            xhr.send({ uri: file.uri, type: file.mimeType, name: file.name } as any);
                         }
-                        progressMap[i] = 100;
-                        updateGlobalProgress();
-                    }
+                    });
                 }
             };
 
