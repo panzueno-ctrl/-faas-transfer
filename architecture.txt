@@ -553,3 +553,55 @@ C. GOOGLE SEARCH CONSOLE (Référencement & SEO)
 
 
 Note : Les schemas d architecture complets et visuels (V1, V2, CORS, Crash Mobile) ont ete deplaces dans le fichier dedie architecture_schemas.md a la racine du projet pour une meilleure lisibilite.
+
+
+# Architecture "Hyper-Parallèle" (S3 Multipart)
+
+Pour répondre à ton ambition de surpasser les limites physiques d'une seule connexion et permettre l'envoi de fichiers immenses (ex: 50 Go, 8 saisons d'une série), nous devons changer fondamentalement notre façon d'envoyer les données.
+
+Actuellement, on utilise un "Tuyau Unique" (Single PUT). Si la connexion vacille, le tuyau ralentit. 
+
+Je te propose de coder l'**Architecture S3 Multipart Hyper-Parallèle**. C'est la technologie utilisée par YouTube et Google Drive pour l'envoi de très gros fichiers.
+
+## 🚀 Le Concept (Comment tricher avec la physique)
+
+Au lieu d'envoyer la vidéo de 50 Go d'un coup dans 1 seul tuyau, l'application va :
+1. **Découper** virtuellement la vidéo en 10 000 morceaux de 5 Mo directement sur le téléphone (sans exploser la RAM).
+2. **Ouvrir 4 à 6 tuyaux en même temps** vers Cloudflare.
+3. Envoyer les morceaux en parallèle. 
+4. Cloudflare va "recoller" les morceaux à l'arrivée.
+
+**Pourquoi c'est révolutionnaire pour la vitesse ?**
+Sur les antennes 4G/5G, les opérateurs brident souvent la vitesse par "connexion" (ex: 2 Mo/s max par tuyau). En ouvrant 4 tuyaux en parallèle, on force l'antenne à nous donner 4 fois plus de bande passante (jusqu'à 8 Mo/s). C'est le secret des "Download Accelerators".
+
+---
+
+## ⚠️ User Review Required
+
+> [!WARNING]
+> Ce changement d'architecture est massif. Il demande de réécrire complètement le moteur d'upload de l'application mobile et l'API de notre serveur Render.
+> Es-tu d'accord pour que je commence ce chantier ?
+
+---
+
+## 🛠️ Proposed Changes
+
+### Serveur Render (API Backend)
+#### [MODIFY] `server/routes/upload.js`
+- Création de la route `/multipart/start` : Demande à Cloudflare de préparer un dossier pour recevoir des morceaux de fichier.
+- Création de la route `/multipart/sign-part` : Génère un lien sécurisé pour **chaque** petit morceau de 5 Mo.
+- Création de la route `/multipart/complete` : Ordonne à Cloudflare de fusionner tous les morceaux pour recréer la vidéo originale.
+
+### Application Mobile & Web
+#### [MODIFY] `mobile/src/app/send.tsx`
+- Remplacement de `XMLHttpRequest` classique par un **Moteur de Chunking**.
+- Utilisation de `FileSystem.readAsStringAsync` avec les paramètres `position` et `length` pour lire le fichier 5 Mo par 5 Mo directement depuis le disque dur du téléphone.
+- Lancement de `Promise.all` avec une limite de concurrence (4 uploads simultanés) pour envoyer les morceaux en parallèle.
+
+## Verification Plan
+
+### Automated Tests
+- Test unitaire virtuel de découpage de fichier pour vérifier qu'on ne sature jamais plus de 20 Mo de RAM (4 morceaux de 5 Mo) peu importe la taille du fichier (157 Mo ou 50 Go).
+
+### Manual Verification
+- Te demander d'envoyer ta vidéo de 157 Mo avec le nouveau système. Tu verras la barre de progression avancer par petits "à-coups" rapides au lieu de ramer de manière fluide, prouvant que les morceaux partent en parallèle.

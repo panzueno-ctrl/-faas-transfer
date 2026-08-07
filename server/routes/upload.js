@@ -2,7 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const supabase = require('../services/supabase');
 const { s3Client } = require('../services/r2');
-const { PutObjectCommand } = require('@aws-sdk/client-s3');
+const { PutObjectCommand, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const router = express.Router();
@@ -81,6 +81,98 @@ router.post('/request-urls', async (req, res) => {
     } catch (err) {
         console.error('Exception dans /request-urls R2:', err);
         res.status(500).json({ error: 'Erreur interne du serveur' });
+    }
+});
+
+// ─────────────────────────────────────────────
+// POST /upload/multipart/start
+// Démarre un upload multipart sur S3/R2
+// ─────────────────────────────────────────────
+router.post('/multipart/start', async (req, res) => {
+    try {
+        const { fileName, contentType } = req.body;
+        if (!fileName) {
+            return res.status(400).json({ error: 'fileName manquant' });
+        }
+
+        const fileId = uuidv4();
+        const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storageName = `${fileId}-${cleanName}`;
+
+        const command = new CreateMultipartUploadCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Key: storageName,
+            ContentType: contentType || 'application/octet-stream'
+        });
+
+        const response = await s3Client.send(command);
+        
+        res.status(200).json({
+            fileId,
+            storageName,
+            uploadId: response.UploadId
+        });
+    } catch (err) {
+        console.error('Exception dans /multipart/start:', err);
+        res.status(500).json({ error: 'Erreur démarrage multipart' });
+    }
+});
+
+// ─────────────────────────────────────────────
+// POST /upload/multipart/sign-part
+// Génère une URL présignée pour un chunk précis
+// ─────────────────────────────────────────────
+router.post('/multipart/sign-part', async (req, res) => {
+    try {
+        const { storageName, uploadId, partNumber } = req.body;
+        
+        if (!storageName || !uploadId || !partNumber) {
+            return res.status(400).json({ error: 'Paramètres manquants' });
+        }
+
+        const command = new UploadPartCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Key: storageName,
+            UploadId: uploadId,
+            PartNumber: partNumber
+        });
+
+        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+        
+        res.status(200).json({ signedUrl });
+    } catch (err) {
+        console.error('Exception dans /multipart/sign-part:', err);
+        res.status(500).json({ error: 'Erreur signature part' });
+    }
+});
+
+// ─────────────────────────────────────────────
+// POST /upload/multipart/complete
+// Finalise l'upload multipart
+// ─────────────────────────────────────────────
+router.post('/multipart/complete', async (req, res) => {
+    try {
+        const { storageName, uploadId, parts } = req.body;
+        
+        if (!storageName || !uploadId || !parts) {
+            return res.status(400).json({ error: 'Paramètres manquants' });
+        }
+
+        const command = new CompleteMultipartUploadCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Key: storageName,
+            UploadId: uploadId,
+            MultipartUpload: {
+                Parts: parts // doit être un tableau de { ETag, PartNumber }
+            }
+        });
+
+        await s3Client.send(command);
+        
+        res.status(200).json({ success: true });
+    } catch (err) {
+        console.error('Exception dans /multipart/complete:', err);
+        res.status(500).json({ error: 'Erreur finalisation multipart' });
     }
 });
 

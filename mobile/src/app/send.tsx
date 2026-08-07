@@ -15,11 +15,13 @@ import {
     ActivityIndicator,
     Clipboard,
     Platform,
+    Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import ActionCard from '../components/ActionCard';
@@ -398,6 +400,24 @@ export default function SendScreen() {
         }
     };
 
+    const shareLink = async () => {
+        try {
+            if (Platform.OS === 'web' && navigator.share) {
+                await navigator.share({
+                    title: 'FaaS Transfer',
+                    text: 'Je t\\'ai envoyé des fichiers via FaaS Transfer. Télécharge-les ici :',
+                    url: result?.downloadUrl
+                });
+            } else {
+                await Share.share({
+                    message: `Je t\\'ai envoyé des fichiers via FaaS Transfer. Télécharge-les ici : ${result?.downloadUrl}`,
+                });
+            }
+        } catch (error) {
+            console.error('Erreur de partage', error);
+        }
+    };
+
     const copyLink = () => {
         Clipboard.setString(result?.downloadUrl || '');
         setCopied(true);
@@ -458,20 +478,38 @@ export default function SendScreen() {
     }
 
     if (step === 'uploading') {
+        const radius = 60;
+        const circumference = 2 * Math.PI * radius;
+        const strokeDashoffset = circumference - (progress / 100) * circumference;
+
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.backgroundGlow} pointerEvents="none" />
                 <View style={styles.centerContent}>
 
-                    <ActivityIndicator size="large" color={colors.primary} />
-
                     <Text style={styles.uploadingTitle}>{t('send.uploading')}</Text>
                     <Text style={styles.uploadingFile}>{selectedFile?.name}</Text>
 
-                    <View style={styles.progressBar}>
-                        <View style={[styles.progressFill, { width: `${progress}%` }]} />
+                    <View style={{ position: 'relative', width: 140, height: 140, alignItems: 'center', justifyContent: 'center', marginVertical: 30 }}>
+                        <Svg width="140" height="140" viewBox="0 0 140 140">
+                            <Circle 
+                                cx="70" cy="70" r={radius} 
+                                stroke={colors.border} 
+                                strokeWidth="8" fill="transparent" 
+                            />
+                            <Circle 
+                                cx="70" cy="70" r={radius} 
+                                stroke={colors.primary} 
+                                strokeWidth="8" fill="transparent" 
+                                strokeDasharray={circumference}
+                                strokeDashoffset={strokeDashoffset}
+                                strokeLinecap="round"
+                                rotation="-90"
+                                origin="70, 70"
+                            />
+                        </Svg>
+                        <Text style={[styles.progressText, { position: 'absolute' }]}>{progress}%</Text>
                     </View>
-                    <Text style={styles.progressText}>{progress}%</Text>
 
                 </View>
             </SafeAreaView>
@@ -515,6 +553,10 @@ export default function SendScreen() {
                                 {result?.downloadUrl}
                             </Text>
                         </View>
+
+                        <Pressable style={styles.copyButton} onPress={shareLink}>
+                            <Ionicons name="share-social-outline" size={20} color={colors.primary} />
+                        </Pressable>
 
                         <Pressable style={styles.copyButton} onPress={copyLink}>
                             <Ionicons name="copy-outline" size={20} color={colors.primary} />

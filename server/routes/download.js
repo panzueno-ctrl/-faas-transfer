@@ -209,4 +209,61 @@ router.get('/:id', async (req, res) => {
     }
 });
 
+// NOUVELLE ROUTE : Obtenir les détails et prévisualisations
+router.get('/:id/details', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const { data: transfer, error } = await supabase
+            .from('transfers')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error || !transfer) {
+            return res.status(404).json({ error: 'Transfert introuvable' });
+        }
+
+        let filesList = [];
+
+        if (transfer.file_url.startsWith('[')) {
+            const parsedFiles = JSON.parse(transfer.file_url);
+            for (const f of parsedFiles) {
+                const command = new GetObjectCommand({
+                    Bucket: process.env.R2_BUCKET_NAME,
+                    Key: f.storageName
+                });
+                const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+                filesList.push({
+                    name: f.originalName,
+                    url: url,
+                    isImage: f.originalName.match(/\.(jpeg|jpg|gif|png)$/i) != null,
+                    isVideo: f.originalName.match(/\.(mp4|mov|avi)$/i) != null
+                });
+            }
+        } else {
+            const command = new GetObjectCommand({
+                Bucket: process.env.R2_BUCKET_NAME,
+                Key: transfer.file_url
+            });
+            const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+            filesList.push({
+                name: transfer.file_name,
+                url: url,
+                isImage: transfer.file_name.match(/\.(jpeg|jpg|gif|png)$/i) != null,
+                isVideo: transfer.file_name.match(/\.(mp4|mov|avi)$/i) != null
+            });
+        }
+
+        res.json({
+            fileName: transfer.file_name,
+            expiresAt: transfer.expires_at,
+            files: filesList
+        });
+    } catch (err) {
+        console.error('Erreur details:', err);
+        res.status(500).json({ error: 'Erreur serveur' });
+    }
+});
+
 module.exports = router;

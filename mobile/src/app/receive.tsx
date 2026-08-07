@@ -20,6 +20,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Video, ResizeMode } from 'expo-av';
+import { Image } from 'expo-image';
 import ActionCard from '../components/ActionCard';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
@@ -32,7 +34,8 @@ export default function ReceiveScreen() {
     const { t } = useTranslation();
     const styles = getStyles(colors, isDark);
 
-    const [step, setStep] = useState<'choice' | 'scanning' | 'manual' | 'downloading' | 'done'>('choice');
+    const [step, setStep] = useState<'choice' | 'scanning' | 'manual' | 'downloading' | 'preview' | 'done'>('choice');
+    const [previewData, setPreviewData] = useState<any>(null);
     const [link, setLink] = useState('');
     const [fileName, setFileName] = useState('');
     const [permission, requestPermission] = useCameraPermissions();
@@ -53,12 +56,27 @@ export default function ReceiveScreen() {
         }
 
         try {
-            const downloadUrl = `${SERVER_URL}/download/${id}`;
-            const supported = await Linking.canOpenURL(downloadUrl);
+            const res = await fetch(`${SERVER_URL}/download/${id}/details`);
+            if (!res.ok) throw new Error('Introuvable');
+            const data = await res.json();
+            setPreviewData({ ...data, id });
+            setStep('preview');
+        } catch (error) {
+            Alert.alert(
+                t('common.error'),
+                'Le téléchargement a échoué. Le lien est peut-être expiré.'
+            );
+            setStep('choice');
+        }
+    };
 
-            if (!supported) {
-                throw new Error('URL non supportée');
-            }
+    const performRealDownload = async () => {
+        if (!previewData?.id) return;
+        const id = previewData.id;
+        try {
+            const downloadUrl = `${SERVER_URL}/download/${id}?zip=true`;
+            const supported = await Linking.canOpenURL(downloadUrl);
+            if (!supported) throw new Error('URL non supportée');
 
             await Linking.openURL(downloadUrl);
 
@@ -67,7 +85,7 @@ export default function ReceiveScreen() {
 
             const receivedTransfer = {
                 id: id,
-                fileName: `Fichier reçu (${id})`,
+                fileName: previewData.fileName || `Fichier reçu (${id})`,
                 downloadUrl: downloadUrl,
                 sentAt: new Date().toLocaleDateString('fr-FR', {
                     day: '2-digit', month: '2-digit', year: 'numeric',
@@ -82,13 +100,8 @@ export default function ReceiveScreen() {
                 history.unshift(receivedTransfer);
                 await AsyncStorage.setItem('faas_received_history', JSON.stringify(history));
             }
-
         } catch (error) {
-            Alert.alert(
-                t('common.error'),
-                'Le téléchargement a échoué. Le lien est peut-être expiré.'
-            );
-            setStep('choice');
+            console.error(error);
         }
     };
 
@@ -237,6 +250,65 @@ export default function ReceiveScreen() {
                     <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={styles.downloadingTitle}>{t('receive.downloading')}</Text>
                     <Text style={styles.downloadingSubtitle}>Veuillez patienter</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (step === 'preview') {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                
+                <View style={[styles.contentWrapper, { paddingBottom: 20 }]}>
+                    <Pressable style={styles.backButton} onPress={() => setStep('choice')}>
+                        <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                        <Text style={styles.backButtonText}>{t('common.back')}</Text>
+                    </Pressable>
+
+                    <Text style={[styles.title, { marginTop: 40 }]}>Fichiers prêts</Text>
+                    <Text style={styles.subtitle}>{previewData?.files?.length} fichier(s) dans ce lot</Text>
+
+                    <View style={{ flex: 1, width: '100%', marginTop: 20 }}>
+                        <ScrollView contentContainerStyle={{ gap: 16 }}>
+                            {previewData?.files?.map((file: any, idx: number) => (
+                                <View key={idx} style={{ 
+                                    backgroundColor: colors.card, 
+                                    borderRadius: 16, 
+                                    overflow: 'hidden',
+                                    borderWidth: 1,
+                                    borderColor: colors.border
+                                }}>
+                                    {file.isImage && (
+                                        <Image source={{ uri: file.url }} style={{ width: '100%', height: 200 }} contentFit="cover" />
+                                    )}
+                                    {file.isVideo && (
+                                        <Video 
+                                            source={{ uri: file.url }} 
+                                            style={{ width: '100%', height: 200 }} 
+                                            resizeMode={ResizeMode.COVER} 
+                                            useNativeControls 
+                                        />
+                                    )}
+                                    {!file.isImage && !file.isVideo && (
+                                        <View style={{ width: '100%', height: 100, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardHovered }}>
+                                            <Ionicons name="document-text" size={40} color={colors.textMuted} />
+                                        </View>
+                                    )}
+                                    <View style={{ padding: 12 }}>
+                                        <Text style={{ color: colors.text, fontWeight: '600' }}>{file.name}</Text>
+                                    </View>
+                                </View>
+                            ))}
+                        </ScrollView>
+                    </View>
+
+                    <Pressable
+                        style={[styles.downloadButton, { marginTop: 20, width: '100%' }]}
+                        onPress={performRealDownload}>
+                        <Ionicons name="download-outline" size={20} color="#ffffff" />
+                        <Text style={styles.downloadButtonText}>Télécharger ({previewData?.files?.length > 1 ? 'ZIP' : 'Fichier'})</Text>
+                    </Pressable>
                 </View>
             </SafeAreaView>
         );
