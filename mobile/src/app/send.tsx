@@ -48,14 +48,6 @@ export default function SendScreen() {
     const [copied, setCopied] = useState(false);
     const [isPreparing, setIsPreparing] = useState(false);
 
-    useFocusEffect(
-        useCallback(() => {
-            if (step === 'uploading') {
-                reset();
-            }
-        }, [step])
-    );
-
     const CATEGORIES = [
         {
             id: 'images',
@@ -296,8 +288,8 @@ export default function SendScreen() {
             const progressMap = new Array(files.length).fill(0);
             const totalFiles = files.length;
 
-            // 3. Upload en parallèle (limité à 5 en même temps)
-            const CONCURRENCY_LIMIT = 5;
+            // 3. Upload en parallèle (limité à 3 en même temps pour éviter les crashs RAM sur mobile)
+            const CONCURRENCY_LIMIT = 3;
             let currentIndex = 0;
 
             const uploadTaskWorker = async () => {
