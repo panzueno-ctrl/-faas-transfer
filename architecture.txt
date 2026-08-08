@@ -605,3 +605,48 @@ Sur les antennes 4G/5G, les opérateurs brident souvent la vitesse par "connexio
 
 ### Manual Verification
 - Te demander d'envoyer ta vidéo de 157 Mo avec le nouveau système. Tu verras la barre de progression avancer par petits "à-coups" rapides au lieu de ramer de manière fluide, prouvant que les morceaux partent en parallèle.
+
+
+
+
+
+
+
+
+RAPORT DE TRAVAIL :
+
+C'est une excellente question, et c'est tout à fait normal de se sentir perdu ici. Il y a un paradoxe apparent : on t'a toujours dit "si tu charges un gros fichier en mémoire, la RAM explose", et là, tu envoies 1,39 Go d'un coup sans découper, et ça marche !
+
+Voici le secret : tu ne charges pas le fichier en mémoire. Ton code utilise ce qu'on appelle un flux continu (un Stream), et non un chargement en bloc.
+
+Voici concrètement comment l'architecture V1 optimisée (le flux unique) réussit cet exploit par rapport aux anciennes méthodes.
+
+**Le problème original : L'approche "Bloc" (qui fait exploser la RAM)**
+Avant, le problème ne venait pas du fait d'envoyer le fichier en une seule fois, mais de la façon dont JavaScript le lisait. Souvent, les développeurs utilisaient des méthodes comme `FileReader.readAsArrayBuffer()` ou tentaient de stocker le fichier dans une variable pour l'envoyer.
+
+Le processus était :
+1. Lire l'intégralité du fichier de 1,39 Go depuis le disque.
+2. Copier ce 1,39 Go dans la RAM du navigateur.
+3. Tenter de l'envoyer sur le réseau.
+
+Résultat : Le navigateur d'un smartphone n'a pas 1,39 Go de RAM libre allouée à un seul onglet. L'OS tue l'application ("Uffa!").
+
+**Le Chunking (Découpage) : Une solution de contournement**
+La première solution qu'on t'avait proposée (le découpage avec `File.slice()`), c'était de tricher avec cette mémoire :
+- Couper le fichier virtuellement.
+- Ne charger en RAM que 5 Mo à la fois.
+- Envoyer ces 5 Mo, les effacer de la RAM, et passer aux 5 Mo suivants.
+
+Ça marche très bien sur ordinateur. Mais sur Android, le système de sécurité (qui contrôle l'accès à tes photos) panique quand un script web essaie de "découper" un fichier de sa galerie en temps réel. Ça génère des erreurs XHR.
+
+**La solution actuelle : Le "Streaming" natif (Le tuyau ouvert)**
+L'architecture que tu as finalement utilisée exploite une capacité moderne des navigateurs (souvent via l'API fetch avec le corps de la requête sous forme de Stream ou simplement en passant directement l'objet File natif à une requête XHR/Fetch). Dans ce scénario, JavaScript ne "lit" pas le fichier.
+
+1. **Création du pointeur :** Le fichier reste sur le disque. Lorsque l'utilisateur sélectionne la vidéo, JavaScript ne reçoit qu'une référence (un pointeur) vers le fichier sur le disque du téléphone. Aucune donnée vidéo n'est copiée en RAM.
+2. **Ouverture du tuyau réseau :** Passage du relais au navigateur. JavaScript dit au moteur du navigateur (en C++) : "Ouvre une connexion HTTP directe vers Cloudflare (via l'URL pré-signée) et envoie ce fichier-là."
+3. **Le streaming bit à bit :** Le transfert invisible. Le navigateur agit comme un entonnoir direct entre le disque dur du téléphone et la carte réseau. Il aspire les données du disque par minuscules blocs (de l'ordre du kilo-octet), les met dans le réseau, et les oublie. La RAM n'est utilisée que comme une zone de transit temporaire et minuscule.
+
+**Pourquoi c'est une victoire sur l'OS**
+C'est une victoire parce que tu as arrêté d'utiliser JavaScript pour faire le travail lourd. Au lieu de dire à JavaScript : "Découpe ce fichier et gère les envois" (ce qui déclenche les sécurités Android), tu as simplement dit au moteur profond du navigateur : "Tiens, voilà le fichier, connecte-le à Cloudflare, et débrouille-toi".
+
+L'OS mobile adore ça. Il n'y a pas de violation de sécurité (JavaScript n'a pas farfouillé dans la vidéo), et la gestion de la mémoire est parfaite (le C++ du navigateur est infiniment plus optimisé que JavaScript pour faire transiter des octets du disque vers la carte réseau).

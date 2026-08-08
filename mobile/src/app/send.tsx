@@ -312,184 +312,122 @@ export default function SendScreen() {
 
             const { data: { session } } = await supabase.auth.getSession();
             
-            // 1. Démarrer le multipart upload
+            const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
+            const MAX_CONCURRENCY = 4; // 4 envois parallèles
+            const totalBytes = file.file.size;
+            const totalParts = Math.ceil(totalBytes / CHUNK_SIZE);
+            
+            // 1. Démarrer le multipart upload et récupérer TOUTES les signatures
             const startRes = await fetch(`${SERVER_URL}/upload/multipart/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     fileName: file.name,
                     contentType: file.mimeType || 'application/octet-stream',
-                    userId: session?.user?.id || null
+                    userId: session?.user?.id || null,
+                    totalParts // <-- Clé anti-bufferbloat
                 })
             });
             
             if (!startRes.ok) throw new Error('Erreur de démarrage du multiplexage');
-            const { fileId, storageName, uploadId } = await startRes.json();
+            const { fileId, storageName, uploadId, presignedUrls } = await startRes.json();
 
             setIsPreparing(false);
             setStep('uploading');
 
-            // 2. Stream-to-Buffer Chunking
-            const stream = file.file.stream();
-            const reader = stream.getReader();
-            const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
-            const MAX_CONCURRENCY = 4; // 4 envois parallèles
-            let partNumber = 1;
-            let isStreamDone = false;
-            let uploadedBytes = 0;
-            const totalBytes = file.file.size;
-            const uploadedParts: { PartNumber: number, ETag: string }[] = [];
-
-            const activeUploads: Promise<void>[] = [];
-            const allUploads: Promise<void>[] = [];
+            // 2. Déportation vers le Web Worker (Service Worker)
+            const worker = new Worker('/upload.worker.js');
             
-            const uploadChunk = async (chunkBuffer: Uint8Array, currentPartNumber: number) => {
-                const signRes = await fetch(`${SERVER_URL}/upload/multipart/sign-part`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ storageName, uploadId, partNumber: currentPartNumber })
-                });
+            // On écoute le Worker
+            worker.onmessage = async (e) => {
+                const { type, progress, uploadedParts, message } = e.data;
                 
-                if (!signRes.ok) throw new Error('Erreur de signature du morceau ' + currentPartNumber);
-                const { signedUrl } = await signRes.json();
-
-                await withRetry(() => new Promise((resolve, reject) => {
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('PUT', signedUrl);
-                    
-                    xhr.onload = () => {
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            const eTag = xhr.getResponseHeader('ETag');
-                            if (eTag) {
-                                // Cloudflare R2 renvoie parfois les ETags avec des guillemets
-                                uploadedParts.push({ PartNumber: currentPartNumber, ETag: eTag.replace(/"/g, '') });
-                            }
-                            uploadedBytes += chunkBuffer.byteLength;
-                            // Mise à jour douce de la barre de progression
-                            setProgress(Math.round((uploadedBytes / totalBytes) * 100));
-                            resolve(true);
-                        } else {
-                            reject(new Error('Erreur de transmission (Morceau ' + currentPartNumber + ')'));
-                        }
-                    };
-                    
-                    xhr.onerror = () => reject(new Error('Coupure réseau détectée (Morceau ' + currentPartNumber + ')'));
-                    xhr.send(chunkBuffer);
-                }));
-            };
-
-            // Boucle principale de lecture fluide (Le Robinet)
-            let currentBuffer = new Uint8Array(CHUNK_SIZE);
-            let currentBufferLength = 0;
-
-            while (!isStreamDone) {
-                const { done, value } = await reader.read();
-                
-                if (value) {
-                    let valueOffset = 0;
-                    while (valueOffset < value.length) {
-                        const spaceLeft = CHUNK_SIZE - currentBufferLength;
-                        const chunkToCopy = value.subarray(valueOffset, valueOffset + spaceLeft);
+                if (type === 'progress') {
+                    setProgress(progress);
+                } 
+                else if (type === 'success') {
+                    try {
+                        // 3. Finaliser le multiplexage
+                        const completeRes = await fetch(`${SERVER_URL}/upload/multipart/complete`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ storageName, uploadId, parts: uploadedParts })
+                        });
                         
-                        currentBuffer.set(chunkToCopy, currentBufferLength);
-                        currentBufferLength += chunkToCopy.length;
-                        valueOffset += chunkToCopy.length;
-
-                        // Dès qu'on a rempli le seau de 5 Mo, on le jette sur le réseau en parallèle
-                        if (currentBufferLength === CHUNK_SIZE) {
-                            const bufferToSend = currentBuffer;
-                            const partNumToSend = partNumber++;
-                            
-                            // On réinitialise un nouveau seau de 5 Mo pour la suite
-                            currentBuffer = new Uint8Array(CHUNK_SIZE);
-                            currentBufferLength = 0;
-
-                            const uploadPromise = uploadChunk(bufferToSend, partNumToSend);
-                            
-                            // Gestion de la contre-pression (Backpressure)
-                            const p: Promise<void> = uploadPromise.then(() => {
-                                activeUploads.splice(activeUploads.indexOf(p), 1);
-                            });
-                            activeUploads.push(p);
-                            allUploads.push(p);
-
-                            // Si on atteint 4 envois simultanés, on bloque le robinet jusqu'à ce qu'un se vide
-                            if (activeUploads.length >= MAX_CONCURRENCY) {
-                                await Promise.race(activeUploads);
-                            }
+                        if (!completeRes.ok) {
+                            throw new Error('Erreur lors de la fusion finale des morceaux');
                         }
+
+                        // 4. Confirmer le transfert dans la base de données
+                        const confirmResponse = await fetch(`${SERVER_URL}/upload/confirm`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                fileId,
+                                originalName: file.name,
+                                storageName,
+                                userId: session?.user?.id || null
+                            })
+                        });
+
+                        if (!confirmResponse.ok) {
+                            throw new Error('Erreur lors de la création du lien de partage');
+                        }
+
+                        const data = await confirmResponse.json();
+                        setResult(data);
+
+                        const transfer = {
+                            id: data.id,
+                            fileName: file.name,
+                            downloadUrl: data.downloadUrl,
+                            sentAt: new Date().toLocaleDateString('fr-FR', {
+                                day: '2-digit', month: '2-digit', year: 'numeric',
+                                hour: '2-digit', minute: '2-digit'
+                            }),
+                            status: 'pending',
+                        };
+
+                        const existing = await AsyncStorage.getItem('faas_history');
+                        const history = existing ? JSON.parse(existing) : [];
+                        history.unshift(transfer);
+                        await AsyncStorage.setItem('faas_history', JSON.stringify(history));
+
+                        setStep('done');
+                        worker.terminate(); // Tuer le worker proprement
+                    } catch (err: any) {
+                        handleError(err);
+                        worker.terminate();
                     }
+                } 
+                else if (type === 'error') {
+                    handleError(new Error(message));
+                    worker.terminate();
                 }
-
-                if (done) {
-                    isStreamDone = true;
-                    // On envoie le reste d'eau (les derniers mégaoctets < 5 Mo)
-                    if (currentBufferLength > 0) {
-                        const bufferToSend = currentBuffer.subarray(0, currentBufferLength);
-                        const partNumToSend = partNumber++;
-                        const uploadPromise = uploadChunk(bufferToSend, partNumToSend);
-                        allUploads.push(uploadPromise);
-                    }
-                }
-            }
-
-            // On attend que les tous derniers morceaux arrivent à destination
-            await Promise.all(allUploads);
-            setProgress(100);
-
-            // 3. Finaliser le multiplexage (L'ordre des morceaux est crucial pour S3)
-            uploadedParts.sort((a, b) => a.PartNumber - b.PartNumber);
-
-            const completeRes = await fetch(`${SERVER_URL}/upload/multipart/complete`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ storageName, uploadId, parts: uploadedParts })
-            });
-            
-            if (!completeRes.ok) {
-                throw new Error('Erreur lors de la fusion finale des morceaux');
-            }
-
-            // 4. Confirmer le transfert dans la base de données
-            const confirmResponse = await fetch(`${SERVER_URL}/upload/confirm`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    fileId,
-                    originalName: file.name,
-                    storageName,
-                    userId: session?.user?.id || null
-                })
-            });
-
-            if (!confirmResponse.ok) {
-                throw new Error('Erreur lors de la création du lien de partage');
-            }
-
-            const data = await confirmResponse.json();
-            setResult(data);
-
-            const transfer = {
-                id: data.id,
-                fileName: file.name,
-                downloadUrl: data.downloadUrl,
-                sentAt: new Date().toLocaleDateString('fr-FR', {
-                    day: '2-digit', month: '2-digit', year: 'numeric',
-                    hour: '2-digit', minute: '2-digit'
-                }),
-                status: 'pending',
             };
+            
+            // Lancement du Worker !
+            worker.postMessage({
+                file: file.file,
+                storageName,
+                uploadId,
+                presignedUrls,
+                chunkSize: CHUNK_SIZE,
+                maxConcurrency: MAX_CONCURRENCY
+            });
 
-            const existing = await AsyncStorage.getItem('faas_history');
-            const history = existing ? JSON.parse(existing) : [];
-            history.unshift(transfer);
-            await AsyncStorage.setItem('faas_history', JSON.stringify(history));
-
-            setStep('done');
+            // Fonction helper locale
+            const handleError = (error: any) => {
+                setIsPreparing(false);
+                console.error('Upload V2.1 Error:', error);
+                if (Platform.OS === 'web') window.alert(t('common.error') + '\nLe transfert a échoué: ' + error.message);
+                else Alert.alert(t('common.error'), 'Le transfert a échoué: ' + error.message);
+                setStep('category');
+            };
 
         } catch (error: any) {
             setIsPreparing(false);
-            console.error('Upload V2 Error:', error);
+            console.error('Upload V2.1 Initial Error:', error);
             if (Platform.OS === 'web') window.alert(t('common.error') + '\nLe transfert a échoué: ' + error.message);
             else Alert.alert(t('common.error'), 'Le transfert a échoué: ' + error.message);
             setStep('category');

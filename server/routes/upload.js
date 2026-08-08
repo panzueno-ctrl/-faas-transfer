@@ -90,7 +90,7 @@ router.post('/request-urls', async (req, res) => {
 // ─────────────────────────────────────────────
 router.post('/multipart/start', async (req, res) => {
     try {
-        const { fileName, contentType } = req.body;
+        const { fileName, contentType, totalParts } = req.body;
         if (!fileName) {
             return res.status(400).json({ error: 'fileName manquant' });
         }
@@ -106,11 +106,27 @@ router.post('/multipart/start', async (req, res) => {
         });
 
         const response = await s3Client.send(command);
+        const uploadId = response.UploadId;
+
+        // Pré-génération anti-bufferbloat
+        let presignedUrls = {};
+        if (totalParts && typeof totalParts === 'number') {
+            for (let i = 1; i <= totalParts; i++) {
+                const partCommand = new UploadPartCommand({
+                    Bucket: process.env.R2_BUCKET_NAME,
+                    Key: storageName,
+                    UploadId: uploadId,
+                    PartNumber: i
+                });
+                presignedUrls[i] = await getSignedUrl(s3Client, partCommand, { expiresIn: 3600 * 24 }); // 24h au cas où
+            }
+        }
         
         res.status(200).json({
             fileId,
             storageName,
-            uploadId: response.UploadId
+            uploadId,
+            presignedUrls // Retourne le dictionnaire { 1: "url...", 2: "url..." }
         });
     } catch (err) {
         console.error('Exception dans /multipart/start:', err);
