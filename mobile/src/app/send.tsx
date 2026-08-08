@@ -162,7 +162,19 @@ export default function SendScreen() {
                     multiple: true,
                 });
                 if (res.canceled) return;
-                files = res.assets;
+                files = res.assets.map(asset => {
+                    let finalName = asset.name || (asset.file && (asset.file as any).name) || 'fichier';
+                    const mime = asset.mimeType || (asset.file && (asset.file as any).type) || '';
+                    if (mime.includes('video/') && !finalName.includes('.')) finalName += '.mp4';
+                    else if (mime.includes('image/') && !finalName.includes('.')) finalName += '.jpg';
+                    else if (mime.includes('audio/') && !finalName.includes('.')) finalName += '.mp3';
+                    
+                    return {
+                        ...asset,
+                        name: finalName,
+                        file: (asset as any).file
+                    };
+                });
             }
 
             if (!files || files.length === 0) return;
