@@ -305,7 +305,6 @@ export default function SendScreen() {
         setProgress(0);
 
         try {
-            // Fallback pour les plateformes non-Web ou si le stream n'est pas supporté (ex: iOS natif)
             if (Platform.OS !== 'web' || !file.file || typeof file.file.stream !== 'function') {
                 return uploadFileLegacy(file);
             }
@@ -318,18 +317,23 @@ export default function SendScreen() {
             const totalParts = Math.ceil(totalBytes / CHUNK_SIZE);
             
             // 1. Démarrer le multipart upload et récupérer TOUTES les signatures
-            const startRes = await fetch(`${SERVER_URL}/upload/multipart/start`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    fileName: file.name,
-                    contentType: file.mimeType || 'application/octet-stream',
-                    userId: session?.user?.id || null,
-                    totalParts // <-- Clé anti-bufferbloat
-                })
-            });
+            let startRes;
+            try {
+                startRes = await fetch(`${SERVER_URL}/upload/multipart/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fileName: file.name,
+                        contentType: file.mimeType || 'application/octet-stream',
+                        userId: session?.user?.id || null,
+                        totalParts 
+                    })
+                });
+            } catch (err: any) {
+                throw new Error('API_START_ERROR: ' + err.message);
+            }
             
-            if (!startRes.ok) throw new Error('Erreur de démarrage du multiplexage');
+            if (!startRes.ok) throw new Error('API_START_ERROR: HTTP ' + startRes.status);
             const { fileId, storageName, uploadId, presignedUrls } = await startRes.json();
 
             setIsPreparing(false);
@@ -338,41 +342,70 @@ export default function SendScreen() {
             // 2. Déportation vers le Web Worker (Service Worker)
             const worker = new Worker('/upload.worker.js');
             
+            let uploadedBytes = 0;
+            let activeUploadsCount = 0;
+            const pendingChunks = [];
+            let isStreamReadDone = false;
+
+            const sendNextChunkIfPossible = () => {
+                while (activeUploadsCount < MAX_CONCURRENCY && pendingChunks.length > 0) {
+                    const chunk = pendingChunks.shift();
+                    activeUploadsCount++;
+                    worker.postMessage({
+                        type: 'upload_chunk',
+                        chunkBuffer: chunk.buffer,
+                        partNumber: chunk.partNumber,
+                        signedUrl: presignedUrls[chunk.partNumber]
+                    });
+                }
+
+                if (isStreamReadDone && pendingChunks.length === 0 && activeUploadsCount === 0) {
+                    worker.postMessage({ type: 'finish' });
+                }
+            };
+
             // On écoute le Worker
             worker.onmessage = async (e) => {
-                const { type, progress, uploadedParts, message } = e.data;
+                const { type, partNumber, byteLength, uploadedParts, message } = e.data;
                 
-                if (type === 'progress') {
-                    setProgress(progress);
+                if (type === 'chunk_success') {
+                    uploadedBytes += byteLength;
+                    setProgress(Math.round((uploadedBytes / totalBytes) * 100));
+                    activeUploadsCount--;
+                    sendNextChunkIfPossible();
                 } 
                 else if (type === 'success') {
                     try {
-                        // 3. Finaliser le multiplexage
-                        const completeRes = await fetch(`${SERVER_URL}/upload/multipart/complete`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ storageName, uploadId, parts: uploadedParts })
-                        });
+                        let completeRes;
+                        try {
+                            completeRes = await fetch(`${SERVER_URL}/upload/multipart/complete`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ storageName, uploadId, parts: uploadedParts })
+                            });
+                        } catch (err: any) {
+                            throw new Error('API_COMPLETE_ERROR: ' + err.message);
+                        }
                         
-                        if (!completeRes.ok) {
-                            throw new Error('Erreur lors de la fusion finale des morceaux');
+                        if (!completeRes.ok) throw new Error('API_COMPLETE_ERROR: HTTP ' + completeRes.status);
+
+                        let confirmResponse;
+                        try {
+                            confirmResponse = await fetch(`${SERVER_URL}/upload/confirm`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    fileId,
+                                    originalName: file.name,
+                                    storageName,
+                                    userId: session?.user?.id || null
+                                })
+                            });
+                        } catch (err: any) {
+                            throw new Error('API_CONFIRM_ERROR: ' + err.message);
                         }
 
-                        // 4. Confirmer le transfert dans la base de données
-                        const confirmResponse = await fetch(`${SERVER_URL}/upload/confirm`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                fileId,
-                                originalName: file.name,
-                                storageName,
-                                userId: session?.user?.id || null
-                            })
-                        });
-
-                        if (!confirmResponse.ok) {
-                            throw new Error('Erreur lors de la création du lien de partage');
-                        }
+                        if (!confirmResponse.ok) throw new Error('API_CONFIRM_ERROR: HTTP ' + confirmResponse.status);
 
                         const data = await confirmResponse.json();
                         setResult(data);
@@ -394,7 +427,7 @@ export default function SendScreen() {
                         await AsyncStorage.setItem('faas_history', JSON.stringify(history));
 
                         setStep('done');
-                        worker.terminate(); // Tuer le worker proprement
+                        worker.terminate();
                     } catch (err: any) {
                         handleError(err);
                         worker.terminate();
@@ -406,16 +439,6 @@ export default function SendScreen() {
                 }
             };
             
-            // Lancement du Worker !
-            worker.postMessage({
-                file: file.file,
-                storageName,
-                uploadId,
-                presignedUrls,
-                chunkSize: CHUNK_SIZE,
-                maxConcurrency: MAX_CONCURRENCY
-            });
-
             // Fonction helper locale
             const handleError = (error: any) => {
                 setIsPreparing(false);
@@ -424,6 +447,58 @@ export default function SendScreen() {
                 else Alert.alert(t('common.error'), 'Le transfert a échoué: ' + error.message);
                 setStep('category');
             };
+
+            // 3. Lecture du Stream sur le Main Thread (Le Robinet local)
+            try {
+                const stream = file.file.stream();
+                const reader = stream.getReader();
+                let currentBuffer = new Uint8Array(CHUNK_SIZE);
+                let currentBufferLength = 0;
+                let currentPartNumber = 1;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (value) {
+                        let valueOffset = 0;
+                        while (valueOffset < value.length) {
+                            const spaceLeft = CHUNK_SIZE - currentBufferLength;
+                            const chunkToCopy = value.subarray(valueOffset, valueOffset + spaceLeft);
+                            
+                            currentBuffer.set(chunkToCopy, currentBufferLength);
+                            currentBufferLength += chunkToCopy.length;
+                            valueOffset += chunkToCopy.length;
+
+                            if (currentBufferLength === CHUNK_SIZE) {
+                                pendingChunks.push({ buffer: currentBuffer, partNumber: currentPartNumber++ });
+                                currentBuffer = new Uint8Array(CHUNK_SIZE);
+                                currentBufferLength = 0;
+                                sendNextChunkIfPossible();
+
+                                // Limitation de la pression en RAM : si on a 4 chunks en attente, on pause la lecture
+                                while (pendingChunks.length >= MAX_CONCURRENCY) {
+                                    await new Promise(r => setTimeout(r, 50));
+                                }
+                            }
+                        }
+                    }
+
+                    if (done) {
+                        isStreamReadDone = true;
+                        if (currentBufferLength > 0) {
+                            pendingChunks.push({ 
+                                buffer: currentBuffer.subarray(0, currentBufferLength), 
+                                partNumber: currentPartNumber++ 
+                            });
+                        }
+                        sendNextChunkIfPossible();
+                        break;
+                    }
+                }
+            } catch (err: any) {
+                handleError(new Error('LOCAL_READ_ERROR: ' + err.message));
+                worker.terminate();
+            }
 
         } catch (error: any) {
             setIsPreparing(false);
