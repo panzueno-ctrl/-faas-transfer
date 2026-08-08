@@ -47,11 +47,7 @@ router.get('/:id', async (req, res) => {
                     console.error('Archive error:', err);
                 });
 
-                const https = require('https');
-                const fs = require('fs');
-                const path = require('path');
-                const os = require('os');
-                
+                const { Readable } = require('stream');
                 archive.pipe(res);
 
                 for (const file of files) {
@@ -61,22 +57,20 @@ router.get('/:id', async (req, res) => {
                             Key: file.storageName
                         });
                         const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-                        // Streamer directement de S3 vers l'archive ZIP sans passer par le disque
+                        
+                        const response = await fetch(signedUrl);
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        
+                        const nodeStream = Readable.fromWeb(response.body);
+                        archive.append(nodeStream, { name: file.originalName });
+                        
+                        // Attendre que ce fichier soit entièrement ajouté au ZIP avant de passer au suivant
                         await new Promise((resolve, reject) => {
-                            https.get(signedUrl, (httpRes) => {
-                                if (httpRes.statusCode !== 200) {
-                                    httpRes.resume();
-                                    return reject(new Error(`HTTP ${httpRes.statusCode}`));
-                                }
-                                
-                                archive.append(httpRes, { name: file.originalName });
-                                
-                                httpRes.on('end', () => resolve());
-                                httpRes.on('error', reject);
-                            }).on('error', reject);
+                            nodeStream.on('end', resolve);
+                            nodeStream.on('error', reject);
                         });
                     } catch (err) {
-                        console.error('Error streaming file to ZIP:', file.originalName, err);
+                        console.error('Error streaming file to ZIP:', file.originalName, err.message);
                     }
                 }
                 
@@ -149,11 +143,13 @@ router.get('/:id', async (req, res) => {
             return res.send(html);
 
         } catch (err) {
-            console.error('Erreur lors de la génération de la page de lot:', err);
+            console.error('Erreur lors de la génération de la page de lot/zip:', err);
             if (!res.headersSent) {
+                res.removeHeader('Content-Type');
+                res.removeHeader('Content-Disposition');
                 return res.status(500).json({ error: 'Erreur lors de la préparation des liens' });
             }
-            return;
+            return res.end();
         }
     }
 
