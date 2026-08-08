@@ -254,10 +254,6 @@ export default function SendScreen() {
                             body: fetchBody, 
                             headers: { 'Content-Type': file.mimeType || 'application/octet-stream' }
                         };
-                        if (typeof file.file.stream === 'function') {
-                            fetchOptions.body = file.file.stream();
-                            fetchOptions.duplex = 'half';
-                        }
                         fetch(signedUrl, fetchOptions).then(res => {
                             clearInterval(interval);
                             if (res.ok) { setProgress(100); resolve(true); }
@@ -394,10 +390,6 @@ export default function SendScreen() {
                                     body: fetchBody, 
                                     headers: { 'Content-Type': file.mimeType || 'application/octet-stream' }
                                 };
-                                if (typeof file.file.stream === 'function') {
-                                    fetchOptions.body = file.file.stream();
-                                    fetchOptions.duplex = 'half';
-                                }
                                 fetch(ticket.signedUrl, fetchOptions).then(res => {
                                     clearInterval(interval);
                                     if (res.ok) { progressMap[i] = 100; updateGlobalProgress(); resolve(true); }
