@@ -206,7 +206,6 @@ export default function SendScreen() {
                         xhr.send({ uri: file.uri, type: file.mimeType, name: file.name } as any);
                     }
                 });
-            }
 
             setProgress(100);
 
