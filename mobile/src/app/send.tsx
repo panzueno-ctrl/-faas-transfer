@@ -18,6 +18,7 @@ import {
     Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useKeepAwake } from 'expo-keep-awake';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -34,7 +35,22 @@ import { useTranslation } from 'react-i18next';
 
 const SERVER_URL = 'https://faas-transfer.onrender.com';
 
+const withRetry = async (fn: () => Promise<any>, retries = 3) => {
+    let attempt = 0;
+    while (attempt < retries) {
+        try {
+            return await fn();
+        } catch (error) {
+            attempt++;
+            if (attempt >= retries) throw error;
+            console.log(`Retry ${attempt}/${retries} failed, retrying in 2s...`);
+            await new Promise(r => setTimeout(r, 2000));
+        }
+    }
+};
+
 export default function SendScreen() {
+    useKeepAwake();
 
     const router = useRouter();
     const { colors, isDark } = useTheme();
@@ -174,7 +190,6 @@ export default function SendScreen() {
     };
 
     const uploadFile = async (file: any) => {
-        // La préparation continue
         setProgress(0);
 
         try {
@@ -198,6 +213,7 @@ export default function SendScreen() {
             setIsPreparing(false);
             setStep('uploading');
 
+            await withRetry(() => new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
                 xhr.open('PUT', signedUrl);
                 xhr.setRequestHeader('Content-Type', file.mimeType || 'application/octet-stream');
@@ -208,21 +224,18 @@ export default function SendScreen() {
                     }
                 };
                 
-                await new Promise((resolve, reject) => {
-                    xhr.onload = () => {
-                        if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response);
-                        else reject(new Error('Erreur upload R2: ' + xhr.status));
-                    };
-                    xhr.onerror = () => reject(new Error('Erreur réseau lors de l\'upload'));
-                    
-                    if (Platform.OS === 'web') {
-                        xhr.send(file.file || file);
-                    } else {
-                        // Utiliser xhr.send avec l'URI permet à React Native de streamer le fichier 
-                        // sans le charger en RAM, contrairement à expo-file-system qui crashe sur les gros fichiers.
-                        xhr.send({ uri: file.uri, type: file.mimeType, name: file.name } as any);
-                    }
-                });
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) resolve(true);
+                    else reject(new Error('Erreur upload R2: ' + xhr.status));
+                };
+                xhr.onerror = () => reject(new Error('Erreur réseau lors de l\'upload'));
+                
+                if (Platform.OS === 'web') {
+                    xhr.send(file.file || file);
+                } else {
+                    xhr.send({ uri: file.uri, type: file.mimeType, name: file.name } as any);
+                }
+            }));
 
             setProgress(100);
 
@@ -272,13 +285,11 @@ export default function SendScreen() {
     };
 
     const uploadMultipleFiles = async (files: any[]) => {
-        // La préparation (génération des tickets) continue
         setProgress(0);
 
         try {
             const { data: { session } } = await supabase.auth.getSession();
             
-            // 1. Demander les tickets pour tous les fichiers
             const filePayload = files.map(f => ({
                 fileName: f.name,
                 contentType: f.mimeType || 'application/octet-stream'
@@ -296,11 +307,9 @@ export default function SendScreen() {
 
             const { batchId, uploadTickets } = await reqUrlResponse.json();
 
-            // Les tickets sont générés, on affiche l'interface d'upload
             setIsPreparing(false);
             setStep('uploading');
 
-            // 2. Préparer le suivi de progression
             const progressMap = new Array(files.length).fill(0);
             const totalFiles = files.length;
 
@@ -309,7 +318,6 @@ export default function SendScreen() {
                 setProgress(Math.round(total / totalFiles));
             };
 
-            // 3. Upload en parallèle (limité à 3 en même temps pour éviter les crashs RAM sur mobile)
             const CONCURRENCY_LIMIT = 3;
             let currentIndex = 0;
 
@@ -319,41 +327,34 @@ export default function SendScreen() {
                     const file = files[i];
                     const ticket = uploadTickets[i];
 
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('PUT', ticket.signedUrl);
-                    xhr.setRequestHeader('Content-Type', file.mimeType || 'application/octet-stream');
-                    
-                    xhr.upload.onprogress = (event) => {
-                        if (event.lengthComputable) {
-                            progressMap[i] = (event.loaded / event.total) * 100;
-                            updateGlobalProgress();
-                        }
-                    };
+                    await withRetry(() => new Promise((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('PUT', ticket.signedUrl);
+                        xhr.setRequestHeader('Content-Type', file.mimeType || 'application/octet-stream');
+                        
+                        xhr.upload.onprogress = (event) => {
+                            if (event.lengthComputable) {
+                                progressMap[i] = (event.loaded / event.total) * 100;
+                                updateGlobalProgress();
+                            }
+                        };
 
-                    await new Promise(async (resolve, reject) => {
                         xhr.onload = () => {
                             if (xhr.status >= 200 && xhr.status < 300) {
                                 progressMap[i] = 100;
                                 updateGlobalProgress();
-                                resolve(xhr.response);
+                                resolve(true);
                             } else reject(new Error('Erreur upload R2: ' + xhr.status));
                         };
                         xhr.onerror = () => reject(new Error('Erreur réseau'));
 
                         if (Platform.OS === 'web') {
-                            let blob;
-                            if (file.file instanceof Blob) {
-                                blob = file.file;
-                            } else {
-                                const response_file = await fetch(file.uri);
-                                blob = await response_file.blob();
-                            }
-                            xhr.send(blob);
+                            xhr.send(file.file || file);
                         } else {
                             // React Native gère nativement l'envoi depuis une URI content://
                             xhr.send({ uri: file.uri, type: file.mimeType, name: file.name } as any);
                         }
-                    });
+                    }));
                 }
             };
 
