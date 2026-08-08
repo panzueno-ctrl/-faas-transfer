@@ -236,7 +236,17 @@ export default function SendScreen() {
                         const interval = setInterval(() => {
                             if (fakeP < 90) { fakeP += 2; setProgress(fakeP); }
                         }, 1000);
-                        fetch(signedUrl, { method: 'PUT', body: file.file, headers: { 'Content-Type': file.mimeType || 'application/octet-stream' } }).then(res => {
+                        let fetchBody = file.file;
+                        let fetchOptions: any = {
+                            method: 'PUT', 
+                            body: fetchBody, 
+                            headers: { 'Content-Type': file.mimeType || 'application/octet-stream' }
+                        };
+                        if (typeof file.file.stream === 'function') {
+                            fetchOptions.body = file.file.stream();
+                            fetchOptions.duplex = 'half';
+                        }
+                        fetch(signedUrl, fetchOptions).then(res => {
                             clearInterval(interval);
                             if (res.ok) { setProgress(100); resolve(true); }
                             else reject(new Error('Erreur upload R2'));
@@ -366,7 +376,17 @@ export default function SendScreen() {
                                 const interval = setInterval(() => {
                                     if (fakeP < 90) { fakeP += 2; progressMap[i] = fakeP; updateGlobalProgress(); }
                                 }, 1000);
-                                fetch(ticket.signedUrl, { method: 'PUT', body: file.file, headers: { 'Content-Type': file.mimeType || 'application/octet-stream' } }).then(res => {
+                                let fetchBody = file.file;
+                                let fetchOptions: any = {
+                                    method: 'PUT', 
+                                    body: fetchBody, 
+                                    headers: { 'Content-Type': file.mimeType || 'application/octet-stream' }
+                                };
+                                if (typeof file.file.stream === 'function') {
+                                    fetchOptions.body = file.file.stream();
+                                    fetchOptions.duplex = 'half';
+                                }
+                                fetch(ticket.signedUrl, fetchOptions).then(res => {
                                     clearInterval(interval);
                                     if (res.ok) { progressMap[i] = 100; updateGlobalProgress(); resolve(true); }
                                     else reject(new Error('Erreur upload R2'));
