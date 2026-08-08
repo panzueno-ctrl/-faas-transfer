@@ -152,7 +152,8 @@ export default function SendScreen() {
                         uri: asset.uri,
                         name: asset.fileName || asset.uri.split('/').pop() || 'media.jpg',
                         mimeType: asset.mimeType || (categoryId === 'video' ? 'video/mp4' : 'image/jpeg'),
-                        size: asset.fileSize || 0
+                        size: asset.fileSize || 0,
+                        file: (asset as any).file
                     }));
                 }
             } else {
@@ -231,6 +232,18 @@ export default function SendScreen() {
                 xhr.onerror = () => reject(new Error('Erreur réseau lors de l\'upload'));
                 
                 if (Platform.OS === 'web') {
+                    if (file.file && file.file.size > 100 * 1024 * 1024) { // > 100 MB
+                        let fakeP = 0;
+                        const interval = setInterval(() => {
+                            if (fakeP < 90) { fakeP += 2; setProgress(fakeP); }
+                        }, 1000);
+                        fetch(signedUrl, { method: 'PUT', body: file.file, headers: { 'Content-Type': file.mimeType || 'application/octet-stream' } }).then(res => {
+                            clearInterval(interval);
+                            if (res.ok) { setProgress(100); resolve(true); }
+                            else reject(new Error('Erreur upload R2'));
+                        }).catch(e => { clearInterval(interval); reject(e); });
+                        return;
+                    }
                     xhr.send(file.file || file);
                 } else {
                     xhr.send({ uri: file.uri, type: file.mimeType, name: file.name } as any);
@@ -349,6 +362,18 @@ export default function SendScreen() {
                         xhr.onerror = () => reject(new Error('Erreur réseau'));
 
                         if (Platform.OS === 'web') {
+                            if (file.file && file.file.size > 100 * 1024 * 1024) { // > 100 MB
+                                let fakeP = 0;
+                                const interval = setInterval(() => {
+                                    if (fakeP < 90) { fakeP += 2; progressMap[i] = fakeP; updateGlobalProgress(); }
+                                }, 1000);
+                                fetch(ticket.signedUrl, { method: 'PUT', body: file.file, headers: { 'Content-Type': file.mimeType || 'application/octet-stream' } }).then(res => {
+                                    clearInterval(interval);
+                                    if (res.ok) { progressMap[i] = 100; updateGlobalProgress(); resolve(true); }
+                                    else reject(new Error('Erreur upload R2'));
+                                }).catch(e => { clearInterval(interval); reject(e); });
+                                return;
+                            }
                             xhr.send(file.file || file);
                         } else {
                             // React Native gère nativement l'envoi depuis une URI content://
