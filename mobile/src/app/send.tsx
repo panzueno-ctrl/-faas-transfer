@@ -229,78 +229,6 @@ export default function SendScreen() {
             await withRetry(() => new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
                 
-                if (Platform.OS === 'web' && file.file && file.file.size > 100 * 1024 * 1024) { // > 100 MB
-                    // Utilisation de l'API Multipart pour les gros fichiers sur le web
-                    const rawFile = file.file;
-                    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB (plus léger pour la RAM du téléphone)
-                    const totalChunks = Math.ceil(rawFile.size / CHUNK_SIZE);
-                    const parts: any[] = [];
-                    
-                    const uploadChunks = async () => {
-                        try {
-                            const startRes = await fetch(`${SERVER_URL}/upload/multipart/start`, {
-                                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ fileName: file.name, contentType: file.mimeType || 'application/octet-stream', userId: session?.user?.id || null })
-                            });
-                            if (!startRes.ok) throw new Error('Erreur start multipart');
-                            const { uploadId, storageName: multiStorageName, fileId: multiFileId } = await startRes.json();
-                            
-                            for (let i = 0; i < totalChunks; i++) {
-                                const start = i * CHUNK_SIZE;
-                                const end = Math.min(start + CHUNK_SIZE, rawFile.size);
-                                let chunk: Blob | null = rawFile.slice(start, end);
-                                
-                                const signRes = await fetch(`${SERVER_URL}/upload/multipart/sign-part`, {
-                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ storageName: multiStorageName, uploadId, partNumber: i + 1 })
-                                });
-                                if (!signRes.ok) throw new Error('Erreur sign part');
-                                const { signedUrl: partSignedUrl } = await signRes.json();
-                                
-                                const etag = await new Promise<string>((resolve, reject) => {
-                                    const chunkXhr = new XMLHttpRequest();
-                                    chunkXhr.open('PUT', partSignedUrl);
-                                    
-                                    // Optionnel: On peut aussi suivre la progression exacte de chaque chunk ici si on veut plus tard
-                                    
-                                    chunkXhr.onload = () => {
-                                        if (chunkXhr.status >= 200 && chunkXhr.status < 300) {
-                                            const e = chunkXhr.getResponseHeader('ETag') || chunkXhr.getResponseHeader('etag');
-                                            resolve(e ? e.replace(/"/g, '') : '');
-                                        } else {
-                                            reject(new Error('Erreur HTTP ' + chunkXhr.status + ' sur le chunk ' + (i+1)));
-                                        }
-                                    };
-                                    
-                                    chunkXhr.onerror = () => reject(new Error('Failed to fetch (XHR Error) sur chunk ' + (i+1)));
-                                    chunkXhr.send(chunk);
-                                });
-                                
-                                parts.push({ PartNumber: i + 1, ETag: etag });
-                                setProgress(Math.round(((i + 1) / totalChunks) * 100));
-                                
-                                // Libération immédiate de la mémoire et pause pour le Garbage Collector
-                                chunk = null;
-                                await new Promise(resolve => setTimeout(resolve, 50));
-                            }
-                            
-                            const completeRes = await fetch(`${SERVER_URL}/upload/multipart/complete`, {
-                                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ storageName: multiStorageName, uploadId, parts })
-                            });
-                            if (!completeRes.ok) throw new Error('Erreur complete multipart');
-                            
-                            // Hack: on modifie les variables de la scope parente pour la suite
-                            reqUrlResponseObj = { fileId: multiFileId, storageName: multiStorageName };
-                            resolve(true);
-                        } catch (e) {
-                            reject(e);
-                        }
-                    };
-                    uploadChunks();
-                    return;
-                }
-
                 xhr.open('PUT', signedUrl);
                 xhr.setRequestHeader('Content-Type', file.mimeType || 'application/octet-stream');
                 
@@ -314,9 +242,12 @@ export default function SendScreen() {
                     if (xhr.status >= 200 && xhr.status < 300) resolve(true);
                     else reject(new Error('Erreur upload R2: ' + xhr.status));
                 };
-                xhr.onerror = () => reject(new Error('Erreur réseau lors de l\'upload'));
+                xhr.onerror = () => reject(new Error('Erreur réseau lors de l\'upload (Vérifiez votre connexion)'));
                 
                 if (Platform.OS === 'web') {
+                    // On envoie le fichier brut (File object) via XHR.
+                    // XHR gère nativement le streaming depuis le disque sur Android Chrome,
+                    // évitant les crash OOM (Uffa!) depuis qu'on utilise DocumentPicker.
                     xhr.send(file.file || file);
                 } else {
                     xhr.send({ uri: file.uri, type: file.mimeType, name: file.name } as any);
