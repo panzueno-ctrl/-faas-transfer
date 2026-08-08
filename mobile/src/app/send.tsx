@@ -257,11 +257,26 @@ export default function SendScreen() {
                                 if (!signRes.ok) throw new Error('Erreur sign part');
                                 const { signedUrl: partSignedUrl } = await signRes.json();
                                 
-                                const uploadRes = await fetch(partSignedUrl, { method: 'PUT', body: chunk });
-                                if (!uploadRes.ok) throw new Error('Erreur upload chunk');
+                                const etag = await new Promise<string>((resolve, reject) => {
+                                    const chunkXhr = new XMLHttpRequest();
+                                    chunkXhr.open('PUT', partSignedUrl);
+                                    
+                                    // Optionnel: On peut aussi suivre la progression exacte de chaque chunk ici si on veut plus tard
+                                    
+                                    chunkXhr.onload = () => {
+                                        if (chunkXhr.status >= 200 && chunkXhr.status < 300) {
+                                            const e = chunkXhr.getResponseHeader('ETag') || chunkXhr.getResponseHeader('etag');
+                                            resolve(e ? e.replace(/"/g, '') : '');
+                                        } else {
+                                            reject(new Error('Erreur HTTP ' + chunkXhr.status + ' sur le chunk ' + (i+1)));
+                                        }
+                                    };
+                                    
+                                    chunkXhr.onerror = () => reject(new Error('Failed to fetch (XHR Error) sur chunk ' + (i+1)));
+                                    chunkXhr.send(chunk);
+                                });
                                 
-                                const etag = uploadRes.headers.get('ETag') || uploadRes.headers.get('etag');
-                                parts.push({ PartNumber: i + 1, ETag: etag ? etag.replace(/"/g, '') : '' });
+                                parts.push({ PartNumber: i + 1, ETag: etag });
                                 setProgress(Math.round(((i + 1) / totalChunks) * 100));
                                 
                                 // Libération immédiate de la mémoire et pause pour le Garbage Collector
