@@ -47,6 +47,15 @@ export default function SendScreen() {
     const [result, setResult] = useState<{ id: string; downloadUrl: string } | null>(null);
     const [copied, setCopied] = useState(false);
     const [isPreparing, setIsPreparing] = useState(false);
+    const [batchStats, setBatchStats] = useState<{ count: number, totalSize: number } | null>(null);
+
+    const formatSize = (bytes: number) => {
+        if (!bytes || bytes === 0) return 'Taille inconnue';
+        const k = 1024;
+        const sizes = ['Octets', 'Ko', 'Mo', 'Go', 'To'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    };
 
     const CATEGORIES = [
         {
@@ -126,7 +135,8 @@ export default function SendScreen() {
                     files = result.assets.map(asset => ({
                         uri: asset.uri,
                         name: asset.fileName || asset.uri.split('/').pop() || 'media.jpg',
-                        mimeType: asset.mimeType || (categoryId === 'video' ? 'video/mp4' : 'image/jpeg')
+                        mimeType: asset.mimeType || (categoryId === 'video' ? 'video/mp4' : 'image/jpeg'),
+                        size: asset.fileSize || 0
                     }));
                 }
             } else {
@@ -140,6 +150,13 @@ export default function SendScreen() {
             }
 
             if (!files || files.length === 0) return;
+
+            if (files.length > 1) {
+                const totalSize = files.reduce((acc: number, f: any) => acc + (f.size || f.fileSize || f.file?.size || 0), 0);
+                setBatchStats({ count: files.length, totalSize });
+            } else {
+                setBatchStats(null);
+            }
 
             setIsPreparing(true);
             setSelectedFile(files[0]);
@@ -387,11 +404,11 @@ export default function SendScreen() {
 
             setStep('done');
 
-        } catch (error) {
+        } catch (error: any) {
             setIsPreparing(false);
-            console.error(error);
-            if (Platform.OS === 'web') window.alert(t('common.error') + '\nImpossible d\'envoyer le lot.');
-            else Alert.alert(t('common.error'), 'Impossible d\'envoyer le lot.');
+            console.error('Upload Error:', error);
+            if (Platform.OS === 'web') window.alert(t('common.error') + '\nLe transfert a échoué: ' + error.message);
+            else Alert.alert(t('common.error'), 'Le transfert a échoué: ' + error.message);
             setStep('category');
         }
     };
@@ -465,7 +482,9 @@ export default function SendScreen() {
                     {isPreparing && (
                         <View style={styles.preparingOverlay}>
                             <ActivityIndicator size="large" color={colors.primary} />
-                            <Text style={styles.preparingText}>Préparation des fichiers...</Text>
+                            <Text style={styles.preparingText}>
+                                {batchStats ? `Préparation de ${batchStats.count} fichiers...` : 'Préparation des fichiers...'}
+                            </Text>
                         </View>
                     )}
                 </View>
@@ -484,7 +503,9 @@ export default function SendScreen() {
                 <View style={styles.centerContent}>
 
                     <Text style={styles.uploadingTitle}>{t('send.uploading')}</Text>
-                    <Text style={styles.uploadingFile}>{selectedFile?.name}</Text>
+                    <Text style={styles.uploadingFile}>
+                        {batchStats ? `Lot de ${batchStats.count} fichiers (${formatSize(batchStats.totalSize)})` : selectedFile?.name}
+                    </Text>
 
                     <View style={{ position: 'relative', width: 140, height: 140, alignItems: 'center', justifyContent: 'center', marginVertical: 30 }}>
                         <Svg width="140" height="140" viewBox="0 0 140 140">

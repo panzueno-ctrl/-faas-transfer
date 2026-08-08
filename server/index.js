@@ -41,7 +41,7 @@ app.use(cors({
 
 // On dit à Express de lire le JSON dans les requêtes
 // Sans ça on ne peut pas lire le body d'une requête POST
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // Route de test pour vérifier que le serveur tourne
 // Quand tu vas sur http://localhost:3000 tu vois "Serveur FaaS actif"
