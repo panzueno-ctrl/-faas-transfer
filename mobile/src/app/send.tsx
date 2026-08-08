@@ -232,7 +232,7 @@ export default function SendScreen() {
                 if (Platform.OS === 'web' && file.file && file.file.size > 100 * 1024 * 1024) { // > 100 MB
                     // Utilisation de l'API Multipart pour les gros fichiers sur le web
                     const rawFile = file.file;
-                    const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB
+                    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB (plus léger pour la RAM du téléphone)
                     const totalChunks = Math.ceil(rawFile.size / CHUNK_SIZE);
                     const parts: any[] = [];
                     
@@ -248,7 +248,7 @@ export default function SendScreen() {
                             for (let i = 0; i < totalChunks; i++) {
                                 const start = i * CHUNK_SIZE;
                                 const end = Math.min(start + CHUNK_SIZE, rawFile.size);
-                                const chunk = rawFile.slice(start, end);
+                                let chunk: Blob | null = rawFile.slice(start, end);
                                 
                                 const signRes = await fetch(`${SERVER_URL}/upload/multipart/sign-part`, {
                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -263,6 +263,10 @@ export default function SendScreen() {
                                 const etag = uploadRes.headers.get('ETag') || uploadRes.headers.get('etag');
                                 parts.push({ PartNumber: i + 1, ETag: etag ? etag.replace(/"/g, '') : '' });
                                 setProgress(Math.round(((i + 1) / totalChunks) * 100));
+                                
+                                // Libération immédiate de la mémoire et pause pour le Garbage Collector
+                                chunk = null;
+                                await new Promise(resolve => setTimeout(resolve, 50));
                             }
                             
                             const completeRes = await fetch(`${SERVER_URL}/upload/multipart/complete`, {
