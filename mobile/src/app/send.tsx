@@ -224,9 +224,64 @@ export default function SendScreen() {
 
             setIsPreparing(false);
             setStep('uploading');
+            let reqUrlResponseObj = { fileId, storageName };
 
             await withRetry(() => new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
+                
+                if (Platform.OS === 'web' && file.file && file.file.size > 100 * 1024 * 1024) { // > 100 MB
+                    // Utilisation de l'API Multipart pour les gros fichiers sur le web
+                    const rawFile = file.file;
+                    const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB
+                    const totalChunks = Math.ceil(rawFile.size / CHUNK_SIZE);
+                    const parts: any[] = [];
+                    
+                    const uploadChunks = async () => {
+                        try {
+                            const startRes = await fetch(`${SERVER_URL}/upload/multipart/start`, {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ fileName: file.name, contentType: file.mimeType || 'application/octet-stream', userId: session?.user?.id || null })
+                            });
+                            if (!startRes.ok) throw new Error('Erreur start multipart');
+                            const { uploadId, storageName: multiStorageName, fileId: multiFileId } = await startRes.json();
+                            
+                            for (let i = 0; i < totalChunks; i++) {
+                                const start = i * CHUNK_SIZE;
+                                const end = Math.min(start + CHUNK_SIZE, rawFile.size);
+                                const chunk = rawFile.slice(start, end);
+                                
+                                const signRes = await fetch(`${SERVER_URL}/upload/multipart/sign-part`, {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ storageName: multiStorageName, uploadId, partNumber: i + 1 })
+                                });
+                                if (!signRes.ok) throw new Error('Erreur sign part');
+                                const { signedUrl: partSignedUrl } = await signRes.json();
+                                
+                                const uploadRes = await fetch(partSignedUrl, { method: 'PUT', body: chunk });
+                                if (!uploadRes.ok) throw new Error('Erreur upload chunk');
+                                
+                                const etag = uploadRes.headers.get('ETag') || uploadRes.headers.get('etag');
+                                parts.push({ PartNumber: i + 1, ETag: etag ? etag.replace(/"/g, '') : '' });
+                                setProgress(Math.round(((i + 1) / totalChunks) * 100));
+                            }
+                            
+                            const completeRes = await fetch(`${SERVER_URL}/upload/multipart/complete`, {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ storageName: multiStorageName, uploadId, parts })
+                            });
+                            if (!completeRes.ok) throw new Error('Erreur complete multipart');
+                            
+                            // Hack: on modifie les variables de la scope parente pour la suite
+                            reqUrlResponseObj = { fileId: multiFileId, storageName: multiStorageName };
+                            resolve(true);
+                        } catch (e) {
+                            reject(e);
+                        }
+                    };
+                    uploadChunks();
+                    return;
+                }
+
                 xhr.open('PUT', signedUrl);
                 xhr.setRequestHeader('Content-Type', file.mimeType || 'application/octet-stream');
                 
@@ -243,24 +298,6 @@ export default function SendScreen() {
                 xhr.onerror = () => reject(new Error('Erreur réseau lors de l\'upload'));
                 
                 if (Platform.OS === 'web') {
-                    if (file.file && file.file.size > 100 * 1024 * 1024) { // > 100 MB
-                        let fakeP = 0;
-                        const interval = setInterval(() => {
-                            if (fakeP < 90) { fakeP += 2; setProgress(fakeP); }
-                        }, 1000);
-                        let fetchBody = file.file;
-                        let fetchOptions: any = {
-                            method: 'PUT', 
-                            body: fetchBody, 
-                            headers: { 'Content-Type': file.mimeType || 'application/octet-stream' }
-                        };
-                        fetch(signedUrl, fetchOptions).then(res => {
-                            clearInterval(interval);
-                            if (res.ok) { setProgress(100); resolve(true); }
-                            else reject(new Error('Erreur upload R2'));
-                        }).catch(e => { clearInterval(interval); reject(e); });
-                        return;
-                    }
                     xhr.send(file.file || file);
                 } else {
                     xhr.send({ uri: file.uri, type: file.mimeType, name: file.name } as any);
@@ -273,9 +310,9 @@ export default function SendScreen() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    fileId: fileId,
+                    fileId: reqUrlResponseObj.fileId,
                     originalName: file.name,
-                    storageName: storageName,
+                    storageName: reqUrlResponseObj.storageName,
                     userId: session?.user?.id || null
                 })
             });
