@@ -287,6 +287,11 @@ export default function SendScreen() {
             const progressMap = new Array(files.length).fill(0);
             const totalFiles = files.length;
 
+            const updateGlobalProgress = () => {
+                const total = progressMap.reduce((acc, curr) => acc + curr, 0);
+                setProgress(Math.round(total / totalFiles));
+            };
+
             // 3. Upload en parallèle (limité à 3 en même temps pour éviter les crashs RAM sur mobile)
             const CONCURRENCY_LIMIT = 3;
             let currentIndex = 0;
