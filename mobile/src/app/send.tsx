@@ -120,7 +120,7 @@ export default function SendScreen() {
         try {
             let files: any[] = [];
 
-            if (categoryId === 'images' || categoryId === 'video' || categoryId === 'audio') {
+            if (Platform.OS !== 'web' && (categoryId === 'images' || categoryId === 'video' || categoryId === 'audio')) {
                 let mediaTypes: ImagePicker.MediaType = 'images';
                 if (categoryId === 'video') mediaTypes = 'videos';
                 
@@ -135,8 +135,7 @@ export default function SendScreen() {
                 } else {
                     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
                     if (permissionResult.granted === false) {
-                        if (Platform.OS === 'web') window.alert("Permission requise\nVous devez autoriser l'accès à vos photos.");
-                        else Alert.alert("Permission requise", "Vous devez autoriser l'accès à vos photos.");
+                        Alert.alert("Permission requise", "Vous devez autoriser l'accès à vos photos.");
                         return;
                     }
 
