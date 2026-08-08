@@ -61,50 +61,20 @@ router.get('/:id', async (req, res) => {
                             Key: file.storageName
                         });
                         const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-                        
-                        const tempFilePath = path.join(os.tmpdir(), `faas-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`);
-                        
-                        // 1. Télécharger de S3 vers le disque local (Rapide, pas de timeout)
+                        // Streamer directement de S3 vers l'archive ZIP sans passer par le disque
                         await new Promise((resolve, reject) => {
-                            const fileStream = fs.createWriteStream(tempFilePath);
                             https.get(signedUrl, (httpRes) => {
                                 if (httpRes.statusCode !== 200) {
                                     httpRes.resume();
                                     return reject(new Error(`HTTP ${httpRes.statusCode}`));
                                 }
-                                httpRes.pipe(fileStream);
-                                fileStream.on('finish', () => resolve());
-                                fileStream.on('error', reject);
+                                
+                                archive.append(httpRes, { name: file.originalName });
+                                
+                                httpRes.on('end', () => resolve());
                                 httpRes.on('error', reject);
                             }).on('error', reject);
                         });
-
-                        // 2. Ajouter le fichier local au ZIP
-                        archive.file(tempFilePath, { name: file.originalName });
-                        
-                        // 3. Attendre que Archiver ait envoyé ce fichier au client
-                        await new Promise((resolve, reject) => {
-                            const onEntry = (entryData) => {
-                                if (entryData.name === file.originalName) {
-                                    archive.removeListener('entry', onEntry);
-                                    archive.removeListener('error', onError);
-                                    resolve();
-                                }
-                            };
-                            const onError = (err) => {
-                                archive.removeListener('entry', onEntry);
-                                archive.removeListener('error', onError);
-                                reject(err);
-                            };
-                            archive.on('entry', onEntry);
-                            archive.on('error', onError);
-                        });
-
-                        // 4. Nettoyer le disque
-                        fs.unlink(tempFilePath, (err) => {
-                            if (err) console.error('Erreur suppression temp:', err);
-                        });
-
                     } catch (err) {
                         console.error('Error streaming file to ZIP:', file.originalName, err);
                     }
