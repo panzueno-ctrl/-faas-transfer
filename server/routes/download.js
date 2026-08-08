@@ -50,19 +50,25 @@ router.get('/:id', async (req, res) => {
                 const { Readable } = require('stream');
                 archive.pipe(res);
 
+                const https = require('https');
+                
                 for (const file of files) {
                     try {
                         const command = new GetObjectCommand({
                             Bucket: process.env.R2_BUCKET_NAME,
                             Key: file.storageName
                         });
-                        const response = await s3Client.send(command);
-                        
-                        archive.append(response.Body, { name: file.originalName || file.storageName });
+                        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
                         
                         await new Promise((resolve, reject) => {
-                            response.Body.on('end', resolve);
-                            response.Body.on('error', reject);
+                            https.get(signedUrl, (streamRes) => {
+                                if (streamRes.statusCode !== 200) {
+                                    return reject(new Error(`HTTP ${streamRes.statusCode}`));
+                                }
+                                archive.append(streamRes, { name: file.originalName || file.storageName });
+                                streamRes.on('end', resolve);
+                                streamRes.on('error', reject);
+                            }).on('error', reject);
                         });
                     } catch (err) {
                         console.error('Error streaming file to ZIP:', file.originalName, err.message);
