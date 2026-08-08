@@ -147,7 +147,11 @@ router.get('/:id', async (req, res) => {
             if (!res.headersSent) {
                 res.removeHeader('Content-Type');
                 res.removeHeader('Content-Disposition');
-                return res.status(500).json({ error: 'Erreur lors de la préparation des liens' });
+                return res.status(500).json({ 
+                    error: 'Erreur lors de la préparation des liens', 
+                    details: err.message,
+                    stack: err.stack
+                });
             }
             return res.end();
         }
