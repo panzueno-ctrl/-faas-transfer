@@ -4,7 +4,7 @@
  * Écran de réception de fichiers.
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -15,6 +15,7 @@ import {
     ActivityIndicator,
     Linking,
     ScrollView,
+    Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,6 +41,19 @@ export default function ReceiveScreen() {
     const [link, setLink] = useState('');
     const [fileName, setFileName] = useState('');
     const [permission, requestPermission] = useCameraPermissions();
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        if (step === 'preview') {
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 400,
+                useNativeDriver: true,
+            }).start();
+        } else {
+            fadeAnim.setValue(0);
+        }
+    }, [step, fadeAnim]);
 
     const extractId = (url: string) => {
         const parts = url.split('/download/');
@@ -267,49 +281,51 @@ export default function ReceiveScreen() {
                         <Text style={styles.backButtonText}>{t('common.back')}</Text>
                     </Pressable>
 
-                    <Text style={[styles.title, { marginTop: 40 }]}>Fichiers prêts</Text>
-                    <Text style={styles.subtitle}>{previewData?.files?.length} fichier(s) dans ce lot</Text>
+                    <Animated.View style={{ opacity: fadeAnim, width: '100%', alignItems: 'center', flex: 1 }}>
+                        <Text style={[styles.title, { marginTop: 40 }]}>Fichiers prêts</Text>
+                        <Text style={styles.subtitle}>{previewData?.files?.length} fichier(s) dans ce lot</Text>
 
-                    <View style={{ flex: 1, width: '100%', marginTop: 20 }}>
-                        <ScrollView contentContainerStyle={{ gap: 16 }}>
-                            {previewData?.files?.map((file: any, idx: number) => (
-                                <View key={idx} style={{ 
-                                    backgroundColor: colors.card, 
-                                    borderRadius: 16, 
-                                    overflow: 'hidden',
-                                    borderWidth: 1,
-                                    borderColor: colors.border
-                                }}>
-                                    {file.isImage && (
-                                        <Image source={{ uri: file.url }} style={{ width: '100%', height: 200 }} contentFit="cover" />
-                                    )}
-                                    {file.isVideo && (
-                                        <Video 
-                                            source={{ uri: file.url }} 
-                                            style={{ width: '100%', height: 200 }} 
-                                            resizeMode={ResizeMode.COVER} 
-                                            useNativeControls 
-                                        />
-                                    )}
-                                    {!file.isImage && !file.isVideo && (
-                                        <View style={{ width: '100%', height: 100, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardHovered }}>
-                                            <Ionicons name="document-text" size={40} color={colors.textMuted} />
+                        <View style={{ flex: 1, width: '100%', marginTop: 20 }}>
+                            <ScrollView contentContainerStyle={{ gap: 16 }}>
+                                {previewData?.files?.map((file: any, idx: number) => (
+                                    <View key={idx} style={{ 
+                                        backgroundColor: colors.card, 
+                                        borderRadius: 16, 
+                                        overflow: 'hidden',
+                                        borderWidth: 1,
+                                        borderColor: colors.border
+                                    }}>
+                                        {file.isImage && (
+                                            <Image source={{ uri: file.url }} style={{ width: '100%', height: 200 }} contentFit="cover" />
+                                        )}
+                                        {file.isVideo && (
+                                            <Video 
+                                                source={{ uri: file.url }} 
+                                                style={{ width: '100%', height: 200 }} 
+                                                resizeMode={ResizeMode.COVER} 
+                                                useNativeControls 
+                                            />
+                                        )}
+                                        {!file.isImage && !file.isVideo && (
+                                            <View style={{ width: '100%', height: 100, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardHovered }}>
+                                                <Ionicons name="document-text" size={40} color={colors.textMuted} />
+                                            </View>
+                                        )}
+                                        <View style={{ padding: 12 }}>
+                                            <Text style={{ color: colors.text, fontWeight: '600' }}>{file.name}</Text>
                                         </View>
-                                    )}
-                                    <View style={{ padding: 12 }}>
-                                        <Text style={{ color: colors.text, fontWeight: '600' }}>{file.name}</Text>
                                     </View>
-                                </View>
-                            ))}
-                        </ScrollView>
-                    </View>
+                                ))}
+                            </ScrollView>
+                        </View>
 
-                    <Pressable
-                        style={[styles.downloadButton, { marginTop: 20, width: '100%' }]}
-                        onPress={performRealDownload}>
-                        <Ionicons name="download-outline" size={20} color="#ffffff" />
-                        <Text style={styles.downloadButtonText}>Télécharger ({previewData?.files?.length > 1 ? 'ZIP' : 'Fichier'})</Text>
-                    </Pressable>
+                        <Pressable
+                            style={[styles.downloadButton, { marginTop: 20, width: '100%' }]}
+                            onPress={performRealDownload}>
+                            <Ionicons name="download-outline" size={20} color="#ffffff" />
+                            <Text style={styles.downloadButtonText}>Télécharger ({previewData?.files?.length > 1 ? 'ZIP' : 'Fichier'})</Text>
+                        </Pressable>
+                    </Animated.View>
                 </View>
             </SafeAreaView>
         );

@@ -607,6 +607,14 @@ export default function SendScreen() {
                         <Text style={[styles.secondaryButtonText, { color: colors.error }]}>Vider le panier</Text>
                     </Pressable>
                 </View>
+                
+                {isPicking && (
+                    <View style={styles.fullscreenOverlay}>
+                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Text style={styles.overlayText}>Traitement en cours...</Text>
+                        <Text style={styles.overlaySubText}>Veuillez patienter, cela peut prendre quelques secondes.</Text>
+                    </View>
+                )}
             </SafeAreaView>
         );
     }
@@ -1003,5 +1011,30 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
         color: colors.text,
         fontSize: 16,
         fontWeight: '600',
+    },
+    fullscreenOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: isDark ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1000,
+        padding: 20,
+    },
+    overlayText: {
+        color: colors.text,
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginTop: 20,
+        textAlign: 'center',
+    },
+    overlaySubText: {
+        color: colors.textSubtle,
+        fontSize: 14,
+        marginTop: 10,
+        textAlign: 'center',
     },
 });

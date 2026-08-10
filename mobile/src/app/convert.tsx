@@ -13,6 +13,7 @@ import {
     ScrollView,
     Alert,
     ActivityIndicator,
+    TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -267,6 +268,7 @@ export default function ConvertScreen() {
     const [selectedService, setSelectedService] = useState<any>(null);
     const [fileName, setFileName] = useState('');
     const [resultUrl, setResultUrl] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
     
     const [session, setSession] = useState<Session | null>(null);
 
@@ -359,6 +361,15 @@ export default function ConvertScreen() {
 
 
     if (step === 'menu') {
+        const filteredConversions = CONVERSIONS.filter(c => 
+            c.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
+            c.id.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        const filteredPdfTools = PDF_TOOLS.filter(c => 
+            c.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
+            c.id.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.backgroundGlow} pointerEvents="none" />
@@ -381,11 +392,29 @@ export default function ConvertScreen() {
                         <View style={styles.headerContainer}>
                             <Text style={styles.title}>{t('convert.title')}</Text>
                             <Text style={styles.subtitle}>{t('convert.subtitle')}</Text>
+                            
+                            <View style={styles.searchContainer}>
+                                <Ionicons name="search-outline" size={20} color={colors.textMuted} />
+                                <TextInput
+                                    style={styles.searchInput}
+                                    placeholder="Chercher une conversion (ex: pdf, mp3, heic...)"
+                                    placeholderTextColor={colors.textMuted}
+                                    value={searchQuery}
+                                    onChangeText={setSearchQuery}
+                                />
+                                {searchQuery.length > 0 && (
+                                    <Pressable onPress={() => setSearchQuery('')}>
+                                        <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+                                    </Pressable>
+                                )}
+                            </View>
                         </View>
 
-                        <Text style={styles.groupTitle}>{t('convert.popular')}</Text>
-                        <View style={styles.grid}>
-                            {CONVERSIONS.map((service) => (
+                        {filteredConversions.length > 0 && (
+                            <>
+                                <Text style={styles.groupTitle}>{t('convert.popular')}</Text>
+                                <View style={styles.grid}>
+                                    {filteredConversions.map((service) => (
                                 <ActionCard
                                     key={service.id}
                                     title={service.label}
@@ -396,11 +425,15 @@ export default function ConvertScreen() {
                                     compact={true}
                                 />
                             ))}
-                        </View>
+                                </View>
+                            </>
+                        )}
 
-                        <Text style={styles.groupTitle}>{t('convert.advanced')}</Text>
-                        <View style={styles.grid}>
-                            {PDF_TOOLS.map((service) => (
+                        {filteredPdfTools.length > 0 && (
+                            <>
+                                <Text style={styles.groupTitle}>{t('convert.advanced')}</Text>
+                                <View style={styles.grid}>
+                                    {filteredPdfTools.map((service) => (
                                 <ActionCard
                                     key={service.id}
                                     title={service.label}
@@ -411,7 +444,16 @@ export default function ConvertScreen() {
                                     compact={true}
                                 />
                             ))}
-                        </View>
+                                </View>
+                            </>
+                        )}
+
+                        {filteredConversions.length === 0 && filteredPdfTools.length === 0 && (
+                            <View style={{ alignItems: 'center', marginTop: 40 }}>
+                                <Ionicons name="search-outline" size={48} color={colors.textMuted} />
+                                <Text style={[styles.subtitle, { marginTop: 16 }]}>Aucune conversion trouvée</Text>
+                            </View>
+                        )}
                     </ScrollView>
                 </View>
             </SafeAreaView>
