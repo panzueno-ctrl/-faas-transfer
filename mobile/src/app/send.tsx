@@ -58,6 +58,8 @@ export default function SendScreen() {
     const styles = getStyles(colors, isDark);
 
     const [step, setStep] = useState<'category' | 'review' | 'uploading' | 'done'>('category');
+    const [lastCategory, setLastCategory] = useState<string>('all');
+    const [lastMimeTypes, setLastMimeTypes] = useState<string[]>(['*/*']);
     const [selectedFile, setSelectedFile] = useState<any>(null);
     const [pendingFiles, setPendingFiles] = useState<any[]>([]);
     const [progress, setProgress] = useState(0);
@@ -118,6 +120,8 @@ export default function SendScreen() {
     ];
 
     const pickFile = async (categoryId: string, mimeTypes: string[]) => {
+        setLastCategory(categoryId);
+        setLastMimeTypes(mimeTypes);
         try {
             let files: any[] = [];
 
@@ -571,7 +575,7 @@ export default function SendScreen() {
                             (pressed || hovered) && styles.secondaryButtonHovered,
                             { width: '100%' }
                         ]} 
-                        onPress={() => pickFile('all', ['*/*'])}>
+                        onPress={() => pickFile(lastCategory, lastMimeTypes)}>
                         <Text style={styles.secondaryButtonText}>
                             <Ionicons name="add-circle-outline" size={18} /> Ajouter d'autres fichiers
                         </Text>
@@ -940,6 +944,44 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     toastText: {
         color: colors.primary,
         fontSize: 14,
+        fontWeight: '600',
+    },
+    primaryButton: {
+        backgroundColor: colors.primary,
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        gap: 8,
+    },
+    primaryButtonHovered: {
+        opacity: 0.9,
+    },
+    primaryButtonText: {
+        color: '#ffffff',
+        fontSize: 16,
+        fontWeight: '700',
+    },
+    secondaryButton: {
+        backgroundColor: 'transparent',
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        gap: 8,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    secondaryButtonHovered: {
+        backgroundColor: isDark ? '#1a1a1a' : '#f3f4f6',
+    },
+    secondaryButtonText: {
+        color: colors.text,
+        fontSize: 16,
         fontWeight: '600',
     },
 });
