@@ -57,8 +57,9 @@ export default function SendScreen() {
     const { t } = useTranslation();
     const styles = getStyles(colors, isDark);
 
-    const [step, setStep] = useState<'category' | 'uploading' | 'done'>('category');
+    const [step, setStep] = useState<'category' | 'review' | 'uploading' | 'done'>('category');
     const [selectedFile, setSelectedFile] = useState<any>(null);
+    const [pendingFiles, setPendingFiles] = useState<any[]>([]);
     const [progress, setProgress] = useState(0);
     const [result, setResult] = useState<{ id: string; downloadUrl: string } | null>(null);
     const [copied, setCopied] = useState(false);
@@ -179,21 +180,8 @@ export default function SendScreen() {
 
             if (!files || files.length === 0) return;
 
-            if (files.length > 1) {
-                const totalSize = files.reduce((acc: number, f: any) => acc + (f.size || f.fileSize || f.file?.size || 0), 0);
-                setBatchStats({ count: files.length, totalSize });
-            } else {
-                setBatchStats(null);
-            }
-
-            setIsPreparing(true);
-            setSelectedFile(files[0]);
-
-            if (files.length === 1) {
-                await uploadFileV2(files[0]);
-            } else {
-                await uploadMultipleFiles(files);
-            }
+            setPendingFiles(prev => [...prev, ...files]);
+            setStep('review');
 
         } catch (error) {
             if (Platform.OS === 'web') window.alert(t('common.error') + '\nImpossible de sélectionner le(s) fichier(s).');
@@ -482,6 +470,7 @@ export default function SendScreen() {
 
     const reset = () => {
         setStep('category');
+        setPendingFiles([]);
         setSelectedFile(null);
         setProgress(0);
         setResult(null);
@@ -532,6 +521,69 @@ export default function SendScreen() {
                     )}
                 </View>
             </View>
+        );
+    }
+
+    if (step === 'review') {
+        const totalSize = pendingFiles.reduce((acc, f) => acc + (f.size || f.fileSize || f.file?.size || 0), 0);
+        
+        const startUploadFlow = async () => {
+            if (pendingFiles.length === 0) return;
+            setIsPreparing(true);
+            
+            if (pendingFiles.length === 1) {
+                setSelectedFile(pendingFiles[0]);
+                setBatchStats(null);
+                await uploadFileV2(pendingFiles[0]);
+            } else {
+                setBatchStats({ count: pendingFiles.length, totalSize });
+                setSelectedFile({ name: `Lot de ${pendingFiles.length} fichiers` });
+                await uploadMultipleFiles(pendingFiles);
+            }
+        };
+
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                <View style={styles.centerContent}>
+                    <Ionicons name="folder-open-outline" size={64} color={colors.primary} style={{ marginBottom: 20 }} />
+                    <Text style={styles.uploadingTitle}>Panier de transfert</Text>
+                    <Text style={styles.uploadingFile}>
+                        {pendingFiles.length} fichier{pendingFiles.length > 1 ? 's' : ''} prêt{pendingFiles.length > 1 ? 's' : ''}
+                    </Text>
+                    <Text style={[styles.subtitle, { marginBottom: 40 }]}>
+                        Taille totale : {formatSize(totalSize)}
+                    </Text>
+
+                    <Pressable 
+                        style={({ pressed, hovered }: any) => [
+                            styles.primaryButton,
+                            (pressed || hovered) && styles.primaryButtonHovered,
+                            { width: '100%', marginBottom: 15 }
+                        ]} 
+                        onPress={startUploadFlow}>
+                        <Text style={styles.primaryButtonText}>Envoyer ({pendingFiles.length})</Text>
+                    </Pressable>
+
+                    <Pressable 
+                        style={({ pressed, hovered }: any) => [
+                            styles.secondaryButton,
+                            (pressed || hovered) && styles.secondaryButtonHovered,
+                            { width: '100%' }
+                        ]} 
+                        onPress={() => pickFile('all', ['*/*'])}>
+                        <Text style={styles.secondaryButtonText}>
+                            <Ionicons name="add-circle-outline" size={18} /> Ajouter d'autres fichiers
+                        </Text>
+                    </Pressable>
+                    
+                    <Pressable 
+                        style={{ marginTop: 20, padding: 10 }}
+                        onPress={reset}>
+                        <Text style={[styles.secondaryButtonText, { color: colors.error }]}>Vider le panier</Text>
+                    </Pressable>
+                </View>
+            </SafeAreaView>
         );
     }
 
