@@ -203,6 +203,8 @@ export default function SendScreen() {
 
     const uploadFileLegacy = async (file: any) => {
         setProgress(0);
+        setIsPreparing(false);
+        setStep('uploading');
 
         try {
             const { data: { session } } = await supabase.auth.getSession();
@@ -221,9 +223,6 @@ export default function SendScreen() {
             }
 
             const { fileId, storageName, signedUrl } = await reqUrlResponse.json();
-
-            setIsPreparing(false);
-            setStep('uploading');
             let reqUrlResponseObj = { fileId, storageName };
 
             await withRetry(() => new Promise((resolve, reject) => {
@@ -312,6 +311,8 @@ export default function SendScreen() {
 
     const uploadMultipleFiles = async (files: any[]) => {
         setProgress(0);
+        setIsPreparing(false);
+        setStep('uploading');
 
         try {
             const { data: { session } } = await supabase.auth.getSession();
@@ -332,9 +333,6 @@ export default function SendScreen() {
             }
 
             const { batchId, uploadTickets } = await reqUrlResponse.json();
-
-            setIsPreparing(false);
-            setStep('uploading');
 
             const progressMap = new Array(files.length).fill(0);
             const totalFiles = files.length;
