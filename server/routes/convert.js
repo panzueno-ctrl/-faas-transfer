@@ -581,9 +581,224 @@ router.post('/keynote-to-pdf', upload.single('file'), (req, res) => {
     });
 });
 
+// ─────────────────────────────────────────────
+// POST /convert/numbers-to-pdf
+// Convertit Apple Numbers (.numbers) en PDF
+// ─────────────────────────────────────────────
+router.post('/numbers-to-pdf', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const outputDir = '/tmp';
+    const command = `libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
+
+    exec(command, (error) => {
+        if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
+        const pdfFileName = path.basename(inputPath, path.extname(inputPath)) + '.pdf';
+        const pdfPath = path.join(outputDir, pdfFileName);
+        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.send(fs.readFileSync(pdfPath));
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(pdfPath);
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/txt-to-pdf
+// Convertit Text (.txt) en PDF
+// ─────────────────────────────────────────────
+router.post('/txt-to-pdf', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const outputDir = '/tmp';
+    const command = `libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
+
+    exec(command, (error) => {
+        if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
+        const pdfFileName = path.basename(inputPath, path.extname(inputPath)) + '.pdf';
+        const pdfPath = path.join(outputDir, pdfFileName);
+        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.send(fs.readFileSync(pdfPath));
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(pdfPath);
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/pdf-to-txt
+// Convertit PDF en TXT via pdftotext
+// ─────────────────────────────────────────────
+router.post('/pdf-to-txt', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const txtPath = `/tmp/${Date.now()}-output.txt`;
+    const command = `pdftotext "${inputPath}" "${txtPath}"`;
+
+    exec(command, (error) => {
+        if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
+        res.setHeader('Content-Disposition', 'attachment; filename="document.txt"');
+        res.setHeader('Content-Type', 'text/plain');
+        res.send(fs.readFileSync(txtPath));
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(txtPath);
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/jpg-to-png
+// Convertit JPG en PNG via ImageMagick
+// ─────────────────────────────────────────────
+router.post('/jpg-to-png', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const pngPath = `/tmp/${Date.now()}-output.png`;
+    const command = `convert "${inputPath}" "${pngPath}"`;
+
+    exec(command, (error) => {
+        if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
+        res.setHeader('Content-Disposition', 'attachment; filename="image.png"');
+        res.setHeader('Content-Type', 'image/png');
+        res.send(fs.readFileSync(pngPath));
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(pngPath);
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/png-to-jpg
+// Convertit PNG en JPG via ImageMagick
+// ─────────────────────────────────────────────
+router.post('/png-to-jpg', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const jpgPath = `/tmp/${Date.now()}-output.jpg`;
+    // Option -background white -flatten pour gérer la transparence du PNG
+    const command = `convert "${inputPath}" -background white -flatten "${jpgPath}"`;
+
+    exec(command, (error) => {
+        if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
+        res.setHeader('Content-Disposition', 'attachment; filename="image.jpg"');
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.send(fs.readFileSync(jpgPath));
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(jpgPath);
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/heic-to-jpg
+// Convertit HEIC (iPhone) en JPG via ImageMagick
+// ─────────────────────────────────────────────
+router.post('/heic-to-jpg', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const jpgPath = `/tmp/${Date.now()}-output.jpg`;
+    const command = `convert "${inputPath}" "${jpgPath}"`;
+
+    exec(command, (error) => {
+        if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
+        res.setHeader('Content-Disposition', 'attachment; filename="image.jpg"');
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.send(fs.readFileSync(jpgPath));
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(jpgPath);
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/mp4-to-mp3
+// Convertit MP4 en MP3 via FFmpeg
+// ─────────────────────────────────────────────
+router.post('/mp4-to-mp3', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const mp3Path = `/tmp/${Date.now()}-output.mp3`;
+    const command = `ffmpeg -i "${inputPath}" -q:a 0 -map a "${mp3Path}"`;
+
+    exec(command, (error) => {
+        if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
+        res.setHeader('Content-Disposition', 'attachment; filename="audio.mp3"');
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.send(fs.readFileSync(mp3Path));
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(mp3Path);
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/wav-to-mp3
+// Convertit WAV en MP3 via FFmpeg
+// ─────────────────────────────────────────────
+router.post('/wav-to-mp3', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const mp3Path = `/tmp/${Date.now()}-output.mp3`;
+    const command = `ffmpeg -i "${inputPath}" -b:a 192k "${mp3Path}"`;
+
+    exec(command, (error) => {
+        if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
+        res.setHeader('Content-Disposition', 'attachment; filename="audio.mp3"');
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.send(fs.readFileSync(mp3Path));
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(mp3Path);
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/mp3-to-wav
+// Convertit MP3 en WAV via FFmpeg
+// ─────────────────────────────────────────────
+router.post('/mp3-to-wav', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const wavPath = `/tmp/${Date.now()}-output.wav`;
+    const command = `ffmpeg -i "${inputPath}" "${wavPath}"`;
+
+    exec(command, (error) => {
+        if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
+        res.setHeader('Content-Disposition', 'attachment; filename="audio.wav"');
+        res.setHeader('Content-Type', 'audio/wav');
+        res.send(fs.readFileSync(wavPath));
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(wavPath);
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/mp4-to-gif
+// Convertit MP4 en GIF animé via FFmpeg (Max 15fps, width 480)
+// ─────────────────────────────────────────────
+router.post('/mp4-to-gif', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const gifPath = `/tmp/${Date.now()}-output.gif`;
+    // On optimise le GIF pour ne pas crasher le serveur (scale=480:-1, fps=10)
+    const command = `ffmpeg -i "${inputPath}" -vf "fps=10,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 "${gifPath}"`;
+
+    exec(command, (error) => {
+        if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
+        res.setHeader('Content-Disposition', 'attachment; filename="animation.gif"');
+        res.setHeader('Content-Type', 'image/gif');
+        res.send(fs.readFileSync(gifPath));
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(gifPath);
+    });
+});
+
 // On exporte le router
 module.exports = router;
-
 
 
 
