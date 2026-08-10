@@ -67,6 +67,7 @@ export default function SendScreen() {
     const [copied, setCopied] = useState(false);
     const [isPreparing, setIsPreparing] = useState(false);
     const [batchStats, setBatchStats] = useState<{ count: number, totalSize: number } | null>(null);
+    const [isPicking, setIsPicking] = useState(false);
 
     const formatSize = (bytes: number) => {
         if (!bytes || bytes === 0) return 'Taille inconnue';
@@ -120,6 +121,7 @@ export default function SendScreen() {
     ];
 
     const pickFile = async (categoryId: string, mimeTypes: string[]) => {
+        setIsPicking(true);
         setLastCategory(categoryId);
         setLastMimeTypes(mimeTypes);
         try {
@@ -182,12 +184,17 @@ export default function SendScreen() {
                 });
             }
 
-            if (!files || files.length === 0) return;
+            if (!files || files.length === 0) {
+                setIsPicking(false);
+                return;
+            }
 
             setPendingFiles(prev => [...prev, ...files]);
             setStep('review');
+            setIsPicking(false);
 
         } catch (error) {
+            setIsPicking(false);
             if (Platform.OS === 'web') window.alert(t('common.error') + '\nImpossible de sélectionner le(s) fichier(s).');
             else Alert.alert(t('common.error'), 'Impossible de sélectionner le(s) fichier(s).');
         }
@@ -563,8 +570,10 @@ export default function SendScreen() {
                         style={({ pressed, hovered }: any) => [
                             styles.primaryButton,
                             (pressed || hovered) && styles.primaryButtonHovered,
-                            { width: '100%', marginBottom: 15 }
+                            { width: '100%', marginBottom: 15 },
+                            isPicking && { opacity: 0.5 }
                         ]} 
+                        disabled={isPicking}
                         onPress={startUploadFlow}>
                         <Text style={styles.primaryButtonText}>Envoyer ({pendingFiles.length})</Text>
                     </Pressable>
@@ -573,11 +582,22 @@ export default function SendScreen() {
                         style={({ pressed, hovered }: any) => [
                             styles.secondaryButton,
                             (pressed || hovered) && styles.secondaryButtonHovered,
-                            { width: '100%' }
+                            { width: '100%' },
+                            isPicking && { opacity: 0.5 }
                         ]} 
+                        disabled={isPicking}
                         onPress={() => pickFile(lastCategory, lastMimeTypes)}>
                         <Text style={styles.secondaryButtonText}>
-                            <Ionicons name="add-circle-outline" size={18} /> Ajouter d'autres fichiers
+                            {isPicking ? (
+                                <>
+                                    <ActivityIndicator size="small" color={colors.text} style={{ marginRight: 8 }} />
+                                    Traitement...
+                                </>
+                            ) : (
+                                <>
+                                    <Ionicons name="add-circle-outline" size={18} /> Ajouter d'autres fichiers
+                                </>
+                            )}
                         </Text>
                     </Pressable>
                     
