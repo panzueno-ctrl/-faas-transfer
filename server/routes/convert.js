@@ -182,11 +182,33 @@ router.post('/image-to-pdf', upload.single('file'), (req, res) => {
 
 // ─────────────────────────────────────────────
 // POST /convert/pdf-to-pptx
-// Fonctionnalité bientôt disponible
+// Convertit un PDF en PowerPoint via LibreOffice
 // ─────────────────────────────────────────────
 router.post('/pdf-to-pptx', upload.single('file'), (req, res) => {
-    return res.status(503).json({
-        message: 'La conversion PDF → PowerPoint sera bientôt disponible.'
+    if (!req.file) {
+        return res.status(400).json({ message: 'Aucun fichier reçu.' });
+    }
+
+    const inputPath = req.file.path;
+    const outputDir = '/tmp';
+
+    // Commande LibreOffice pour convertir PDF en PPTX via le filtre impress
+    const command = `libreoffice --infilter="impress_pdf_import" --headless --convert-to pptx --outdir ${outputDir} "${inputPath}"`;
+
+    exec(command, (error) => {
+        if (error) {
+            return res.status(500).json({ message: 'La conversion a échoué. Veuillez réessayer.' });
+        }
+
+        const pptxFileName = path.basename(inputPath, path.extname(inputPath)) + '.pptx';
+        const pptxPath = path.join(outputDir, pptxFileName);
+
+        res.setHeader('Content-Disposition', `attachment; filename="${pptxFileName}"`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+        res.send(fs.readFileSync(pptxPath));
+
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(pptxPath);
     });
 });
 
@@ -507,9 +529,60 @@ router.post('/ocr-pdf', upload.single('file'), async (req, res) => {
     }
 });
 
+// ─────────────────────────────────────────────
+// POST /convert/pages-to-pdf
+// Convertit un fichier Apple Pages (.pages) en PDF via LibreOffice
+// ─────────────────────────────────────────────
+router.post('/pages-to-pdf', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const outputDir = '/tmp';
+    const command = `libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
+
+    exec(command, (error) => {
+        if (error) return res.status(500).json({ message: 'La conversion a échoué. Veuillez réessayer.' });
+
+        const pdfFileName = path.basename(inputPath, path.extname(inputPath)) + '.pdf';
+        const pdfPath = path.join(outputDir, pdfFileName);
+
+        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.send(fs.readFileSync(pdfPath));
+
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(pdfPath);
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/keynote-to-pdf
+// Convertit un fichier Apple Keynote (.key) en PDF via LibreOffice
+// ─────────────────────────────────────────────
+router.post('/keynote-to-pdf', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const outputDir = '/tmp';
+    const command = `libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
+
+    exec(command, (error) => {
+        if (error) return res.status(500).json({ message: 'La conversion a échoué. Veuillez réessayer.' });
+
+        const pdfFileName = path.basename(inputPath, path.extname(inputPath)) + '.pdf';
+        const pdfPath = path.join(outputDir, pdfFileName);
+
+        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.send(fs.readFileSync(pdfPath));
+
+        fs.unlinkSync(inputPath);
+        fs.unlinkSync(pdfPath);
+    });
+});
+
 // On exporte le router
 module.exports = router;
-
 
 
 

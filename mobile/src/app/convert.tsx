@@ -83,6 +83,30 @@ const CONVERSIONS = [
         mimeTypes: ['application/pdf'],
         outputExt: 'xlsx',
     },
+    {
+        id: 'pdf-to-pptx',
+        label: 'PDF → PPTX',
+        icon: 'easel-outline',
+        endpoint: '/convert/pdf-to-pptx',
+        mimeTypes: ['application/pdf'],
+        outputExt: 'pptx',
+    },
+    {
+        id: 'pages-to-pdf',
+        label: 'Pages → PDF',
+        icon: 'document-text-outline',
+        endpoint: '/convert/pages-to-pdf',
+        mimeTypes: ['application/vnd.apple.pages'],
+        outputExt: 'pdf',
+    },
+    {
+        id: 'keynote-to-pdf',
+        label: 'Keynote → PDF',
+        icon: 'easel-outline',
+        endpoint: '/convert/keynote-to-pdf',
+        mimeTypes: ['application/vnd.apple.keynote'],
+        outputExt: 'pdf',
+    },
 ];
 
 const PDF_TOOLS = [
