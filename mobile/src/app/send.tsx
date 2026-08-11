@@ -4,7 +4,7 @@
  * Écran d'envoi de fichiers.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -16,6 +16,7 @@ import {
     Clipboard,
     Platform,
     Share,
+    BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useKeepAwake } from 'expo-keep-awake';
@@ -68,6 +69,25 @@ export default function SendScreen() {
     const [isPreparing, setIsPreparing] = useState(false);
     const [batchStats, setBatchStats] = useState<{ count: number, totalSize: number } | null>(null);
     const [isPicking, setIsPicking] = useState(false);
+
+    useEffect(() => {
+        const onBackPress = () => {
+            if (step !== 'category') {
+                setStep('category');
+                setPendingFiles([]);
+                setSelectedFile(null);
+                setProgress(0);
+                setResult(null);
+                setCopied(false);
+                setIsPreparing(false);
+                return true; // prevent default behavior (exit tab)
+            }
+            return false;
+        };
+
+        BackHandler.addEventListener('hardwareBackPress', onBackPress);
+        return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+    }, [step]);
 
     const formatSize = (bytes: number) => {
         if (!bytes || bytes === 0) return 'Taille inconnue';
@@ -559,7 +579,20 @@ export default function SendScreen() {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.backgroundGlow} pointerEvents="none" />
-                <View style={styles.centerContent}>
+                
+                <View style={{ width: '100%', paddingHorizontal: 20, paddingTop: Platform.OS === 'web' ? 40 : 20, zIndex: 20 }}>
+                    <Pressable 
+                        style={({ pressed, hovered }: any) => [
+                            styles.backButton,
+                            (pressed || hovered) && styles.backButtonHovered
+                        ]}
+                        onPress={reset}>
+                        <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                        <Text style={styles.backButtonText}>Annuler et retour</Text>
+                    </Pressable>
+                </View>
+
+                <View style={[styles.centerContent, { flex: 1 }]}>
                     <Ionicons name="folder-open-outline" size={64} color={colors.primary} style={{ marginBottom: 20 }} />
                     <Text style={styles.uploadingTitle}>Panier de transfert</Text>
                     <Text style={styles.uploadingFile}>
