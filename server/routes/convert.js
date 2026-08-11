@@ -58,7 +58,7 @@ router.post('/word-to-pdf', upload.single('file'), (req, res) => {
     const outputDir = '/tmp';
 
     // Commande LibreOffice pour convertir en PDF
-    const command = `libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
+    const command = `export HOME=/tmp && libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
 
     exec(command, (error) => {
         if (error) {
@@ -193,7 +193,7 @@ router.post('/pdf-to-pptx', upload.single('file'), (req, res) => {
     const outputDir = '/tmp';
 
     // Commande LibreOffice pour convertir PDF en PPTX via le filtre impress
-    const command = `libreoffice --infilter="impress_pdf_import" --headless --convert-to pptx --outdir ${outputDir} "${inputPath}"`;
+    const command = `export HOME=/tmp && libreoffice --infilter="impress_pdf_import" --headless --convert-to pptx --outdir ${outputDir} "${inputPath}"`;
 
     exec(command, (error) => {
         if (error) {
@@ -226,7 +226,7 @@ router.post('/pptx-to-pdf', upload.single('file'), (req, res) => {
     const outputDir = '/tmp';
 
     // Commande LibreOffice pour convertir PowerPoint en PDF
-    const command = `libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
+    const command = `export HOME=/tmp && libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
 
     exec(command, (error) => {
         if (error) {
@@ -256,7 +256,7 @@ router.post('/excel-to-pdf', upload.single('file'), (req, res) => {
 
     const inputPath = req.file.path;
     const outputDir = '/tmp';
-    const command = `libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
+    const command = `export HOME=/tmp && libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
 
     exec(command, (error) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué. Veuillez réessayer.' });
@@ -282,7 +282,7 @@ router.post('/pdf-to-word', upload.single('file'), (req, res) => {
 
     const inputPath = req.file.path;
     const outputDir = '/tmp';
-    const command = `libreoffice --headless --convert-to docx --outdir ${outputDir} "${inputPath}"`;
+    const command = `export HOME=/tmp && libreoffice --headless --convert-to docx --outdir ${outputDir} "${inputPath}"`;
 
     exec(command, (error) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué. Veuillez réessayer.' });
@@ -308,7 +308,7 @@ router.post('/pdf-to-excel', upload.single('file'), (req, res) => {
 
     const inputPath = req.file.path;
     const outputDir = '/tmp';
-    const command = `libreoffice --headless --convert-to xlsx --outdir ${outputDir} "${inputPath}"`;
+    const command = `export HOME=/tmp && libreoffice --headless --convert-to xlsx --outdir ${outputDir} "${inputPath}"`;
 
     exec(command, (error) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué. Veuillez réessayer.' });
@@ -538,7 +538,7 @@ router.post('/pages-to-pdf', upload.single('file'), (req, res) => {
 
     const inputPath = req.file.path;
     const outputDir = '/tmp';
-    const command = `libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
+    const command = `export HOME=/tmp && libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
 
     exec(command, (error) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué. Veuillez réessayer.' });
@@ -564,7 +564,7 @@ router.post('/keynote-to-pdf', upload.single('file'), (req, res) => {
 
     const inputPath = req.file.path;
     const outputDir = '/tmp';
-    const command = `libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
+    const command = `export HOME=/tmp && libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
 
     exec(command, (error) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué. Veuillez réessayer.' });
@@ -590,7 +590,7 @@ router.post('/numbers-to-pdf', upload.single('file'), (req, res) => {
 
     const inputPath = req.file.path;
     const outputDir = '/tmp';
-    const command = `libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
+    const command = `export HOME=/tmp && libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
 
     exec(command, (error) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
@@ -613,7 +613,7 @@ router.post('/txt-to-pdf', upload.single('file'), (req, res) => {
 
     const inputPath = req.file.path;
     const outputDir = '/tmp';
-    const command = `libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
+    const command = `export HOME=/tmp && libreoffice --headless --convert-to pdf --outdir ${outputDir} "${inputPath}"`;
 
     exec(command, (error) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
