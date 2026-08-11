@@ -149,7 +149,7 @@ export default function SendScreen() {
                     const result = await ImagePicker.launchImageLibraryAsync({
                         mediaTypes: mediaTypes,
                         allowsMultipleSelection: true,
-                        quality: 1,
+                        preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
                     });
 
                     if (result.canceled) return;
