@@ -6,6 +6,8 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     imagemagick \
     poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-fra \
     && rm -rf /var/lib/apt/lists/*
 
 # Fix pour autoriser ImageMagick à lire/écrire des PDF (nécessaire sur Debian/Ubuntu récent)

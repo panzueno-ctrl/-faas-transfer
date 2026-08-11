@@ -25,7 +25,7 @@ import ActionCard from '../components/ActionCard';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
-const SERVER_URL = 'http://localhost:3000';
+const SERVER_URL = 'https://faas-transfer.onrender.com';
 
 const FILE_TOOLS = [
     // --- Manipulation PDF (Outils principaux) ---
