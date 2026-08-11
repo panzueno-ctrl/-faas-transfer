@@ -29,61 +29,62 @@ const SERVER_URL = 'http://localhost:3000';
 
 const FILE_TOOLS = [
     // --- Manipulation PDF (Outils principaux) ---
-    { id: 'merge-pdf', label: 'Fusionner PDF', icon: 'git-merge-outline', endpoint: '/convert/merge-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf', multiple: true },
-    { id: 'split-pdf', label: 'Diviser PDF', icon: 'cut-outline', endpoint: '/convert/split-pdf', mimeTypes: ['application/pdf'], outputExt: 'zip' },
-    { id: 'compress-pdf', label: 'Compresser PDF', icon: 'contract-outline', endpoint: '/convert/compress-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'edit-pdf', label: 'Modifier PDF', icon: 'create-outline', endpoint: '/convert/edit-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'sign-pdf', label: 'Signer PDF', icon: 'pencil-outline', endpoint: '/convert/sign-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'watermark-pdf', label: 'Filigrane', icon: 'water-outline', endpoint: '/convert/watermark-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'rotate-pdf', label: 'Faire pivoter', icon: 'refresh-outline', endpoint: '/convert/rotate-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'organize-pdf', label: 'Organiser PDF', icon: 'layers-outline', endpoint: '/convert/organize-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'protect-pdf', label: 'Protéger PDF', icon: 'lock-closed-outline', endpoint: '/convert/protect-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'unlock-pdf', label: 'Déverrouiller', icon: 'lock-open-outline', endpoint: '/convert/unlock-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'number-pdf', label: 'Numéros pages', icon: 'list-outline', endpoint: '/convert/number-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'crop-pdf', label: 'Rogner PDF', icon: 'crop-outline', endpoint: '/convert/crop-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'flatten-pdf', label: 'Aplatir PDF', icon: 'copy-outline', endpoint: '/convert/flatten-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'repair-pdf', label: 'Réparer PDF', icon: 'build-outline', endpoint: '/convert/repair-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'censor-pdf', label: 'Censure PDF', icon: 'eye-off-outline', endpoint: '/convert/censor-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'annotate-pdf', label: 'Annoter PDF', icon: 'brush-outline', endpoint: '/convert/annotate-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'pdfa-pdf', label: 'PDF en PDF/A', icon: 'archive-outline', endpoint: '/convert/pdf-to-pdfa', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'ocr-pdf', label: 'OCR PDF', icon: 'scan-outline', endpoint: '/convert/ocr-pdf', mimeTypes: ['application/pdf'], outputExt: 'txt' },
-    { id: 'compare-pdf', label: 'Comparer PDF', icon: 'git-compare-outline', endpoint: '/convert/compare-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'merge-pdf', category: 'Outils PDF Essentiels', label: 'Fusionner PDF', icon: 'git-merge-outline', endpoint: '/convert/merge-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf', multiple: true },
+    { id: 'split-pdf', category: 'Outils PDF Essentiels', label: 'Diviser PDF', icon: 'cut-outline', endpoint: '/convert/split-pdf', mimeTypes: ['application/pdf'], outputExt: 'zip' },
+    { id: 'compress-pdf', category: 'Outils PDF Essentiels', label: 'Compresser PDF', icon: 'contract-outline', endpoint: '/convert/compress-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'edit-pdf', category: 'Outils PDF Essentiels', label: 'Modifier PDF', icon: 'create-outline', endpoint: '/convert/edit-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'sign-pdf', category: 'Outils PDF Essentiels', label: 'Signer PDF', icon: 'pencil-outline', endpoint: '/convert/sign-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'watermark-pdf', category: 'Outils PDF Essentiels', label: 'Filigrane', icon: 'water-outline', endpoint: '/convert/watermark-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'rotate-pdf', category: 'Outils PDF Essentiels', label: 'Faire pivoter', icon: 'refresh-outline', endpoint: '/convert/rotate-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'organize-pdf', category: 'Outils PDF Essentiels', label: 'Organiser PDF', icon: 'layers-outline', endpoint: '/convert/organize-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'protect-pdf', category: 'Outils PDF Essentiels', label: 'Protéger PDF', icon: 'lock-closed-outline', endpoint: '/convert/protect-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'unlock-pdf', category: 'Outils PDF Essentiels', label: 'Déverrouiller', icon: 'lock-open-outline', endpoint: '/convert/unlock-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'number-pdf', category: 'Outils PDF Essentiels', label: 'Numéros pages', icon: 'list-outline', endpoint: '/convert/number-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'crop-pdf', category: 'Outils PDF Essentiels', label: 'Rogner PDF', icon: 'crop-outline', endpoint: '/convert/crop-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'flatten-pdf', category: 'Outils PDF Essentiels', label: 'Aplatir PDF', icon: 'copy-outline', endpoint: '/convert/flatten-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'repair-pdf', category: 'Outils PDF Essentiels', label: 'Réparer PDF', icon: 'build-outline', endpoint: '/convert/repair-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'censor-pdf', category: 'Outils PDF Essentiels', label: 'Censure PDF', icon: 'eye-off-outline', endpoint: '/convert/censor-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'annotate-pdf', category: 'Outils PDF Essentiels', label: 'Annoter PDF', icon: 'brush-outline', endpoint: '/convert/annotate-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'pdfa-pdf', category: 'Outils PDF Essentiels', label: 'PDF en PDF/A', icon: 'archive-outline', endpoint: '/convert/pdf-to-pdfa', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'ocr-pdf', category: 'Outils PDF Essentiels', label: 'OCR PDF', icon: 'scan-outline', endpoint: '/convert/ocr-pdf', mimeTypes: ['application/pdf'], outputExt: 'txt' },
+    { id: 'compare-pdf', category: 'Outils PDF Essentiels', label: 'Comparer PDF', icon: 'git-compare-outline', endpoint: '/convert/compare-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
 
     // --- Vers PDF ---
-    { id: 'word-to-pdf', label: 'Word → PDF', icon: 'document-text-outline', endpoint: '/convert/word-to-pdf', mimeTypes: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'], outputExt: 'pdf' },
-    { id: 'pptx-to-pdf', label: 'PPTX → PDF', icon: 'easel-outline', endpoint: '/convert/pptx-to-pdf', mimeTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'], outputExt: 'pdf' },
-    { id: 'excel-to-pdf', label: 'Excel → PDF', icon: 'grid-outline', endpoint: '/convert/excel-to-pdf', mimeTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'], outputExt: 'pdf' },
-    { id: 'image-to-pdf', label: 'JPG → PDF', icon: 'images-outline', endpoint: '/convert/image-to-pdf', mimeTypes: ['image/*'], outputExt: 'pdf' },
-    { id: 'html-to-pdf', label: 'HTML → PDF', icon: 'globe-outline', endpoint: '/convert/html-to-pdf', mimeTypes: ['text/html'], outputExt: 'pdf' },
-    { id: 'pages-to-pdf', label: 'Pages → PDF', icon: 'document-text-outline', endpoint: '/convert/pages-to-pdf', mimeTypes: ['application/vnd.apple.pages'], outputExt: 'pdf' },
-    { id: 'keynote-to-pdf', label: 'Keynote → PDF', icon: 'easel-outline', endpoint: '/convert/keynote-to-pdf', mimeTypes: ['application/vnd.apple.keynote'], outputExt: 'pdf' },
-    { id: 'numbers-to-pdf', label: 'Numbers → PDF', icon: 'grid-outline', endpoint: '/convert/numbers-to-pdf', mimeTypes: ['application/vnd.apple.numbers'], outputExt: 'pdf' },
-    { id: 'txt-to-pdf', label: 'TXT → PDF', icon: 'document-text-outline', endpoint: '/convert/txt-to-pdf', mimeTypes: ['text/plain'], outputExt: 'pdf' },
+    { id: 'word-to-pdf', category: 'Convertir vers PDF', label: 'Word → PDF', icon: 'document-text-outline', endpoint: '/convert/word-to-pdf', mimeTypes: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'], outputExt: 'pdf' },
+    { id: 'pptx-to-pdf', category: 'Convertir vers PDF', label: 'PPTX → PDF', icon: 'easel-outline', endpoint: '/convert/pptx-to-pdf', mimeTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'], outputExt: 'pdf' },
+    { id: 'excel-to-pdf', category: 'Convertir vers PDF', label: 'Excel → PDF', icon: 'grid-outline', endpoint: '/convert/excel-to-pdf', mimeTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'], outputExt: 'pdf' },
+    { id: 'image-to-pdf', category: 'Convertir vers PDF', label: 'JPG → PDF', icon: 'images-outline', endpoint: '/convert/image-to-pdf', mimeTypes: ['image/*'], outputExt: 'pdf' },
+    { id: 'html-to-pdf', category: 'Convertir vers PDF', label: 'HTML → PDF', icon: 'globe-outline', endpoint: '/convert/html-to-pdf', mimeTypes: ['text/html'], outputExt: 'pdf' },
+    { id: 'pages-to-pdf', category: 'Convertir vers PDF', label: 'Pages → PDF', icon: 'document-text-outline', endpoint: '/convert/pages-to-pdf', mimeTypes: ['application/vnd.apple.pages'], outputExt: 'pdf' },
+    { id: 'keynote-to-pdf', category: 'Convertir vers PDF', label: 'Keynote → PDF', icon: 'easel-outline', endpoint: '/convert/keynote-to-pdf', mimeTypes: ['application/vnd.apple.keynote'], outputExt: 'pdf' },
+    { id: 'numbers-to-pdf', category: 'Convertir vers PDF', label: 'Numbers → PDF', icon: 'grid-outline', endpoint: '/convert/numbers-to-pdf', mimeTypes: ['application/vnd.apple.numbers'], outputExt: 'pdf' },
+    { id: 'txt-to-pdf', category: 'Convertir vers PDF', label: 'TXT → PDF', icon: 'document-text-outline', endpoint: '/convert/txt-to-pdf', mimeTypes: ['text/plain'], outputExt: 'pdf' },
 
     // --- Depuis PDF ---
-    { id: 'pdf-to-word', label: 'PDF → Word', icon: 'document-outline', endpoint: '/convert/pdf-to-word', mimeTypes: ['application/pdf'], outputExt: 'docx' },
-    { id: 'pdf-to-pptx', label: 'PDF → PPTX', icon: 'easel-outline', endpoint: '/convert/pdf-to-pptx', mimeTypes: ['application/pdf'], outputExt: 'pptx' },
-    { id: 'pdf-to-excel', label: 'PDF → Excel', icon: 'grid-outline', endpoint: '/convert/pdf-to-excel', mimeTypes: ['application/pdf'], outputExt: 'xlsx' },
-    { id: 'pdf-to-image', label: 'PDF → JPG', icon: 'image-outline', endpoint: '/convert/pdf-to-image', mimeTypes: ['application/pdf'], outputExt: 'zip' },
-    { id: 'pdf-to-txt', label: 'PDF → TXT', icon: 'document-text-outline', endpoint: '/convert/pdf-to-txt', mimeTypes: ['application/pdf'], outputExt: 'txt' },
+    { id: 'pdf-to-word', category: 'Convertir depuis PDF', label: 'PDF → Word', icon: 'document-outline', endpoint: '/convert/pdf-to-word', mimeTypes: ['application/pdf'], outputExt: 'docx' },
+    { id: 'pdf-to-pptx', category: 'Convertir depuis PDF', label: 'PDF → PPTX', icon: 'easel-outline', endpoint: '/convert/pdf-to-pptx', mimeTypes: ['application/pdf'], outputExt: 'pptx' },
+    { id: 'pdf-to-excel', category: 'Convertir depuis PDF', label: 'PDF → Excel', icon: 'grid-outline', endpoint: '/convert/pdf-to-excel', mimeTypes: ['application/pdf'], outputExt: 'xlsx' },
+    { id: 'pdf-to-image', category: 'Convertir depuis PDF', label: 'PDF → JPG', icon: 'image-outline', endpoint: '/convert/pdf-to-image', mimeTypes: ['application/pdf'], outputExt: 'zip' },
+    { id: 'pdf-to-txt', category: 'Convertir depuis PDF', label: 'PDF → TXT', icon: 'document-text-outline', endpoint: '/convert/pdf-to-txt', mimeTypes: ['application/pdf'], outputExt: 'txt' },
 
     // --- Images ---
-    { id: 'heic-to-jpg', label: 'HEIC → JPG', icon: 'logo-apple', endpoint: '/convert/heic-to-jpg', mimeTypes: ['image/heic', 'image/heif'], outputExt: 'jpg' },
-    { id: 'jpg-to-png', label: 'JPG → PNG', icon: 'image-outline', endpoint: '/convert/jpg-to-png', mimeTypes: ['image/jpeg'], outputExt: 'png' },
-    { id: 'png-to-jpg', label: 'PNG → JPG', icon: 'image-outline', endpoint: '/convert/png-to-jpg', mimeTypes: ['image/png'], outputExt: 'jpg' },
-    { id: 'compress-image', label: 'Compresser Image', icon: 'contract-outline', endpoint: '/convert/compress-image', mimeTypes: ['image/*'], outputExt: 'jpg' },
+    { id: 'heic-to-jpg', category: 'Outils d\'Images', label: 'HEIC → JPG', icon: 'logo-apple', endpoint: '/convert/heic-to-jpg', mimeTypes: ['image/heic', 'image/heif'], outputExt: 'jpg' },
+    { id: 'jpg-to-png', category: 'Outils d\'Images', label: 'JPG → PNG', icon: 'image-outline', endpoint: '/convert/jpg-to-png', mimeTypes: ['image/jpeg'], outputExt: 'png' },
+    { id: 'png-to-jpg', category: 'Outils d\'Images', label: 'PNG → JPG', icon: 'image-outline', endpoint: '/convert/png-to-jpg', mimeTypes: ['image/png'], outputExt: 'jpg' },
+    { id: 'compress-image', category: 'Outils d\'Images', label: 'Compresser Image', icon: 'contract-outline', endpoint: '/convert/compress-image', mimeTypes: ['image/*'], outputExt: 'jpg' },
 ];
 
 const MEDIA_TOOLS = [
-    { id: 'mp4-to-mp3', label: 'Vidéo → Audio', icon: 'musical-notes-outline', endpoint: '/convert/mp4-to-mp3', mimeTypes: ['video/mp4', 'video/quicktime'], outputExt: 'mp3' },
-    { id: 'mp4-to-gif', label: 'Vidéo → GIF', icon: 'images-outline', endpoint: '/convert/mp4-to-gif', mimeTypes: ['video/mp4', 'video/quicktime'], outputExt: 'gif' },
-    { id: 'compress-video', label: 'Compresser Vidéo', icon: 'contract-outline', endpoint: '/convert/compress-video', mimeTypes: ['video/*'], outputExt: 'mp4' },
-    { id: 'compress-audio', label: 'Compresser Audio', icon: 'contract-outline', endpoint: '/convert/compress-audio', mimeTypes: ['audio/*'], outputExt: 'mp3' },
-    { id: 'trim-video', label: 'Couper Vidéo', icon: 'cut-outline', endpoint: '/convert/trim-video', mimeTypes: ['video/*'], outputExt: 'mp4' },
-    { id: 'trim-audio', label: 'Couper Audio', icon: 'cut-outline', endpoint: '/convert/trim-audio', mimeTypes: ['audio/*'], outputExt: 'mp3' },
-    { id: 'merge-audio', label: 'Fusionner Audios', icon: 'git-merge-outline', endpoint: '/convert/merge-audio', mimeTypes: ['audio/*'], outputExt: 'mp3', multiple: true },
-    { id: 'wav-to-mp3', label: 'WAV → MP3', icon: 'musical-notes-outline', endpoint: '/convert/wav-to-mp3', mimeTypes: ['audio/wav', 'audio/x-wav'], outputExt: 'mp3' },
-    { id: 'mp3-to-wav', label: 'MP3 → WAV', icon: 'musical-note-outline', endpoint: '/convert/mp3-to-wav', mimeTypes: ['audio/mpeg'], outputExt: 'wav' },
+    { id: 'mp4-to-mp3', category: 'Outils Vidéo', label: 'Vidéo → Audio', icon: 'musical-notes-outline', endpoint: '/convert/mp4-to-mp3', mimeTypes: ['video/mp4', 'video/quicktime'], outputExt: 'mp3' },
+    { id: 'mp4-to-gif', category: 'Outils Vidéo', label: 'Vidéo → GIF', icon: 'images-outline', endpoint: '/convert/mp4-to-gif', mimeTypes: ['video/mp4', 'video/quicktime'], outputExt: 'gif' },
+    { id: 'compress-video', category: 'Outils Vidéo', label: 'Compresser Vidéo', icon: 'contract-outline', endpoint: '/convert/compress-video', mimeTypes: ['video/*'], outputExt: 'mp4' },
+    { id: 'trim-video', category: 'Outils Vidéo', label: 'Couper Vidéo', icon: 'cut-outline', endpoint: '/convert/trim-video', mimeTypes: ['video/*'], outputExt: 'mp4' },
+    
+    { id: 'compress-audio', category: 'Outils Audio', label: 'Compresser Audio', icon: 'contract-outline', endpoint: '/convert/compress-audio', mimeTypes: ['audio/*'], outputExt: 'mp3' },
+    { id: 'trim-audio', category: 'Outils Audio', label: 'Couper Audio', icon: 'cut-outline', endpoint: '/convert/trim-audio', mimeTypes: ['audio/*'], outputExt: 'mp3' },
+    { id: 'merge-audio', category: 'Outils Audio', label: 'Fusionner Audios', icon: 'git-merge-outline', endpoint: '/convert/merge-audio', mimeTypes: ['audio/*'], outputExt: 'mp3', multiple: true },
+    { id: 'wav-to-mp3', category: 'Outils Audio', label: 'WAV → MP3', icon: 'musical-notes-outline', endpoint: '/convert/wav-to-mp3', mimeTypes: ['audio/wav', 'audio/x-wav'], outputExt: 'mp3' },
+    { id: 'mp3-to-wav', category: 'Outils Audio', label: 'MP3 → WAV', icon: 'musical-note-outline', endpoint: '/convert/mp3-to-wav', mimeTypes: ['audio/mpeg'], outputExt: 'wav' },
 ];
 
 export default function ConvertScreen() {
@@ -196,6 +197,16 @@ export default function ConvertScreen() {
             c.id.toLowerCase().includes(searchQuery.toLowerCase())
         );
 
+        // Group tools by category
+        const groupedTools = filteredTools.reduce((acc, tool) => {
+            const cat = tool.category || 'Autres';
+            if (!acc[cat]) {
+                acc[cat] = [];
+            }
+            acc[cat].push(tool);
+            return acc;
+        }, {} as Record<string, typeof FILE_TOOLS>);
+
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.backgroundGlow} pointerEvents="none" />
@@ -251,23 +262,30 @@ export default function ConvertScreen() {
                             </View>
                         </View>
 
-                        {filteredTools.length > 0 && (
-                            <View style={styles.grid}>
-                                {filteredTools.map((service) => (
-                                    <ActionCard
-                                        key={service.id}
-                                        title={service.label}
-                                        description=""
-                                        icon={service.icon as any}
-                                        onPress={() => handleServicePress(service)}
-                                        style={styles.serviceCard}
-                                        compact={true}
-                                    />
+                        {Object.entries(groupedTools).length > 0 && (
+                            <View style={{ width: '100%', maxWidth: 900, alignItems: 'center' }}>
+                                {Object.entries(groupedTools).map(([category, tools]) => (
+                                    <View key={category} style={{ width: '100%', marginBottom: 32 }}>
+                                        <Text style={styles.groupTitle}>{category}</Text>
+                                        <View style={styles.grid}>
+                                            {tools.map((service) => (
+                                                <ActionCard
+                                                    key={service.id}
+                                                    title={service.label}
+                                                    description=""
+                                                    icon={service.icon as any}
+                                                    onPress={() => handleServicePress(service)}
+                                                    style={styles.serviceCard}
+                                                    compact={true}
+                                                />
+                                            ))}
+                                        </View>
+                                    </View>
                                 ))}
                             </View>
                         )}
                         
-                        {filteredTools.length === 0 && (
+                        {Object.entries(groupedTools).length === 0 && (
                             <View style={{ alignItems: 'center', marginTop: 40 }}>
                                 <Ionicons name="search-outline" size={48} color={colors.textMuted} />
                                 <Text style={[styles.subtitle, { marginTop: 16 }]}>Aucun outil trouvé</Text>
