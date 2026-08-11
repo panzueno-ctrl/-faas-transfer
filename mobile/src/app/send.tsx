@@ -522,11 +522,14 @@ export default function SendScreen() {
                         ))}
                     </View>
                     
-                    {isPreparing && (
+                    {(isPreparing || isPicking) && (
                         <View style={styles.preparingOverlay}>
                             <ActivityIndicator size="large" color={colors.primary} />
                             <Text style={styles.preparingText}>
-                                {batchStats ? `Préparation de ${batchStats.count} fichiers...` : 'Préparation des fichiers...'}
+                                {isPicking 
+                                    ? 'Traitement en cours...' 
+                                    : (batchStats ? `Préparation de ${batchStats.count} fichiers...` : 'Préparation des fichiers...')
+                                }
                             </Text>
                         </View>
                     )}
