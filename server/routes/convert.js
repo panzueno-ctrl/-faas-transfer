@@ -151,7 +151,6 @@ router.post('/pdf-to-image', upload.single('file'), (req, res) => {
         }
     });
             
-            try { fs.unlinkSync(imagePath); } catch(e) {}
             return;
         }
 
@@ -173,8 +172,7 @@ router.post('/pdf-to-image', upload.single('file'), (req, res) => {
 
             // On supprime tous les fichiers temporaires
             
-            try { fs.unlinkSync(zipPath); } catch(e) {}
-            files.forEach(f => try { fs.unlinkSync(`/tmp/${f}`)); } catch(e) {}
+            files.forEach(f => { try { fs.unlinkSync(`/tmp/${f}`); } catch(e) {} });
         });
     });
 
@@ -211,7 +209,6 @@ router.post('/image-to-pdf', upload.single('file'), (req, res) => {
 
         // On supprime les fichiers temporaires
         
-        try { fs.unlinkSync(pdfPath); } catch(e) {}
     });
 
 });
@@ -373,7 +370,7 @@ router.post('/merge-pdf', upload.array('files'), async (req, res) => {
         res.setHeader('Content-Type', 'application/pdf');
         res.send(Buffer.from(mergedBytes));
 
-        filePaths.forEach(p => try { fs.unlinkSync(p)); } catch(e) {}
+        filePaths.forEach(p => { try { fs.unlinkSync(p); } catch(e) {} });
     } catch (error) {
         res.status(500).json({ message: 'La fusion a échoué. Veuillez réessayer.' });
     }
@@ -412,8 +409,7 @@ router.post('/split-pdf', upload.single('file'), async (req, res) => {
     });
 
             try { fs.unlinkSync(req.file.path); } catch(e) {}
-            try { fs.unlinkSync(zipPath); } catch(e) {}
-            tempFiles.forEach(p => try { fs.unlinkSync(p)); } catch(e) {}
+            tempFiles.forEach(p => { try { fs.unlinkSync(p); } catch(e) {} });
         });
     } catch (error) {
         res.status(500).json({ message: 'La division a échoué. Veuillez réessayer.' });
@@ -516,7 +512,6 @@ router.post('/protect-pdf', upload.single('file'), (req, res) => {
     });
 
         
-        try { fs.unlinkSync(outputPath); } catch(e) {}
     });
 });
 
@@ -684,7 +679,6 @@ router.post('/pdf-to-txt', upload.single('file'), (req, res) => {
         }
     });
         
-        try { fs.unlinkSync(txtPath); } catch(e) {}
     });
 });
 
@@ -709,7 +703,6 @@ router.post('/jpg-to-png', upload.single('file'), (req, res) => {
         }
     });
         
-        try { fs.unlinkSync(pngPath); } catch(e) {}
     });
 });
 
@@ -735,7 +728,6 @@ router.post('/png-to-jpg', upload.single('file'), (req, res) => {
         }
     });
         
-        try { fs.unlinkSync(jpgPath); } catch(e) {}
     });
 });
 
@@ -760,7 +752,6 @@ router.post('/heic-to-jpg', upload.single('file'), (req, res) => {
         }
     });
         
-        try { fs.unlinkSync(jpgPath); } catch(e) {}
     });
 });
 
@@ -785,7 +776,6 @@ router.post('/mp4-to-mp3', upload.single('file'), (req, res) => {
         }
     });
         
-        try { fs.unlinkSync(mp3Path); } catch(e) {}
     });
 });
 
@@ -810,7 +800,6 @@ router.post('/wav-to-mp3', upload.single('file'), (req, res) => {
         }
     });
         
-        try { fs.unlinkSync(mp3Path); } catch(e) {}
     });
 });
 
@@ -835,7 +824,6 @@ router.post('/mp3-to-wav', upload.single('file'), (req, res) => {
         }
     });
         
-        try { fs.unlinkSync(wavPath); } catch(e) {}
     });
 });
 
@@ -861,7 +849,6 @@ router.post('/mp4-to-gif', upload.single('file'), (req, res) => {
         }
     });
         
-        try { fs.unlinkSync(gifPath); } catch(e) {}
     });
 });
 
