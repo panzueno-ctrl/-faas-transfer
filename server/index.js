@@ -43,6 +43,38 @@ app.use(cors({
 // Sans ça on ne peut pas lire le body d'une requête POST
 app.use(express.json({ limit: '50mb' }));
 
+// --- SECURITY: Rate Limiting & Basic Headers ---
+const requestCounts = new Map();
+app.use((req, res, next) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    const now = Date.now();
+    const windowMs = 60000; // 1 minute
+    const max = 150; // 150 requêtes par minute max
+
+    if (!requestCounts.has(ip)) {
+        requestCounts.set(ip, { count: 1, resetTime: now + windowMs });
+    } else {
+        const data = requestCounts.get(ip);
+        if (now > data.resetTime) {
+            data.count = 1;
+            data.resetTime = now + windowMs;
+        } else {
+            data.count++;
+            if (data.count > max) {
+                return res.status(429).json({ message: "Trop de requêtes, veuillez patienter." });
+            }
+        }
+    }
+    
+    // Equivalent basique de Helmet pour contrer certaines attaques
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    
+    next();
+});
+// ----------------------------------------------
+
 // Route de test pour vérifier que le serveur tourne
 // Quand tu vas sur http://localhost:3000 tu vois "Serveur FaaS actif"
 app.get('/', (req, res) => {
@@ -73,3 +105,13 @@ require('./services/cleanup');
 app.listen(port, () => {
     console.log(`Serveur démarré sur http://localhost:${port}`);
 });
+
+// --- GESTION GLOBALE DES ERREURS ---
+// Empêche le serveur de crasher complètement en cas d'erreur asynchrone non gérée
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Erreur non gérée (Unhandled Rejection):', reason);
+});
+process.on('uncaughtException', (error) => {
+    console.error('Erreur fatale (Uncaught Exception):', error);
+});
+// -----------------------------------

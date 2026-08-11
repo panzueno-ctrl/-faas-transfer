@@ -1,4 +1,4 @@
-FROM node:20-bookworm
+FROM node:20-bookworm-slim
 
 # Mise à jour et installation des outils de conversion
 RUN apt-get update && apt-get install -y \

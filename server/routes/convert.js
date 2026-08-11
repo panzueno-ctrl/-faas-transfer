@@ -35,14 +35,40 @@ const { extractTextFromImage, extractTextFromPDF } = require('../services/ocr');
 // On crée le router
 const router = express.Router();
 
+// --- MIDDLEWARE DE NETTOYAGE AUTO ---
+// Garantit que le fichier d'entrée est supprimé peu importe l'issue (succès ou erreur 500)
+router.use((req, res, next) => {
+    res.on('finish', () => {
+        if (req.file && fs.existsSync(req.file.path)) {
+            try { fs.unlinkSync(req.file.path); } catch(e) {}
+        }
+        if (req.files && Array.isArray(req.files)) {
+            req.files.forEach(f => {
+                if (fs.existsSync(f.path)) {
+                    try { fs.unlinkSync(f.path); } catch(e) {}
+                }
+            });
+        }
+    });
+    next();
+});
+// ------------------------------------
+
+
 // On configure multer pour stocker les fichiers temporairement sur le disque
 // LibreOffice, poppler et ImageMagick ont besoin de vrais fichiers sur le disque
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, '/tmp'),
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+    filename: (req, file, cb) => {
+        const cleanName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+        cb(null, `${Date.now()}-${cleanName}`);
+    }
 });
 
-const upload = multer({ storage });
+const upload = multer({ 
+    storage, 
+    limits: { fileSize: 100 * 1024 * 1024 } // 100 Mo max pour la conversion (évite la saturation RAM/Disque)
+});
 
 // ─────────────────────────────────────────────
 // POST /convert/word-to-pdf
@@ -70,13 +96,11 @@ router.post('/word-to-pdf', upload.single('file'), (req, res) => {
         const pdfPath = path.join(outputDir, pdfFileName);
 
         // On envoie le PDF au client
-        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
-        res.setHeader('Content-Type', 'application/pdf');
-        res.send(fs.readFileSync(pdfPath));
-
-        // On supprime les fichiers temporaires
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(pdfPath);
+        res.download(pdfPath, pdfFileName, (err) => {
+            if (fs.existsSync(pdfPath)) {
+                try { fs.unlinkSync(pdfPath); } catch(e) {}
+            }
+        });
     });
 
 });
@@ -121,9 +145,13 @@ router.post('/pdf-to-image', upload.single('file'), (req, res) => {
             const imagePath = `/tmp/${files[0]}`;
             res.setHeader('Content-Disposition', `attachment; filename="page-1.${format === 'jpeg' ? 'jpg' : 'png'}"`);
             res.setHeader('Content-Type', `image/${format}`);
-            res.send(fs.readFileSync(imagePath));
-            fs.unlinkSync(inputPath);
-            fs.unlinkSync(imagePath);
+            res.download(imagePath, (err) => {
+        if (fs.existsSync(imagePath)) {
+            try { fs.unlinkSync(imagePath); } catch(e) {}
+        }
+    });
+            
+            try { fs.unlinkSync(imagePath); } catch(e) {}
             return;
         }
 
@@ -137,12 +165,16 @@ router.post('/pdf-to-image', upload.single('file'), (req, res) => {
 
             res.setHeader('Content-Disposition', 'attachment; filename="images.zip"');
             res.setHeader('Content-Type', 'application/zip');
-            res.send(fs.readFileSync(zipPath));
+            res.download(zipPath, (err) => {
+        if (fs.existsSync(zipPath)) {
+            try { fs.unlinkSync(zipPath); } catch(e) {}
+        }
+    });
 
             // On supprime tous les fichiers temporaires
-            fs.unlinkSync(inputPath);
-            fs.unlinkSync(zipPath);
-            files.forEach(f => fs.unlinkSync(`/tmp/${f}`));
+            
+            try { fs.unlinkSync(zipPath); } catch(e) {}
+            files.forEach(f => try { fs.unlinkSync(`/tmp/${f}`)); } catch(e) {}
         });
     });
 
@@ -171,11 +203,15 @@ router.post('/image-to-pdf', upload.single('file'), (req, res) => {
 
         res.setHeader('Content-Disposition', 'attachment; filename="image-converti.pdf"');
         res.setHeader('Content-Type', 'application/pdf');
-        res.send(fs.readFileSync(pdfPath));
+        res.download(pdfPath, (err) => {
+        if (fs.existsSync(pdfPath)) {
+            try { fs.unlinkSync(pdfPath); } catch(e) {}
+        }
+    });
 
         // On supprime les fichiers temporaires
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(pdfPath);
+        
+        try { fs.unlinkSync(pdfPath); } catch(e) {}
     });
 
 });
@@ -203,12 +239,11 @@ router.post('/pdf-to-pptx', upload.single('file'), (req, res) => {
         const pptxFileName = path.basename(inputPath, path.extname(inputPath)) + '.pptx';
         const pptxPath = path.join(outputDir, pptxFileName);
 
-        res.setHeader('Content-Disposition', `attachment; filename="${pptxFileName}"`);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
-        res.send(fs.readFileSync(pptxPath));
-
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(pptxPath);
+        res.download(pptxPath, pptxFileName, (err) => {
+            if (fs.existsSync(pptxPath)) {
+                try { fs.unlinkSync(pptxPath); } catch(e) {}
+            }
+        });
     });
 });
 
@@ -236,13 +271,11 @@ router.post('/pptx-to-pdf', upload.single('file'), (req, res) => {
         const pdfFileName = path.basename(inputPath, path.extname(inputPath)) + '.pdf';
         const pdfPath = path.join(outputDir, pdfFileName);
 
-        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
-        res.setHeader('Content-Type', 'application/pdf');
-        res.send(fs.readFileSync(pdfPath));
-
-        // On supprime les fichiers temporaires
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(pdfPath);
+        res.download(pdfPath, pdfFileName, (err) => {
+            if (fs.existsSync(pdfPath)) {
+                try { fs.unlinkSync(pdfPath); } catch(e) {}
+            }
+        });
     });
 
 });
@@ -264,12 +297,11 @@ router.post('/excel-to-pdf', upload.single('file'), (req, res) => {
         const pdfFileName = path.basename(inputPath, path.extname(inputPath)) + '.pdf';
         const pdfPath = path.join(outputDir, pdfFileName);
 
-        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
-        res.setHeader('Content-Type', 'application/pdf');
-        res.send(fs.readFileSync(pdfPath));
-
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(pdfPath);
+        res.download(pdfPath, pdfFileName, (err) => {
+            if (fs.existsSync(pdfPath)) {
+                try { fs.unlinkSync(pdfPath); } catch(e) {}
+            }
+        });
     });
 });
 
@@ -290,12 +322,11 @@ router.post('/pdf-to-word', upload.single('file'), (req, res) => {
         const docxFileName = path.basename(inputPath, path.extname(inputPath)) + '.docx';
         const docxPath = path.join(outputDir, docxFileName);
 
-        res.setHeader('Content-Disposition', `attachment; filename="${docxFileName}"`);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        res.send(fs.readFileSync(docxPath));
-
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(docxPath);
+        res.download(docxPath, docxFileName, (err) => {
+            if (fs.existsSync(docxPath)) {
+                try { fs.unlinkSync(docxPath); } catch(e) {}
+            }
+        });
     });
 });
 
@@ -316,12 +347,11 @@ router.post('/pdf-to-excel', upload.single('file'), (req, res) => {
         const xlsxFileName = path.basename(inputPath, path.extname(inputPath)) + '.xlsx';
         const xlsxPath = path.join(outputDir, xlsxFileName);
 
-        res.setHeader('Content-Disposition', `attachment; filename="${xlsxFileName}"`);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.send(fs.readFileSync(xlsxPath));
-
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(xlsxPath);
+        res.download(xlsxPath, xlsxFileName, (err) => {
+            if (fs.existsSync(xlsxPath)) {
+                try { fs.unlinkSync(xlsxPath); } catch(e) {}
+            }
+        });
     });
 });
 
@@ -343,7 +373,7 @@ router.post('/merge-pdf', upload.array('files'), async (req, res) => {
         res.setHeader('Content-Type', 'application/pdf');
         res.send(Buffer.from(mergedBytes));
 
-        filePaths.forEach(p => fs.unlinkSync(p));
+        filePaths.forEach(p => try { fs.unlinkSync(p)); } catch(e) {}
     } catch (error) {
         res.status(500).json({ message: 'La fusion a échoué. Veuillez réessayer.' });
     }
@@ -375,11 +405,15 @@ router.post('/split-pdf', upload.single('file'), async (req, res) => {
 
             res.setHeader('Content-Disposition', 'attachment; filename="pages.zip"');
             res.setHeader('Content-Type', 'application/zip');
-            res.send(fs.readFileSync(zipPath));
+            res.download(zipPath, (err) => {
+        if (fs.existsSync(zipPath)) {
+            try { fs.unlinkSync(zipPath); } catch(e) {}
+        }
+    });
 
-            fs.unlinkSync(req.file.path);
-            fs.unlinkSync(zipPath);
-            tempFiles.forEach(p => fs.unlinkSync(p));
+            try { fs.unlinkSync(req.file.path); } catch(e) {}
+            try { fs.unlinkSync(zipPath); } catch(e) {}
+            tempFiles.forEach(p => try { fs.unlinkSync(p)); } catch(e) {}
         });
     } catch (error) {
         res.status(500).json({ message: 'La division a échoué. Veuillez réessayer.' });
@@ -406,7 +440,7 @@ router.post('/rotate-pdf', upload.single('file'), async (req, res) => {
         res.setHeader('Content-Type', 'application/pdf');
         res.send(Buffer.from(rotatedBytes));
 
-        fs.unlinkSync(req.file.path);
+        try { fs.unlinkSync(req.file.path); } catch(e) {}
     } catch (error) {
         res.status(500).json({ message: 'La rotation a échoué. Veuillez réessayer.' });
     }
@@ -428,7 +462,7 @@ router.post('/watermark-pdf', upload.single('file'), async (req, res) => {
         res.setHeader('Content-Type', 'application/pdf');
         res.send(Buffer.from(watermarkedBytes));
 
-        fs.unlinkSync(req.file.path);
+        try { fs.unlinkSync(req.file.path); } catch(e) {}
     } catch (error) {
         res.status(500).json({ message: 'Le filigrane a échoué. Veuillez réessayer.' });
     }
@@ -448,7 +482,7 @@ router.post('/number-pdf', upload.single('file'), async (req, res) => {
         res.setHeader('Content-Type', 'application/pdf');
         res.send(Buffer.from(numberedBytes));
 
-        fs.unlinkSync(req.file.path);
+        try { fs.unlinkSync(req.file.path); } catch(e) {}
     } catch (error) {
         res.status(500).json({ message: 'La numérotation a échoué. Veuillez réessayer.' });
     }
@@ -475,10 +509,14 @@ router.post('/protect-pdf', upload.single('file'), (req, res) => {
 
         res.setHeader('Content-Disposition', 'attachment; filename="protected.pdf"');
         res.setHeader('Content-Type', 'application/pdf');
-        res.send(fs.readFileSync(outputPath));
+        res.download(outputPath, (err) => {
+        if (fs.existsSync(outputPath)) {
+            try { fs.unlinkSync(outputPath); } catch(e) {}
+        }
+    });
 
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(outputPath);
+        
+        try { fs.unlinkSync(outputPath); } catch(e) {}
     });
 });
 
@@ -499,7 +537,7 @@ router.post('/ocr-image', upload.single('file'), async (req, res) => {
         res.setHeader('Content-Type', 'text/plain');
         res.send(text);
 
-        fs.unlinkSync(req.file.path);
+        try { fs.unlinkSync(req.file.path); } catch(e) {}
     } catch (error) {
         res.status(500).json({ message: 'L\'OCR a échoué. Veuillez réessayer.' });
     }
@@ -523,7 +561,7 @@ router.post('/ocr-pdf', upload.single('file'), async (req, res) => {
         res.setHeader('Content-Type', 'text/plain');
         res.send(text);
 
-        fs.unlinkSync(req.file.path);
+        try { fs.unlinkSync(req.file.path); } catch(e) {}
     } catch (error) {
         res.status(500).json({ message: 'L\'OCR a échoué. Veuillez réessayer.' });
     }
@@ -546,12 +584,11 @@ router.post('/pages-to-pdf', upload.single('file'), (req, res) => {
         const pdfFileName = path.basename(inputPath, path.extname(inputPath)) + '.pdf';
         const pdfPath = path.join(outputDir, pdfFileName);
 
-        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
-        res.setHeader('Content-Type', 'application/pdf');
-        res.send(fs.readFileSync(pdfPath));
-
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(pdfPath);
+        res.download(pdfPath, pdfFileName, (err) => {
+            if (fs.existsSync(pdfPath)) {
+                try { fs.unlinkSync(pdfPath); } catch(e) {}
+            }
+        });
     });
 });
 
@@ -572,12 +609,11 @@ router.post('/keynote-to-pdf', upload.single('file'), (req, res) => {
         const pdfFileName = path.basename(inputPath, path.extname(inputPath)) + '.pdf';
         const pdfPath = path.join(outputDir, pdfFileName);
 
-        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
-        res.setHeader('Content-Type', 'application/pdf');
-        res.send(fs.readFileSync(pdfPath));
-
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(pdfPath);
+        res.download(pdfPath, pdfFileName, (err) => {
+            if (fs.existsSync(pdfPath)) {
+                try { fs.unlinkSync(pdfPath); } catch(e) {}
+            }
+        });
     });
 });
 
@@ -596,11 +632,11 @@ router.post('/numbers-to-pdf', upload.single('file'), (req, res) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
         const pdfFileName = path.basename(inputPath, path.extname(inputPath)) + '.pdf';
         const pdfPath = path.join(outputDir, pdfFileName);
-        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
-        res.setHeader('Content-Type', 'application/pdf');
-        res.send(fs.readFileSync(pdfPath));
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(pdfPath);
+        res.download(pdfPath, pdfFileName, (err) => {
+            if (fs.existsSync(pdfPath)) {
+                try { fs.unlinkSync(pdfPath); } catch(e) {}
+            }
+        });
     });
 });
 
@@ -619,11 +655,11 @@ router.post('/txt-to-pdf', upload.single('file'), (req, res) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
         const pdfFileName = path.basename(inputPath, path.extname(inputPath)) + '.pdf';
         const pdfPath = path.join(outputDir, pdfFileName);
-        res.setHeader('Content-Disposition', `attachment; filename="${pdfFileName}"`);
-        res.setHeader('Content-Type', 'application/pdf');
-        res.send(fs.readFileSync(pdfPath));
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(pdfPath);
+        res.download(pdfPath, pdfFileName, (err) => {
+            if (fs.existsSync(pdfPath)) {
+                try { fs.unlinkSync(pdfPath); } catch(e) {}
+            }
+        });
     });
 });
 
@@ -642,9 +678,13 @@ router.post('/pdf-to-txt', upload.single('file'), (req, res) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
         res.setHeader('Content-Disposition', 'attachment; filename="document.txt"');
         res.setHeader('Content-Type', 'text/plain');
-        res.send(fs.readFileSync(txtPath));
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(txtPath);
+        res.download(txtPath, (err) => {
+        if (fs.existsSync(txtPath)) {
+            try { fs.unlinkSync(txtPath); } catch(e) {}
+        }
+    });
+        
+        try { fs.unlinkSync(txtPath); } catch(e) {}
     });
 });
 
@@ -663,9 +703,13 @@ router.post('/jpg-to-png', upload.single('file'), (req, res) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
         res.setHeader('Content-Disposition', 'attachment; filename="image.png"');
         res.setHeader('Content-Type', 'image/png');
-        res.send(fs.readFileSync(pngPath));
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(pngPath);
+        res.download(pngPath, (err) => {
+        if (fs.existsSync(pngPath)) {
+            try { fs.unlinkSync(pngPath); } catch(e) {}
+        }
+    });
+        
+        try { fs.unlinkSync(pngPath); } catch(e) {}
     });
 });
 
@@ -685,9 +729,13 @@ router.post('/png-to-jpg', upload.single('file'), (req, res) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
         res.setHeader('Content-Disposition', 'attachment; filename="image.jpg"');
         res.setHeader('Content-Type', 'image/jpeg');
-        res.send(fs.readFileSync(jpgPath));
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(jpgPath);
+        res.download(jpgPath, (err) => {
+        if (fs.existsSync(jpgPath)) {
+            try { fs.unlinkSync(jpgPath); } catch(e) {}
+        }
+    });
+        
+        try { fs.unlinkSync(jpgPath); } catch(e) {}
     });
 });
 
@@ -706,9 +754,13 @@ router.post('/heic-to-jpg', upload.single('file'), (req, res) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
         res.setHeader('Content-Disposition', 'attachment; filename="image.jpg"');
         res.setHeader('Content-Type', 'image/jpeg');
-        res.send(fs.readFileSync(jpgPath));
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(jpgPath);
+        res.download(jpgPath, (err) => {
+        if (fs.existsSync(jpgPath)) {
+            try { fs.unlinkSync(jpgPath); } catch(e) {}
+        }
+    });
+        
+        try { fs.unlinkSync(jpgPath); } catch(e) {}
     });
 });
 
@@ -721,15 +773,19 @@ router.post('/mp4-to-mp3', upload.single('file'), (req, res) => {
 
     const inputPath = req.file.path;
     const mp3Path = `/tmp/${Date.now()}-output.mp3`;
-    const command = `ffmpeg -i "${inputPath}" -q:a 0 -map a "${mp3Path}"`;
+    const command = `ffmpeg -threads 1 -i "${inputPath}" -q:a 0 -map a "${mp3Path}"`;
 
     exec(command, (error) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
         res.setHeader('Content-Disposition', 'attachment; filename="audio.mp3"');
         res.setHeader('Content-Type', 'audio/mpeg');
-        res.send(fs.readFileSync(mp3Path));
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(mp3Path);
+        res.download(mp3Path, (err) => {
+        if (fs.existsSync(mp3Path)) {
+            try { fs.unlinkSync(mp3Path); } catch(e) {}
+        }
+    });
+        
+        try { fs.unlinkSync(mp3Path); } catch(e) {}
     });
 });
 
@@ -742,15 +798,19 @@ router.post('/wav-to-mp3', upload.single('file'), (req, res) => {
 
     const inputPath = req.file.path;
     const mp3Path = `/tmp/${Date.now()}-output.mp3`;
-    const command = `ffmpeg -i "${inputPath}" -b:a 192k "${mp3Path}"`;
+    const command = `ffmpeg -threads 1 -i "${inputPath}" -b:a 192k "${mp3Path}"`;
 
     exec(command, (error) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
         res.setHeader('Content-Disposition', 'attachment; filename="audio.mp3"');
         res.setHeader('Content-Type', 'audio/mpeg');
-        res.send(fs.readFileSync(mp3Path));
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(mp3Path);
+        res.download(mp3Path, (err) => {
+        if (fs.existsSync(mp3Path)) {
+            try { fs.unlinkSync(mp3Path); } catch(e) {}
+        }
+    });
+        
+        try { fs.unlinkSync(mp3Path); } catch(e) {}
     });
 });
 
@@ -763,15 +823,19 @@ router.post('/mp3-to-wav', upload.single('file'), (req, res) => {
 
     const inputPath = req.file.path;
     const wavPath = `/tmp/${Date.now()}-output.wav`;
-    const command = `ffmpeg -i "${inputPath}" "${wavPath}"`;
+    const command = `ffmpeg -threads 1 -i "${inputPath}" "${wavPath}"`;
 
     exec(command, (error) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
         res.setHeader('Content-Disposition', 'attachment; filename="audio.wav"');
         res.setHeader('Content-Type', 'audio/wav');
-        res.send(fs.readFileSync(wavPath));
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(wavPath);
+        res.download(wavPath, (err) => {
+        if (fs.existsSync(wavPath)) {
+            try { fs.unlinkSync(wavPath); } catch(e) {}
+        }
+    });
+        
+        try { fs.unlinkSync(wavPath); } catch(e) {}
     });
 });
 
@@ -785,15 +849,19 @@ router.post('/mp4-to-gif', upload.single('file'), (req, res) => {
     const inputPath = req.file.path;
     const gifPath = `/tmp/${Date.now()}-output.gif`;
     // On optimise le GIF pour ne pas crasher le serveur (scale=480:-1, fps=10)
-    const command = `ffmpeg -i "${inputPath}" -vf "fps=10,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 "${gifPath}"`;
+    const command = `ffmpeg -threads 1 -i "${inputPath}" -vf "fps=10,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" -loop 0 "${gifPath}"`;
 
     exec(command, (error) => {
         if (error) return res.status(500).json({ message: 'La conversion a échoué.' });
         res.setHeader('Content-Disposition', 'attachment; filename="animation.gif"');
         res.setHeader('Content-Type', 'image/gif');
-        res.send(fs.readFileSync(gifPath));
-        fs.unlinkSync(inputPath);
-        fs.unlinkSync(gifPath);
+        res.download(gifPath, (err) => {
+        if (fs.existsSync(gifPath)) {
+            try { fs.unlinkSync(gifPath); } catch(e) {}
+        }
+    });
+        
+        try { fs.unlinkSync(gifPath); } catch(e) {}
     });
 });
 

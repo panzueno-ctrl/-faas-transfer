@@ -50,6 +50,9 @@ router.post('/request-urls', async (req, res) => {
         if (!files || !Array.isArray(files) || files.length === 0) {
             return res.status(400).json({ error: 'files manquant ou invalide' });
         }
+        if (files.length > 500) {
+            return res.status(400).json({ error: 'Trop de fichiers dans le lot (max 500)' });
+        }
 
         const batchId = uuidv4();
         const uploadTickets = [];
@@ -111,6 +114,9 @@ router.post('/multipart/start', async (req, res) => {
         // Pré-génération anti-bufferbloat
         let presignedUrls = {};
         if (totalParts && typeof totalParts === 'number') {
+            if (totalParts > 2000) {
+                return res.status(400).json({ error: 'Nombre de parties trop élevé (max 2000)' });
+            }
             for (let i = 1; i <= totalParts; i++) {
                 const partCommand = new UploadPartCommand({
                     Bucket: process.env.R2_BUCKET_NAME,

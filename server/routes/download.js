@@ -45,6 +45,11 @@ router.get('/:id', async (req, res) => {
                 
                 archive.on('error', (err) => {
                     console.error('Archive error:', err);
+                    if (!res.headersSent) {
+                        res.status(500).end();
+                    } else {
+                        res.end();
+                    }
                 });
 
                 const { Readable } = require('stream');

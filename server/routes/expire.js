@@ -3,74 +3,65 @@
  *
  * Gère la suppression manuelle des fichiers par le sender.
  * Le sender peut supprimer son fichier avant que quelqu'un
- * ne le télécharge. Le job automatique utilise aussi cette
- * logique pour nettoyer les fichiers expirés.
+ * ne le télécharge.
  */
 
-// On importe Express pour créer le router
 const express = require('express');
-
-// On importe notre connexion Supabase
 const supabase = require('../services/supabase');
+const { s3Client } = require('../services/r2');
+const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
-// On crée le router
 const router = express.Router();
 
 // DELETE /expire/:id
-// Supprime un fichier manuellement à la demande du sender
 router.delete('/:id', async (req, res) => {
-
-    // On récupère l'id depuis l'URL
     const { id } = req.params;
 
-    // On cherche le fichier dans la table transfers
-    const { data: transfer, error } = await supabase
-        .from('transfers')
-        .select('*')
-        .eq('id', id)
-        .single();
+    try {
+        const { data: transfer, error } = await supabase
+            .from('transfers')
+            .select('*')
+            .eq('id', id)
+            .single();
 
-    // Si le fichier n'existe pas → message simple pour l'utilisateur
-    if (error || !transfer) {
-        return res.status(404).json({
-            message: 'Ce fichier n\'existe plus ou a déjà été supprimé.'
-        });
+        if (error || !transfer) {
+            return res.status(404).json({ message: 'Ce transfert n\'existe plus ou a déjà été supprimé.' });
+        }
+
+        if (transfer.downloaded) {
+            return res.status(200).json({ message: 'Ce transfert a déjà été téléchargé et supprimé.' });
+        }
+
+        // Suppression R2 (Gestion Single et Batch)
+        if (transfer.file_url.startsWith('[')) {
+            const files = JSON.parse(transfer.file_url);
+            for (const file of files) {
+                const command = new DeleteObjectCommand({
+                    Bucket: process.env.R2_BUCKET_NAME,
+                    Key: file.storageName
+                });
+                await s3Client.send(command).catch(e => console.error('Erreur suppression R2 lot:', e));
+            }
+        } else {
+            const command = new DeleteObjectCommand({
+                Bucket: process.env.R2_BUCKET_NAME,
+                Key: transfer.file_url
+            });
+            await s3Client.send(command).catch(e => console.error('Erreur suppression R2 single:', e));
+        }
+
+        // Suppression des métadonnées
+        await supabase
+            .from('transfers')
+            .delete()
+            .eq('id', id);
+
+        res.status(200).json({ message: 'Fichiers supprimés avec succès.' });
+
+    } catch (err) {
+        console.error('Exception dans /expire:', err);
+        res.status(500).json({ message: 'Erreur interne du serveur lors de la suppression' });
     }
-
-    // Si le fichier a déjà été téléchargé → on informe le sender
-    if (transfer.downloaded) {
-        return res.status(200).json({
-            message: 'Ce fichier a déjà été téléchargé et supprimé automatiquement.'
-        });
-    }
-
-    // On extrait le nom du fichier depuis l'URL stockée en DB
-    const filePath = transfer.file_url.split('/').pop();
-
-    // On supprime le fichier du bucket Supabase Storage
-    const { error: storageError } = await supabase.storage
-        .from('transfers')
-        .remove([filePath]);
-
-    // Si la suppression du fichier échoue
-    if (storageError) {
-        return res.status(500).json({
-            message: 'Une erreur est survenue. Veuillez réessayer.'
-        });
-    }
-
-    // On supprime les métadonnées de la table transfers
-    await supabase
-        .from('transfers')
-        .delete()
-        .eq('id', id);
-
-    // Tout s'est bien passé → message de confirmation
-    res.status(200).json({
-        message: 'Fichier supprimé avec succès.'
-    });
-
 });
 
-// On exporte le router pour l'utiliser dans index.js
 module.exports = router;
