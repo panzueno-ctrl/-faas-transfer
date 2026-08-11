@@ -650,3 +650,36 @@ L'architecture que tu as finalement utilisée exploite une capacité moderne des
 C'est une victoire parce que tu as arrêté d'utiliser JavaScript pour faire le travail lourd. Au lieu de dire à JavaScript : "Découpe ce fichier et gère les envois" (ce qui déclenche les sécurités Android), tu as simplement dit au moteur profond du navigateur : "Tiens, voilà le fichier, connecte-le à Cloudflare, et débrouille-toi".
 
 L'OS mobile adore ça. Il n'y a pas de violation de sécurité (JavaScript n'a pas farfouillé dans la vidéo), et la gestion de la mémoire est parfaite (le C++ du navigateur est infiniment plus optimisé que JavaScript pour faire transiter des octets du disque vers la carte réseau).
+
+============================================================
+  12. RÉALISATIONS DES 4 DERNIERS JOURS (V2.0)
+============================================================
+
+Durant les 4 derniers jours, l'application est passée d'un prototype fonctionnel à un produit de qualité production (V2.0), avec des améliorations majeures en matière de performance, de fonctionnalités et d'expérience utilisateur (UX).
+
+A. Envois Multiples (Le Panier de Transfert)
+─────────────────────────────────────────────────────────
+L'application supporte désormais l'envoi de plusieurs dizaines de fichiers en une seule session (batch upload).
+- Côté Mobile : Création d'un système de "Panier" (`send.tsx`) permettant d'accumuler les fichiers en plusieurs clics avant de valider l'envoi.
+- Gestion Qualité : Configuration native de `expo-image-picker` avec `preferredAssetRepresentationMode: Current` pour interdire au système d'exploitation toute compression ou conversion (conservation du format RAW, HEIC, 4K, EXIF).
+- Côté Serveur : Génération d'archives `.zip` à la volée lors du téléchargement des lots de fichiers (`?zip=true`), sans saturer la RAM du backend Render.
+
+B. Refonte UX / UI Premium
+─────────────────────────────────────────────────────────
+Carte blanche UX pour lisser toutes les frictions utilisateurs :
+- Temps Morts : Ajout d'une superposition de chargement pleine page (Overlay) lors du traitement de gros volumes de fichiers depuis la galerie.
+- Recherche : Intégration d'une barre de recherche dynamique dans la vue `convert.tsx` pour filtrer instantanément la longue liste des outils disponibles.
+- Animations : Remplacement des apparitions brutales par un fondu entrant fluide (Fade-in via `Animated`) sur la page de réception (`receive.tsx`).
+
+C. Serveur Dockerisé (Le Couteau Suisse de la Conversion)
+─────────────────────────────────────────────────────────
+L'API Node.js standard était insuffisante pour traiter l'audio, la vidéo et les formats complexes.
+- Création d'un `Dockerfile` complet basé sur Debian.
+- Installation système de FFmpeg, ImageMagick, LibreOffice et Ghostscript.
+- Ajout de 16 nouvelles routes de conversions (Audio, Vidéo, OCR, manipulation avancée de PDF).
+- Le backend Render tourne désormais dans ce conteneur Docker surpuissant.
+
+D. Les Limites Physiques et le Débat du Chunking
+─────────────────────────────────────────────────────────
+Face aux envois colossaux (ex: vidéos de 1.4 Go), le transfert prend naturellement du temps sur une connexion cellulaire (physique réseau). Le "Chunking" (découpage en Javascript natif) se heurte aux systèmes de sécurité Android (`File.slice()` rejeté en accès galerie profonde). 
+L'architecture actuelle utilise le transfert direct en Flux (Stream) natif via l'objet File, ce qui contourne les Crashs OOM (Out of Memory) et garantit que l'OS ne tuera pas l'application en plein vol, tout en exploitant 100% de la bande passante disponible. L'implémentation de Web Workers asynchrones pour le découpage reste l'étape ultime (V2.1) mais nécessite un accès système plus profond.
