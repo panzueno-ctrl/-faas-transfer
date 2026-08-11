@@ -86,7 +86,7 @@ function RootContent() {
         <meta name="theme-color" content={isDark ? '#0B0C10' : '#F8FAFC'} />
         <meta name="google-site-verification" content="5QQjlFYYE2uBKBIyS4rk2fbbXgjY2ehB7B5JN63Cp2w" />
         <meta name="google" content="notranslate" />
-        <meta name="keywords" content="faas transfer, faas transfers, fast transfer, transfert de fichier, envoyer gros fichiers gratuit, convertisseur pdf en ligne, convertir video audio, wetransfer alternatif, outil pdf gratuit, partage de document sans compte, hebergement fichier ephemere, convertir image en pdf" />
+        <meta name="keywords" content="faas transfer, faas transfers, fast transfer, we transfer, application pour transférer des fichiers, application pour envoyer des fichiers, application pour envoyer un fichier d'un téléphone vers un autre, application pour convertir des fichiers, convertisseur de fichier, app to transfer files, app to send files, app to send files from phone to phone, app to convert files, file converter app, app per trasferire file, app per inviare file, app per convertire file, convertitore di file, transfert de fichier, envoyer gros fichiers gratuit, wetransfer alternatif" />
         <script type="application/ld+json">
           {JSON.stringify({
             "@context": "https://schema.org",
