@@ -25,6 +25,8 @@ export default function ActionCard({ title, description, icon, onPress, style, c
                 style
             ]}
             onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={`${title}, ${description}`}
         >
             <View style={styles.iconWrapper}>
                 <Ionicons name={icon} size={32} color={colors.primary} />
