@@ -98,6 +98,33 @@ export default function ConvertScreen() {
     const [fileName, setFileName] = useState('');
     const [resultUrl, setResultUrl] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
+    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+    const onDragStart = (e: any, index: number) => {
+        setDraggedIndex(index);
+    };
+
+    const onDragOver = (e: any) => {
+        e.preventDefault();
+    };
+
+    const onDrop = (e: any, index: number) => {
+        e.preventDefault();
+        if (draggedIndex === null || draggedIndex === index) return;
+        
+        setSelectedFiles(prev => {
+            const newFiles = [...prev];
+            const draggedFile = newFiles[draggedIndex];
+            newFiles.splice(draggedIndex, 1);
+            newFiles.splice(index, 0, draggedFile);
+            return newFiles;
+        });
+        setDraggedIndex(null);
+    };
+
+    const onDragEnd = () => {
+        setDraggedIndex(null);
+    };
     
     const [session, setSession] = useState<Session | null>(null);
 
@@ -145,27 +172,7 @@ export default function ConvertScreen() {
         setSelectedFiles(prev => prev.filter((_, index) => index !== indexToRemove));
     };
 
-    const handleMoveUp = (index: number) => {
-        if (index === 0) return;
-        setSelectedFiles(prev => {
-            const newFiles = [...prev];
-            const temp = newFiles[index];
-            newFiles[index] = newFiles[index - 1];
-            newFiles[index - 1] = temp;
-            return newFiles;
-        });
-    };
 
-    const handleMoveDown = (index: number) => {
-        if (index === selectedFiles.length - 1) return;
-        setSelectedFiles(prev => {
-            const newFiles = [...prev];
-            const temp = newFiles[index];
-            newFiles[index] = newFiles[index + 1];
-            newFiles[index + 1] = temp;
-            return newFiles;
-        });
-    };
 
     // 3. L'utilisateur lance le traitement depuis le staging
     const processFiles = async () => {
@@ -437,68 +444,89 @@ export default function ConvertScreen() {
                             <Text style={styles.title}>{selectedService.label}</Text>
                         </View>
 
-                        <View style={{ width: '100%', maxWidth: 700, gap: 12, marginBottom: 32 }}>
+                        <View style={{ width: '100%', maxWidth: 900, flexDirection: 'row', flexWrap: 'wrap', gap: 20, justifyContent: 'center', marginBottom: 40 }}>
                             {selectedFiles.map((file, index) => (
-                                <View key={index} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}>
-                                    <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
-                                        <Ionicons name="document-text-outline" size={24} color={colors.text} />
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }} numberOfLines={1}>
-                                            {file.name}
-                                        </Text>
-                                        <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 4 }}>
-                                            {file.size ? (file.size / 1024 / 1024).toFixed(2) + ' MB' : 'Taille inconnue'}
-                                        </Text>
-                                    </View>
-
-                                    {selectedService.multiple && (
-                                        <View style={{ flexDirection: 'row', marginRight: 12 }}>
-                                            <Pressable 
-                                                onPress={() => handleMoveUp(index)} 
-                                                style={({ hovered }) => [{ padding: 8, borderRadius: 8 }, hovered && { backgroundColor: 'rgba(255,255,255,0.05)' }]}
-                                                disabled={index === 0}
-                                            >
-                                                <Ionicons name="arrow-up" size={20} color={index === 0 ? colors.border : colors.text} />
-                                            </Pressable>
-                                            <Pressable 
-                                                onPress={() => handleMoveDown(index)} 
-                                                style={({ hovered }) => [{ padding: 8, borderRadius: 8 }, hovered && { backgroundColor: 'rgba(255,255,255,0.05)' }]}
-                                                disabled={index === selectedFiles.length - 1}
-                                            >
-                                                <Ionicons name="arrow-down" size={20} color={index === selectedFiles.length - 1 ? colors.border : colors.text} />
-                                            </Pressable>
-                                        </View>
-                                    )}
-
+                                <View 
+                                    key={`${file.name}-${index}`}
+                                    {...(Platform.OS === 'web' ? {
+                                        draggable: true,
+                                        onDragStart: (e: any) => onDragStart(e, index),
+                                        onDragOver: onDragOver,
+                                        onDrop: (e: any) => onDrop(e, index),
+                                        onDragEnd: onDragEnd
+                                    } : {})}
+                                    style={[{ 
+                                        width: 160, 
+                                        height: 200, 
+                                        backgroundColor: colors.card, 
+                                        borderRadius: 16, 
+                                        borderWidth: 2, 
+                                        borderColor: draggedIndex === index ? colors.primary : colors.border,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: 16,
+                                        position: 'relative',
+                                        opacity: draggedIndex === index ? 0.5 : 1,
+                                        cursor: 'grab' as any
+                                    }]}
+                                >
                                     <Pressable 
                                         onPress={() => handleRemoveFile(index)} 
-                                        style={({ hovered }) => [{ padding: 12, borderRadius: 8 }, hovered && { backgroundColor: 'rgba(255,68,68,0.1)' }]}
+                                        style={({ hovered }) => [{ position: 'absolute', top: 8, right: 8, padding: 8, borderRadius: 20, zIndex: 10 }, hovered && { backgroundColor: 'rgba(255,68,68,0.1)' }]}
                                     >
-                                        <Ionicons name="trash-outline" size={22} color="#ff4444" />
+                                        <Ionicons name="trash-outline" size={20} color="#ff4444" />
                                     </Pressable>
+
+                                    <View style={{ width: 64, height: 64, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                                        <Ionicons name="document-text-outline" size={32} color={colors.text} />
+                                    </View>
+                                    
+                                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600', textAlign: 'center', marginBottom: 4 }} numberOfLines={2}>
+                                        {file.name}
+                                    </Text>
+                                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                                        {file.size ? (file.size / 1024 / 1024).toFixed(2) + ' MB' : 'Inconnu'}
+                                    </Text>
                                 </View>
                             ))}
                             
-                            {selectedFiles.length === 0 && (
+                            {selectedService.multiple && (
+                                <Pressable 
+                                    style={({ hovered }) => [{ 
+                                        width: 160, 
+                                        height: 200, 
+                                        backgroundColor: hovered ? colors.cardHovered : 'transparent', 
+                                        borderRadius: 16, 
+                                        borderWidth: 2, 
+                                        borderColor: colors.border,
+                                        borderStyle: 'dashed' as any,
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: 16,
+                                        cursor: 'pointer' as any
+                                    }]}
+                                    onPress={() => handleSelectFiles(true)}
+                                >
+                                    <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                                        <Ionicons name="add-outline" size={32} color={colors.text} />
+                                    </View>
+                                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600', textAlign: 'center' }}>Ajouter un fichier</Text>
+                                </Pressable>
+                            )}
+
+                            {selectedFiles.length === 0 && !selectedService.multiple && (
                                 <Text style={[styles.subtitle, { padding: 20 }]}>Aucun fichier sélectionné.</Text>
                             )}
                         </View>
 
-                        <View style={{ flexDirection: 'row', gap: 16, width: '100%', maxWidth: 700 }}>
-                            {selectedService.multiple && (
-                                <Pressable style={styles.secondaryButton} onPress={() => handleSelectFiles(true)}>
-                                    <Ionicons name="add-outline" size={22} color={colors.text} />
-                                    <Text style={styles.secondaryButtonText}>Ajouter</Text>
-                                </Pressable>
-                            )}
+                        <View style={{ flexDirection: 'row', gap: 16, width: '100%', maxWidth: 400 }}>
                             <Pressable 
                                 style={[styles.primaryButton, selectedFiles.length === 0 && { opacity: 0.5 }]} 
                                 onPress={processFiles}
                                 disabled={selectedFiles.length === 0}
                             >
                                 <Ionicons name="checkmark-outline" size={22} color="#ffffff" />
-                                <Text style={styles.primaryButtonText}>Terminé</Text>
+                                <Text style={styles.primaryButtonText}>Terminer</Text>
                             </Pressable>
                         </View>
                     </ScrollView>
