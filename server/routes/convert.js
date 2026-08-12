@@ -870,13 +870,8 @@ router.post('/compress-pdf', upload.single('file'), (req, res) => {
     const inputPath = req.file.path;
     const outputPath = `/tmp/${Date.now()}-compressed.pdf`;
 
-    // Optimisations de vitesse pour serveurs lents (Render Free Tier) :
-    // - Downsampling en /Subsample (beaucoup plus rapide que /Bicubic par défaut)
-    // - Multithreading partiel si dispo
-    const speedOpts = '-dColorImageDownsampleType=/Subsample -dGrayImageDownsampleType=/Subsample -dMonoImageDownsampleType=/Subsample -dNumRenderingThreads=4';
-
-    // Commande Ghostscript pour compresser (avec limitation mémoire explicite et opti vitesse)
-    const gsCommand = `gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=${pdfSettings} ${speedOpts} -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${outputPath}" "${inputPath}"`;
+    // Commande Ghostscript pour compresser (avec limitation mémoire explicite)
+    const gsCommand = `gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=${pdfSettings} -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${outputPath}" "${inputPath}"`;
 
     exec(gsCommand, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
         if (error) {
