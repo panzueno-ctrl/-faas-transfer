@@ -146,7 +146,7 @@ export default function ConvertScreen() {
             
             setSelectedFiles(prev => [...prev, ...res.assets]);
         } catch (error) {
-            Alert.alert(t('common.error'), 'Impossible d\\'ajouter les fichiers.');
+            Alert.alert(t('common.error'), "Impossible d'ajouter les fichiers.");
         }
     };
 
