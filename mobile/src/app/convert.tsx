@@ -106,7 +106,6 @@ export default function ConvertScreen() {
 
     const [pageCount, setPageCount] = useState<number>(0);
     const [splitPoints, setSplitPoints] = useState<number[]>([]);
-    const [fileName, setFileName] = useState<string>('document');
     
     // Compression state
     const [compressionLevel, setCompressionLevel] = useState<CompressionLevel>('recommended');
