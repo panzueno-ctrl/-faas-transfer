@@ -116,7 +116,7 @@ export default function ConvertScreen() {
                 const response = await fetch(file.uri);
                 arrayBuffer = await response.arrayBuffer();
             }
-            const { PDFDocument } = require('pdf-lib');
+            const { PDFDocument } = require('pdf-lib/dist/pdf-lib.min.js');
             const pdfDoc = await PDFDocument.load(arrayBuffer);
             const count = pdfDoc.getPageCount();
             setPageCount(count);
@@ -184,7 +184,7 @@ export default function ConvertScreen() {
         if (!pdfDocRef) return;
         setIsSplitting(true);
         try {
-            const { PDFDocument } = require('pdf-lib');
+            const { PDFDocument } = require('pdf-lib/dist/pdf-lib.min.js');
             const JSZip = require('jszip');
             
             const zip = new JSZip();
