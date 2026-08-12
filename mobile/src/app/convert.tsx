@@ -770,9 +770,10 @@ const getStyles = (colors: any) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10,
+        gap: 8,
         backgroundColor: colors.cardHovered,
-        paddingVertical: 18,
+        paddingVertical: 16,
+        paddingHorizontal: 12,
         borderRadius: 16,
         borderWidth: 1,
         borderColor: colors.border,
@@ -780,25 +781,25 @@ const getStyles = (colors: any) => StyleSheet.create({
 
     secondaryButtonText: {
         color: colors.text,
-        fontWeight: '700',
-        fontSize: 18,
+        fontWeight: '600',
+        fontSize: 16,
     },
 
     primaryButton: {
-        flex: 2,
+        flex: 1.5,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 10,
         backgroundColor: colors.primary,
-        paddingVertical: 18,
+        paddingVertical: 16,
         borderRadius: 16,
     },
 
     primaryButtonText: {
         color: '#ffffff',
         fontWeight: '700',
-        fontSize: 18,
+        fontSize: 16,
     },
 
     hugePrimaryButton: {
