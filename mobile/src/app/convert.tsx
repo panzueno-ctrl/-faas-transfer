@@ -26,6 +26,8 @@ import { Session } from '@supabase/supabase-js';
 import ActionCard from '../components/ActionCard';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { PDFDocument } from 'pdf-lib';
+import JSZip from 'jszip';
 
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
@@ -110,21 +112,20 @@ export default function ConvertScreen() {
     const initSplitPDF = async (file: any) => {
         try {
             let arrayBuffer;
-            if (Platform.OS === 'web') {
+            if (Platform.OS === 'web' && file.file) {
                 arrayBuffer = await file.file.arrayBuffer();
             } else {
                 const response = await fetch(file.uri);
                 arrayBuffer = await response.arrayBuffer();
             }
-            const { PDFDocument } = await import('pdf-lib');
             const pdfDoc = await PDFDocument.load(arrayBuffer);
             const count = pdfDoc.getPageCount();
             setPageCount(count);
             setPdfDocRef(pdfDoc);
             setSplitPoints([]);
         } catch (e) {
-            console.error(e);
-            Alert.alert("Erreur", "Impossible de lire ce PDF.");
+            console.error("Error in initSplitPDF:", e);
+            Alert.alert("Erreur", "Impossible de lire ce PDF. Veuillez réessayer.");
             setStep('tool_intro');
         }
     };
@@ -180,9 +181,6 @@ export default function ConvertScreen() {
         if (!pdfDocRef) return;
         setIsSplitting(true);
         try {
-            const { PDFDocument } = await import('pdf-lib');
-            const JSZip = (await import('jszip')).default;
-
             const zip = new JSZip();
             let currentDoc = await PDFDocument.create();
             let docIndex = 1;
