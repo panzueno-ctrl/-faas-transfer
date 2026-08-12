@@ -738,3 +738,8 @@ Afin de rendre l'interface de conversion parfaitement fluide sur le Web et répo
    - Un composant Badge (`position: absolute`, `top: 8`, `left: 8`) a été ajouté dynamiquement sur la grille.
    - La valeur est calculée sur le moment via l'index de la grille `(index + 1)`, indépendamment du fichier contenu. Peu importe le fichier glissé, la première case physique de gauche restera toujours la place "1".
    - Ajout d'un état dynamique `dragOverIndex` qui déclenche un feedback visuel natif (bordure verte et opacité modifiée) lors du survol d'une place cible.
+
+4. UI/UX et Affordance (Prévention des casses) :
+   - Problème des noms de fichiers extrêmes : Certains fichiers (ex: `li_assicurazione_RSM_Assistenza_cittadini_stranieri_Extra_U.E...`) ne possédaient aucun espace, brisant le layout et rendant le composant gigantesque.
+   - Solution : Application stricte de `<Text numberOfLines={1} ellipsizeMode="middle" width="100%">`. Cela force la troncature (`...`) au centre du nom de fichier, préservant ainsi l'extension visible à droite (ex: `.pdf`) sans casser la grille.
+   - Guidage Utilisateur (Affordance) : Ajout d'un encart visuel dynamique sous le titre ("Maintenez et glissez un fichier pour modifier l'ordre") couplé à une icône de permutation (`swap-horizontal-outline`). Ce composant ne s'affiche intelligemment que lorsque la liste contient plus d'un élément (`selectedFiles.length > 1`).

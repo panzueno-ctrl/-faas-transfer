@@ -464,6 +464,14 @@ export default function ConvertScreen() {
                     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { alignItems: 'center', paddingTop: 100 }]}>
                         <View style={{ alignItems: 'center', marginBottom: 40 }}>
                             <Text style={styles.title}>{selectedService.label}</Text>
+                            {selectedFiles.length > 1 && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16, backgroundColor: 'rgba(59, 130, 246, 0.1)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 }}>
+                                    <Ionicons name="swap-horizontal-outline" size={16} color={colors.primary} style={{ marginRight: 8 }} />
+                                    <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600' }}>
+                                        Maintenez et glissez un fichier pour modifier l'ordre
+                                    </Text>
+                                </View>
+                            )}
                         </View>
 
                         <View style={{ width: '100%', maxWidth: 900, flexDirection: 'row', flexWrap: 'wrap', gap: 20, justifyContent: 'center', marginBottom: 40 }}>
@@ -513,7 +521,7 @@ export default function ConvertScreen() {
                                         <Ionicons name="document-text-outline" size={32} color={colors.text} />
                                     </View>
                                     
-                                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600', textAlign: 'center', marginBottom: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                    <Text numberOfLines={1} ellipsizeMode="middle" style={{ color: colors.text, fontSize: 14, fontWeight: '600', textAlign: 'center', marginBottom: 4, width: '100%' }}>
                                         {file.name}
                                     </Text>
                                     <Text style={{ color: colors.textMuted, fontSize: 12 }}>
@@ -551,7 +559,7 @@ export default function ConvertScreen() {
                                         <Ionicons name="document-text-outline" size={32} color={colors.text} />
                                     </View>
                                     
-                                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600', textAlign: 'center', marginBottom: 4 }} numberOfLines={2}>
+                                    <Text numberOfLines={1} ellipsizeMode="middle" style={{ color: colors.text, fontSize: 14, fontWeight: '600', textAlign: 'center', marginBottom: 4, width: '100%' }}>
                                         {file.name}
                                     </Text>
                                     <Text style={{ color: colors.textMuted, fontSize: 12 }}>
