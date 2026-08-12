@@ -8,3 +8,9 @@
 <RULE[ui_ux_excellence]>
 - Utilise toujours ton expertise de Designer UI/UX pour vérifier au pixel près les espacements, les alignements, la posture des textes et t'assurer que le rendu est premium sur mobile.
 </RULE[ui_ux_excellence]>
+
+<RULE[architecture_detailed_notes]>
+- Le fichier d'architecture (`architecture.txt` ou `architecture_schemas.md`) est un cahier de notes.
+- À chaque modification ou nouvelle action, il est **strictement obligatoire** d'ajouter des explications brutes, détaillées et complètes dans l'architecture.
+- **Interdiction formelle de faire de simples résumés.** Les explications doivent être exhaustives.
+</RULE[architecture_detailed_notes]>
