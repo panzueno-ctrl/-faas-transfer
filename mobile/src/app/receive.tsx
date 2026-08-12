@@ -483,7 +483,7 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: colors.card,
-        borderRadius: 12,
+        borderRadius: 16,
         padding: 16,
         gap: 12,
         borderWidth: 1,
@@ -506,7 +506,7 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
         gap: 8,
         backgroundColor: colors.primary,
         paddingVertical: 16,
-        borderRadius: 12,
+        borderRadius: 16,
         width: '100%',
         maxWidth: 500,
     },
@@ -522,7 +522,7 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 
     downloadButtonText: {
         color: '#ffffff',
-        fontWeight: '600',
+        fontWeight: '700',
         fontSize: 16,
     },
 
@@ -567,11 +567,12 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     backButtonFull: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: 8,
         backgroundColor: colors.card,
-        paddingVertical: 12,
+        paddingVertical: 16,
         paddingHorizontal: 24,
-        borderRadius: 12,
+        borderRadius: 16,
         borderWidth: 1,
         borderColor: colors.border,
     },

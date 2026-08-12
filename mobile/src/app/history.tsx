@@ -497,9 +497,9 @@ const getStyles = (colors: any) => StyleSheet.create({
     },
     premiumButton: {
         backgroundColor: colors.primary,
-        paddingVertical: 14,
+        paddingVertical: 16,
         paddingHorizontal: 32,
-        borderRadius: 12,
+        borderRadius: 16,
         width: '100%',
         alignItems: 'center',
     },
