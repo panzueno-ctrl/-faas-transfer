@@ -14,6 +14,7 @@
 - **RÈGLE D'HISTORIQUE INTÉGRAL (APPEND-ONLY) :** Tu ne dois JAMAIS effacer, écraser ou résumer l'ancien contenu. Chaque nouvelle action doit être **ajoutée à la suite** (à la fin du fichier). 
 - Le document doit contenir TOUTE l'évolution du projet, même les erreurs. Si on a fait "1", on écrit qu'on a fait "1". Si plus tard on efface "1" pour faire "2", on n'efface pas la note sur "1", on écrit une nouvelle entrée : "On a effacé 1 pour faire 2".
 - L'objectif est que ce fichier atteigne 2000 ou 5000 pages s'il le faut. Il doit permettre de retracer chaque décision, chaque tentative et chaque ligne de code modifiée depuis la création du projet.
+- **RÈGLE DE DATATION PRÉCISE :** Pour garantir la traçabilité absolue, CHAQUE NOUVELLE ENTRÉE DOIT ÊTRE DATÉE AVEC LA DATE, L'HEURE, LA MINUTE ET LA SECONDE EXACTES (ex: "12 Août 2026 à 23h45 et 30 secondes"). Ne fais jamais d'entrée sans ce niveau de précision.
 - **RÈGLE STRICTE ET SYSTÉMATIQUE :** À chaque fois que tu travailles sur le projet, PEU IMPORTE LE SUJET (petit ajustement, correction mineure, ou grosse refonte), tu DOIS OBLIGATOIREMENT ajouter une nouvelle entrée détaillée et brute à la fin de `architecture.txt`.
 - Ne manque JAMAIS à cette règle, c'est une exigence fondamentale pour permettre à l'utilisateur de suivre l'historique complet.
 </RULE[architecture_detailed_notes]>
