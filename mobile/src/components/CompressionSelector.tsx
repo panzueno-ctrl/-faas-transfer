@@ -8,6 +8,7 @@ export type CompressionLevel = 'low' | 'recommended' | 'extreme';
 interface CompressionSelectorProps {
     value: CompressionLevel;
     onChange: (val: CompressionLevel) => void;
+    fileSize?: number; // Taille originale en octets
 }
 
 const LEVEL_CONFIG = {
@@ -73,8 +74,18 @@ const Gauge = ({ label, value, color, delay = 0 }: { label: string, value: numbe
     );
 }
 
-export default function CompressionSelector({ value, onChange }: CompressionSelectorProps) {
+export default function CompressionSelector({ value, onChange, fileSize = 0 }: CompressionSelectorProps) {
     const { colors } = useTheme();
+
+    const formatSize = (bytes: number) => {
+        if (!bytes || bytes === 0) return '';
+        const mb = bytes / (1024 * 1024);
+        if (mb < 1) {
+            const kb = bytes / 1024;
+            return `${kb.toFixed(0)} Ko`;
+        }
+        return `${mb.toFixed(1)} Mo`;
+    };
 
     return (
         <View style={{ width: '100%', maxWidth: 900, alignSelf: 'center', marginBottom: 24 }}>
@@ -133,7 +144,21 @@ export default function CompressionSelector({ value, onChange }: CompressionSele
 
                             <View style={{ backgroundColor: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 12, marginBottom: 16 }}>
                                 <Gauge label="Qualité Préservée" value={config.quality} color={config.quality > 70 ? colors.success : (config.quality > 40 ? '#F59E0B' : colors.danger)} delay={index * 100} />
-                                <Gauge label="Réduction de Taille" value={config.reduction} color={config.reduction > 70 ? colors.success : (config.reduction > 40 ? '#F59E0B' : colors.textMuted)} delay={index * 100 + 200} />
+                                
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <View style={{ flex: 1 }}>
+                                        <Gauge label="Réduction de Taille" value={config.reduction} color={config.reduction > 70 ? colors.success : (config.reduction > 40 ? '#F59E0B' : colors.textMuted)} delay={index * 100 + 200} />
+                                    </View>
+                                </View>
+                                
+                                {fileSize > 0 && (
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                                        <Text style={{ color: colors.textSubtle, fontSize: 10 }}>Taille estimée :</Text>
+                                        <Text style={{ color: colors.success, fontSize: 11, fontWeight: 'bold' }}>
+                                            ~ {formatSize(fileSize * (1 - config.reduction / 100))}
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
 
                             <View style={{ backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.1)' : 'rgba(255,255,255,0.03)', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, alignSelf: 'flex-start' }}>

@@ -774,6 +774,7 @@ export default function ConvertScreen() {
                             <CompressionSelector 
                                 value={compressionLevel}
                                 onChange={setCompressionLevel}
+                                fileSize={selectedFiles[0]?.size || 0}
                             />
                         )}
 
