@@ -102,10 +102,19 @@ export default function ConvertScreen() {
 
     const onDragStart = (e: any, index: number) => {
         setDraggedIndex(index);
+        const dataTransfer = e.dataTransfer || (e.nativeEvent && e.nativeEvent.dataTransfer);
+        if (dataTransfer) {
+            dataTransfer.effectAllowed = 'move';
+            dataTransfer.setData('text/plain', index.toString());
+        }
     };
 
     const onDragOver = (e: any) => {
         e.preventDefault();
+        const dataTransfer = e.dataTransfer || (e.nativeEvent && e.nativeEvent.dataTransfer);
+        if (dataTransfer) {
+            dataTransfer.dropEffect = 'move';
+        }
     };
 
     const onDrop = (e: any, index: number) => {
