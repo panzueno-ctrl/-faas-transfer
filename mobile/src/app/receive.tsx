@@ -28,7 +28,7 @@ import ActionCard from '../components/ActionCard';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
-const SERVER_URL = 'https://faas-transfer.onrender.com';
+const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
 export default function ReceiveScreen() {
     const router = useRouter();

@@ -34,7 +34,7 @@ import { supabase } from '../lib/supabase';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
-const SERVER_URL = 'https://faas-transfer.onrender.com';
+const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
 const withRetry = async (fn: () => Promise<any>, retries = 3) => {
     let attempt = 0;
