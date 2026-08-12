@@ -802,3 +802,19 @@ Afin de rendre l'interface de conversion parfaitement fluide sur le Web et répo
   - **Jauges Visuelles :** Au lieu de simples textes, chaque option intègre des jauges animées "Qualité préservée" vs "Réduction de taille" pour que le compromis soit visuellement évident.
   - **Badges d'usage :** Ajout de badges contextuels (Ex: "Idéal Impression", "Idéal Web/Email", "Idéal Archivage").
 - **Intégration :** Le state `compressionLevel` sera ajouté dans `convert.tsx` et injecté dans le `FormData` lors de l'appel backend.
+
+### 13 Août 2026 à 01h15 et 30 secondes - Plan d'Implémentation : Estimation de Taille de Compression
+- **Contexte :** L'utilisateur a suggéré d'ajouter une estimation de la taille finale du fichier pour chaque niveau de compression, afin de rendre les pourcentages plus concrets.
+- **Décision (Valeur Ajoutée 2.0) :** Nous passons la taille originale du fichier (en octets) au composant `CompressionSelector`. Grâce au pourcentage de `reduction` de chaque niveau, nous calculons la taille finale approximative.
+- **UX :** L'estimation est précédée du symbole tilde (`~`) pour indiquer qu'il s'agit d'une approximation.
+
+### 13 Août 2026 à 01h27 et 30 secondes - Plan d'Implémentation : Moteur Backend de Compression PDF
+- **Contexte :** L'interface UI de compression est prête et envoie le fichier au serveur sur `/convert/compress-pdf`. Cependant, l'endpoint n'existe pas encore côté serveur, causant une erreur 404 avalée silencieusement.
+- **Analyse des Concurrents :** Les concurrents comme iLovePDF compressent le fichier côté serveur et renvoient un nouveau fichier. Le fichier original de l'utilisateur n'est jamais touché.
+- **Décision Technique :** 
+  - Utilisation de **Ghostscript** (`gs`) via `child_process.exec` sur le serveur Node.js. Ghostscript est l'outil industriel standard pour la compression PDF.
+  - Correspondance des niveaux : 
+    - `low` -> `/printer` (300 dpi)
+    - `recommended` -> `/ebook` (150 dpi)
+    - `extreme` -> `/screen` (72 dpi)
+- **Modifications prévues :** Ajout de la route `/compress-pdf` dans `server/routes/convert.js` et ajout d'un `window.alert` spécifique pour le Web dans `mobile/src/app/convert.tsx` en cas d'erreur.

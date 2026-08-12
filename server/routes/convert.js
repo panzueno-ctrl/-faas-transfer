@@ -852,6 +852,41 @@ router.post('/mp4-to-gif', upload.single('file'), (req, res) => {
     });
 });
 
+// --- NOUVEAU : COMPRESSION PDF ---
+router.post('/compress-pdf', upload.single('file'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).send('Aucun fichier fourni.');
+    }
+
+    const level = req.body.compressionLevel || 'recommended';
+    let pdfSettings = '/ebook'; // recommended
+
+    if (level === 'extreme') {
+        pdfSettings = '/screen';
+    } else if (level === 'low') {
+        pdfSettings = '/printer';
+    }
+
+    const inputPath = req.file.path;
+    const outputPath = `/tmp/${Date.now()}-compressed.pdf`;
+
+    // Commande Ghostscript pour compresser
+    const gsCommand = `gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=${pdfSettings} -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${outputPath}" "${inputPath}"`;
+
+    exec(gsCommand, (error, stdout, stderr) => {
+        if (error) {
+            console.error('Erreur Ghostscript compression:', error);
+            return res.status(500).send('Erreur lors de la compression du PDF.');
+        }
+
+        res.download(outputPath, 'document_compresse.pdf', (err) => {
+            if (fs.existsSync(outputPath)) {
+                try { fs.unlinkSync(outputPath); } catch (e) {}
+            }
+        });
+    });
+});
+
 // On exporte le router
 module.exports = router;
 

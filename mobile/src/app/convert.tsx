@@ -348,10 +348,14 @@ export default function ConvertScreen() {
             setStep('done');
 
         } catch (error) {
-            Alert.alert(
-                t('common.error'),
-                'Le traitement a échoué. Vérifiez vos fichiers et réessayez.'
-            );
+            if (Platform.OS === 'web') {
+                window.alert('Le traitement a échoué. Vérifiez vos fichiers et réessayez.');
+            } else {
+                Alert.alert(
+                    t('common.error'),
+                    'Le traitement a échoué. Vérifiez vos fichiers et réessayez.'
+                );
+            }
             setStep('staging');
         }
     };
