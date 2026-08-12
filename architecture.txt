@@ -773,3 +773,8 @@ Afin de rendre l'interface de conversion parfaitement fluide sur le Web et répo
   2. Puisqu'il est invoqué à l'intérieur d'une fonction, il n'est **pas évalué** lors du SSG de Vercel. Le crash de la page blanche est évité.
   3. L'exécution est robuste et instantanée au clic.
 - **Bonus UI :** Intégration d'un `window.alert` explicite pour le Web afin de s'assurer qu'aucune erreur ne sera jamais silencieuse à l'avenir.
+
+### 12 Août 2026 à 23h46 et 30 secondes - Mise à jour des règles de traçabilité absolue
+- **Contexte :** L'utilisateur a constaté que le fichier d'architecture n'était pas suffisamment détaillé et manquait de précision temporelle pour suivre chaque micro-évolution ou suppression du projet.
+- **Action Réalisée :** Le fichier de configuration `.agents/AGENTS.md` a été mis à jour avec une nouvelle instruction stricte : la "RÈGLE DE DATATION PRÉCISE".
+- **Détails de l'Action :** Chaque ajout à l'historique de l'architecture doit désormais obligatoirement comporter la date, l'heure, la minute et la seconde exactes. De plus, la règle interdisant la suppression ou l'écrasement (Append-Only) a été renforcée. Le fichier `architecture.txt` est désormais considéré comme un cahier de bord infini, conçu pour pouvoir atteindre 5000 pages et inclure chaque essai, erreur, correction, et changement de cap.
