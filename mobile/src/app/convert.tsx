@@ -99,6 +99,7 @@ export default function ConvertScreen() {
     const [resultUrl, setResultUrl] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
     const onDragStart = (e: any, index: number) => {
         setDraggedIndex(index);
@@ -109,23 +110,34 @@ export default function ConvertScreen() {
         }
     };
 
-    const onDragOver = (e: any) => {
+    const onDragOver = (e: any, index: number) => {
         e.preventDefault();
         const dataTransfer = e.dataTransfer || (e.nativeEvent && e.nativeEvent.dataTransfer);
         if (dataTransfer) {
             dataTransfer.dropEffect = 'move';
         }
+        if (dragOverIndex !== index) {
+            setDragOverIndex(index);
+        }
+    };
+
+    const onDragLeave = (e: any, index: number) => {
+        if (dragOverIndex === index) {
+            setDragOverIndex(null);
+        }
     };
 
     const onDrop = (e: any, index: number) => {
         e.preventDefault();
+        setDragOverIndex(null);
         if (draggedIndex === null || draggedIndex === index) return;
         
         setSelectedFiles(prev => {
             const newFiles = [...prev];
             const draggedFile = newFiles[draggedIndex];
-            newFiles.splice(draggedIndex, 1);
-            newFiles.splice(index, 0, draggedFile);
+            const targetFile = newFiles[index];
+            newFiles[index] = draggedFile;
+            newFiles[draggedIndex] = targetFile;
             return newFiles;
         });
         setDraggedIndex(null);
@@ -133,6 +145,7 @@ export default function ConvertScreen() {
 
     const onDragEnd = () => {
         setDraggedIndex(null);
+        setDragOverIndex(null);
     };
     
     const [session, setSession] = useState<Session | null>(null);
@@ -454,31 +467,79 @@ export default function ConvertScreen() {
                         </View>
 
                         <View style={{ width: '100%', maxWidth: 900, flexDirection: 'row', flexWrap: 'wrap', gap: 20, justifyContent: 'center', marginBottom: 40 }}>
-                            {selectedFiles.map((file, index) => (
+                            {selectedFiles.map((file, index) => {
+                                const isDragged = draggedIndex === index;
+                                const isDragOver = dragOverIndex === index;
+                                
+                                return Platform.OS === 'web' ? (
+                                <div 
+                                    key={`${file.name}-${index}`}
+                                    draggable={true}
+                                    onDragStart={(e: any) => onDragStart(e, index)}
+                                    onDragOver={(e: any) => onDragOver(e, index)}
+                                    onDragLeave={(e: any) => onDragLeave(e, index)}
+                                    onDrop={(e: any) => onDrop(e, index)}
+                                    onDragEnd={onDragEnd}
+                                    style={{
+                                        width: 160, 
+                                        height: 200, 
+                                        backgroundColor: isDragOver ? 'rgba(255,255,255,0.1)' : colors.card, 
+                                        borderRadius: 16, 
+                                        borderWidth: 2, 
+                                        borderColor: isDragOver ? colors.success : (isDragged ? colors.primary : colors.border),
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: 16,
+                                        position: 'relative',
+                                        opacity: isDragged ? 0.5 : 1,
+                                        cursor: 'grab',
+                                        boxSizing: 'border-box'
+                                    }}
+                                >
+                                    <View style={{ position: 'absolute', top: 8, left: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', zIndex: 5 }}>
+                                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>{index + 1}</Text>
+                                    </View>
+
+                                    <Pressable 
+                                        onPress={() => handleRemoveFile(index)} 
+                                        style={({ hovered }) => [{ position: 'absolute', top: 8, right: 8, padding: 8, borderRadius: 20, zIndex: 10 }, hovered && { backgroundColor: 'rgba(255,68,68,0.1)' }]}
+                                    >
+                                        <Ionicons name="trash-outline" size={20} color="#ff4444" />
+                                    </Pressable>
+
+                                    <View style={{ width: 64, height: 64, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                                        <Ionicons name="document-text-outline" size={32} color={colors.text} />
+                                    </View>
+                                    
+                                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600', textAlign: 'center', marginBottom: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                        {file.name}
+                                    </Text>
+                                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                                        {file.size ? (file.size / 1024 / 1024).toFixed(2) + ' MB' : 'Inconnu'}
+                                    </Text>
+                                </div>
+                                ) : (
                                 <View 
                                     key={`${file.name}-${index}`}
-                                    {...(Platform.OS === 'web' ? {
-                                        draggable: true,
-                                        onDragStart: (e: any) => onDragStart(e, index),
-                                        onDragOver: onDragOver,
-                                        onDrop: (e: any) => onDrop(e, index),
-                                        onDragEnd: onDragEnd
-                                    } : {})}
                                     style={[{ 
                                         width: 160, 
                                         height: 200, 
                                         backgroundColor: colors.card, 
                                         borderRadius: 16, 
                                         borderWidth: 2, 
-                                        borderColor: draggedIndex === index ? colors.primary : colors.border,
+                                        borderColor: colors.border,
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         padding: 16,
-                                        position: 'relative',
-                                        opacity: draggedIndex === index ? 0.5 : 1,
-                                        cursor: 'grab' as any
+                                        position: 'relative'
                                     }]}
                                 >
+                                    <View style={{ position: 'absolute', top: 8, left: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', zIndex: 5 }}>
+                                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>{index + 1}</Text>
+                                    </View>
+
                                     <Pressable 
                                         onPress={() => handleRemoveFile(index)} 
                                         style={({ hovered }) => [{ position: 'absolute', top: 8, right: 8, padding: 8, borderRadius: 20, zIndex: 10 }, hovered && { backgroundColor: 'rgba(255,68,68,0.1)' }]}
@@ -497,7 +558,8 @@ export default function ConvertScreen() {
                                         {file.size ? (file.size / 1024 / 1024).toFixed(2) + ' MB' : 'Inconnu'}
                                     </Text>
                                 </View>
-                            ))}
+                                );
+                            })}
                             
                             {selectedService.multiple && (
                                 <Pressable 

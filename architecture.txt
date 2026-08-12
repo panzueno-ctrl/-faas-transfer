@@ -715,3 +715,26 @@ Application de la règle de design UI/UX stricte sur tous les écrans (index, se
 2. Standardisation des paddingVertical à 16px pour un touché mobile optimal et homogène.
 3. Amélioration des flex-scaling (flex: 1 vs flex: 1.5) pour éviter l'écrasement des textes sur petits écrans.
 4. Centralisation des styles premium (ombres, bordures) pour un rendu professionnel.
+
+=== MISE À JOUR : SYSTÈME DE DRAG & DROP HYBRIDE ET NUMÉROTATION DES PLACES ===
+Afin de rendre l'interface de conversion parfaitement fluide sur le Web et répondre au besoin précis de réorganisation des fichiers (ex: ordre de fusion PDF), une refonte technique du Drag & Drop a été implémentée dans `mobile/src/app/convert.tsx` :
+
+1. Architecture et Contournement de React Native Web (HTML5) :
+   - Constat Technique : Le composant natif `<View>` de React Native Web (qui se traduit en `div`) filtre certains événements DOM natifs et bloque l'initialisation du Drag & Drop HTML5 classique (le navigateur annule immédiatement l'action).
+   - Solution Brute : Mise en place d'un rendu conditionnel agressif basé sur `Platform.OS === 'web'`. Sur le Web, on force le rendu d'une vraie balise HTML native `<div>` avec l'attribut strict `draggable={true}`.
+   - Gestion stricte du `dataTransfer` : Pour que Chromium et WebKit autorisent le glissement, l'événement `onDragStart` extrait l'objet via `e.nativeEvent.dataTransfer` (SyntheticEvent React) et lui injecte obligatoirement une donnée via `.setData('text/plain', index)`. De même, l'événement `onDragOver` utilise `.dropEffect = 'move'` avec un `.preventDefault()` obligatoire.
+
+2. Interchangeabilité des Places (Swap Logic Algorithmique) :
+   - L'algorithme de Drop ne se contente plus d'insérer (`Array.splice`) le fichier au milieu (ce qui causait des décalages imprévisibles).
+   - Implémentation d'un "Swap" direct (permutation) :
+     `const draggedFile = newFiles[draggedIndex];`
+     `const targetFile = newFiles[index];`
+     `newFiles[index] = draggedFile;`
+     `newFiles[draggedIndex] = targetFile;`
+   - Résultat : Les places physiques sont strictement interchangeables. Lâcher l'élément A sur l'emplacement B permute instantanément leurs deux places.
+
+3. Logique de Numérotation Statique (Slots) :
+   - UX : Pour la fusion PDF, ce ne sont pas les fichiers qui possèdent un numéro de séquence, mais bien leurs "Places" (Slots) d'accueil sur l'interface.
+   - Un composant Badge (`position: absolute`, `top: 8`, `left: 8`) a été ajouté dynamiquement sur la grille.
+   - La valeur est calculée sur le moment via l'index de la grille `(index + 1)`, indépendamment du fichier contenu. Peu importe le fichier glissé, la première case physique de gauche restera toujours la place "1".
+   - Ajout d'un état dynamique `dragOverIndex` qui déclenche un feedback visuel natif (bordure verte et opacité modifiée) lors du survol d'une place cible.
