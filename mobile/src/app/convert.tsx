@@ -26,6 +26,7 @@ import { Session } from '@supabase/supabase-js';
 import ActionCard from '../components/ActionCard';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import PdfThumbnail from '../components/PdfThumbnail';
 
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
@@ -208,33 +209,20 @@ export default function ConvertScreen() {
                 }
             }
 
-            const zipContent = await zip.generateAsync({ type: 'blob' });
+            const zipContent = await zip.generateAsync({ type: Platform.OS === 'web' ? 'blob' : 'base64' });
             
             if (Platform.OS === 'web') {
-                const url = URL.createObjectURL(zipContent);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `documents_divises.zip`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                const url = URL.createObjectURL(zipContent as Blob);
+                setResultUrl(url);
             } else {
-                const fileReaderInstance = new FileReader();
-                fileReaderInstance.readAsDataURL(zipContent);
-                fileReaderInstance.onload = async () => {
-                    const base64data = (fileReaderInstance.result as string).split(',')[1];
-                    const uri = FileSystem.cacheDirectory + 'documents_divises.zip';
-                    await FileSystem.writeAsStringAsync(uri, base64data, { encoding: FileSystem.EncodingType.Base64 });
-                    const Sharing = await import('expo-sharing');
-                    if (await Sharing.isAvailableAsync()) {
-                        await Sharing.shareAsync({ url: uri });
-                    }
-                };
+                const fileUri = FileSystem.cacheDirectory + 'documents_divises.zip';
+                await FileSystem.writeAsStringAsync(fileUri, zipContent as string, { encoding: FileSystem.EncodingType.Base64 });
+                setResultUrl(fileUri);
             }
+            
             setPdfDocRef(null);
             setStep('done');
-            setResultUrl('Téléchargement terminé.');
+            setFileName('documents_divises');
         } catch (e: any) {
             console.error("Split error:", e);
             if (Platform.OS === 'web') {
@@ -247,7 +235,6 @@ export default function ConvertScreen() {
         }
     };
 
-    
     const [session, setSession] = useState<Session | null>(null);
 
     useEffect(() => {
@@ -262,13 +249,11 @@ export default function ConvertScreen() {
         return () => subscription.unsubscribe();
     }, []);
 
-    // 1. L'utilisateur clique sur une carte d'outil
     const handleServicePress = (service: any) => {
         setSelectedService(service);
         setStep('tool_intro');
     };
 
-    // 2. L'utilisateur clique sur "Choisir les fichiers" depuis l'intro ou "Ajouter" depuis le staging
     const handleSelectFiles = async (append: boolean = false) => {
         try {
             const res = await DocumentPicker.getDocumentAsync({
@@ -299,15 +284,11 @@ export default function ConvertScreen() {
         setSelectedFiles(prev => prev.filter((_, index) => index !== indexToRemove));
     };
 
-
-
-    // 3. L'utilisateur lance le traitement depuis le staging
     const processFiles = async () => {
         if (selectedFiles.length === 0) return;
         
         setStep('processing');
         
-        // Nom sympa pour le fichier de sortie
         let baseName = selectedFiles[0].name.split('.').slice(0, -1).join('.');
         if (selectedFiles.length > 1 && selectedService.id === 'merge-pdf') {
             baseName = 'document_fusionne';
@@ -329,22 +310,10 @@ export default function ConvertScreen() {
                     blob = await response_file.blob();
                 }
                 
-                // Si le service supporte le multi-fichier, la route attend 'files'
-                // Sinon on envoie 'file' (et on se limite au premier fichier dans ce cas)
                 const fieldName = selectedService.multiple ? 'files' : 'file';
                 formData.append(fieldName, blob, file.name);
                 
                 if (!selectedService.multiple) break; 
-            }
-
-            if (selectedService.id === 'rotate-pdf') {
-                formData.append('rotation', '90');
-            }
-            if (selectedService.id === 'watermark-pdf') {
-                formData.append('text', 'CONFIDENTIEL');
-            }
-            if (selectedService.id === 'protect-pdf') {
-                formData.append('password', 'faas2024');
             }
 
             const response = await fetch(`${SERVER_URL}${selectedService.endpoint}`, {
@@ -366,15 +335,22 @@ export default function ConvertScreen() {
                 t('common.error'),
                 'Le traitement a échoué. Vérifiez vos fichiers et réessayez.'
             );
-            setStep('staging'); // On retourne sur l'écran de staging en cas d'erreur
+            setStep('staging');
         }
     };
 
-    const downloadResult = () => {
-        const a = document.createElement('a');
-        a.href = resultUrl;
-        a.download = `${fileName}.${selectedService.outputExt}`;
-        a.click();
+    const downloadResult = async () => {
+        if (Platform.OS === 'web') {
+            const a = document.createElement('a');
+            a.href = resultUrl;
+            a.download = `${fileName}.${selectedService?.outputExt || 'zip'}`;
+            a.click();
+            URL.revokeObjectURL(resultUrl);
+        } else {
+            if (await shareAsync) {
+                await shareAsync(resultUrl);
+            }
+        }
     };
 
     const reset = () => {
@@ -385,10 +361,6 @@ export default function ConvertScreen() {
         setResultUrl('');
     };
 
-
-    // -------------------------------------------------------------------------
-    // RENDER MENU
-    // -------------------------------------------------------------------------
     if (step === 'menu') {
         const toolsToDisplay = activeTab === 'files' ? FILE_TOOLS : MEDIA_TOOLS;
         const filteredTools = toolsToDisplay.filter(c => 
@@ -396,7 +368,6 @@ export default function ConvertScreen() {
             c.id.toLowerCase().includes(searchQuery.toLowerCase())
         );
 
-        // Group tools by category
         const groupedTools = filteredTools.reduce((acc, tool) => {
             const cat = tool.category || 'Autres';
             if (!acc[cat]) {
@@ -409,7 +380,6 @@ export default function ConvertScreen() {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.backgroundGlow} pointerEvents="none" />
-                
                 <View style={styles.contentWrapper}>
                     <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', paddingHorizontal: 32, paddingTop: 32, position: 'absolute', top: 0, zIndex: 20 }}>
                         <Pressable 
@@ -496,9 +466,6 @@ export default function ConvertScreen() {
         );
     }
 
-    // -------------------------------------------------------------------------
-    // RENDER TOOL INTRO
-    // -------------------------------------------------------------------------
     if (step === 'tool_intro') {
         return (
             <SafeAreaView style={styles.container}>
@@ -545,9 +512,6 @@ export default function ConvertScreen() {
         );
     }
     
-    // -------------------------------------------------------------------------
-    // RENDER SPLIT EDITOR (Le découpage)
-    // -------------------------------------------------------------------------
     if (step === 'split_editor') {
         const resultCount = splitPoints.length + 1;
         return (
@@ -591,7 +555,6 @@ export default function ConvertScreen() {
                                 const hasCutAfter = splitPoints.includes(index);
                                 return (
                                     <View key={index} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        {/* Carte de la Page */}
                                         <View style={{
                                             width: 140, 
                                             height: 180, 
@@ -599,16 +562,11 @@ export default function ConvertScreen() {
                                             borderRadius: 12, 
                                             borderWidth: 1, 
                                             borderColor: colors.border,
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
+                                            overflow: 'hidden'
                                         }}>
-                                            <Ionicons name="document-text-outline" size={32} color={colors.text} style={{ opacity: 0.5 }} />
-                                            <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600', marginTop: 12 }}>
-                                                Page {index + 1}
-                                            </Text>
+                                            <PdfThumbnail fileUri={selectedFiles[0].uri} pageIndex={index} />
                                         </View>
 
-                                        {/* Ciseaux entre les pages (sauf pour la dernière) */}
                                         {index < pageCount - 1 && (
                                             <Pressable 
                                                 onPress={() => {
@@ -644,9 +602,6 @@ export default function ConvertScreen() {
         );
     }
     
-    // -------------------------------------------------------------------------
-    // RENDER STAGING (L'ESPACE AJOUTER/TERMINER DE LA VIDÉO)
-    // -------------------------------------------------------------------------
     if (step === 'staging') {
         return (
             <SafeAreaView style={styles.container}>
@@ -796,10 +751,6 @@ export default function ConvertScreen() {
                                     <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600', textAlign: 'center' }}>Ajouter un fichier</Text>
                                 </Pressable>
                             )}
-
-                            {selectedFiles.length === 0 && !selectedService.multiple && (
-                                <Text style={[styles.subtitle, { padding: 20 }]}>Aucun fichier sélectionné.</Text>
-                            )}
                         </View>
 
                         <View style={{ flexDirection: 'row', gap: 16, width: '100%', maxWidth: 400 }}>
@@ -818,9 +769,6 @@ export default function ConvertScreen() {
         );
     }
 
-    // -------------------------------------------------------------------------
-    // RENDER PROCESSING
-    // -------------------------------------------------------------------------
     if (step === 'processing') {
         return (
             <SafeAreaView style={styles.container}>
@@ -837,9 +785,6 @@ export default function ConvertScreen() {
         );
     }
 
-    // -------------------------------------------------------------------------
-    // RENDER DONE
-    // -------------------------------------------------------------------------
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.backgroundGlow} pointerEvents="none" />
