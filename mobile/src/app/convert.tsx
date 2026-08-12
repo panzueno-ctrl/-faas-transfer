@@ -1,7 +1,7 @@
 /**
  * app/convert.tsx
  *
- * Écran de conversion et traitement de fichiers avec interface de Staging.
+ * Écran de conversion et traitement de fichiers avec interface "SmallPDF" : Intro -> Staging -> Processing -> Done.
  */
 
 import { useState, useEffect } from 'react';
@@ -28,7 +28,6 @@ import { useTranslation } from 'react-i18next';
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
 const FILE_TOOLS = [
-    // --- Manipulation PDF (Outils principaux) ---
     { id: 'merge-pdf', category: 'Outils PDF Essentiels', label: 'Fusionner PDF', description: 'Combinez plusieurs fichiers PDF dans l\'ordre de votre choix.', icon: 'git-merge-outline', endpoint: '/convert/merge-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf', multiple: true },
     { id: 'split-pdf', category: 'Outils PDF Essentiels', label: 'Diviser PDF', description: 'Séparez une ou plusieurs pages d\'un PDF.', icon: 'cut-outline', endpoint: '/convert/split-pdf', mimeTypes: ['application/pdf'], outputExt: 'zip' },
     { id: 'compress-pdf', category: 'Outils PDF Essentiels', label: 'Compresser PDF', description: 'Réduisez le poids de votre PDF sans perte de qualité.', icon: 'contract-outline', endpoint: '/convert/compress-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
@@ -49,7 +48,6 @@ const FILE_TOOLS = [
     { id: 'ocr-pdf', category: 'Outils PDF Essentiels', label: 'OCR PDF', description: 'Rendez le texte de vos PDF scannés sélectionnable.', icon: 'scan-outline', endpoint: '/convert/ocr-pdf', mimeTypes: ['application/pdf'], outputExt: 'txt' },
     { id: 'compare-pdf', category: 'Outils PDF Essentiels', label: 'Comparer PDF', description: 'Analysez les différences entre deux documents.', icon: 'git-compare-outline', endpoint: '/convert/compare-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
 
-    // --- Vers PDF ---
     { id: 'word-to-pdf', category: 'Convertir vers PDF', label: 'Word → PDF', description: 'Convertissez vos documents DOCX en PDF parfait.', icon: 'document-text-outline', endpoint: '/convert/word-to-pdf', mimeTypes: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'], outputExt: 'pdf' },
     { id: 'pptx-to-pdf', category: 'Convertir vers PDF', label: 'PPTX → PDF', description: 'Transformez vos présentations en PDF.', icon: 'easel-outline', endpoint: '/convert/pptx-to-pdf', mimeTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'], outputExt: 'pdf' },
     { id: 'excel-to-pdf', category: 'Convertir vers PDF', label: 'Excel → PDF', description: 'Convertissez vos feuilles de calcul en PDF.', icon: 'grid-outline', endpoint: '/convert/excel-to-pdf', mimeTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'], outputExt: 'pdf' },
@@ -60,14 +58,12 @@ const FILE_TOOLS = [
     { id: 'numbers-to-pdf', category: 'Convertir vers PDF', label: 'Numbers → PDF', description: 'Convertissez les tableaux Apple Numbers.', icon: 'grid-outline', endpoint: '/convert/numbers-to-pdf', mimeTypes: ['application/vnd.apple.numbers'], outputExt: 'pdf' },
     { id: 'txt-to-pdf', category: 'Convertir vers PDF', label: 'TXT → PDF', description: 'Convertissez de simples fichiers texte.', icon: 'document-text-outline', endpoint: '/convert/txt-to-pdf', mimeTypes: ['text/plain'], outputExt: 'pdf' },
 
-    // --- Depuis PDF ---
     { id: 'pdf-to-word', category: 'Convertir depuis PDF', label: 'PDF → Word', description: 'Rendez vos PDF éditables sur Microsoft Word.', icon: 'document-outline', endpoint: '/convert/pdf-to-word', mimeTypes: ['application/pdf'], outputExt: 'docx' },
     { id: 'pdf-to-pptx', category: 'Convertir depuis PDF', label: 'PDF → PPTX', description: 'Générez des diapositives à partir de vos PDF.', icon: 'easel-outline', endpoint: '/convert/pdf-to-pptx', mimeTypes: ['application/pdf'], outputExt: 'pptx' },
     { id: 'pdf-to-excel', category: 'Convertir depuis PDF', label: 'PDF → Excel', description: 'Extrayez les données de vos PDF vers Excel.', icon: 'grid-outline', endpoint: '/convert/pdf-to-excel', mimeTypes: ['application/pdf'], outputExt: 'xlsx' },
     { id: 'pdf-to-image', category: 'Convertir depuis PDF', label: 'PDF → JPG', description: 'Convertissez chaque page en image de haute qualité.', icon: 'image-outline', endpoint: '/convert/pdf-to-image', mimeTypes: ['application/pdf'], outputExt: 'zip' },
     { id: 'pdf-to-txt', category: 'Convertir depuis PDF', label: 'PDF → TXT', description: 'Extrayez tout le texte brut d\'un PDF.', icon: 'document-text-outline', endpoint: '/convert/pdf-to-txt', mimeTypes: ['application/pdf'], outputExt: 'txt' },
 
-    // --- Images ---
     { id: 'heic-to-jpg', category: 'Outils d\'Images', label: 'HEIC → JPG', description: 'Convertissez les photos d\'iPhone au format JPG.', icon: 'logo-apple', endpoint: '/convert/heic-to-jpg', mimeTypes: ['image/heic', 'image/heif'], outputExt: 'jpg' },
     { id: 'jpg-to-png', category: 'Outils d\'Images', label: 'JPG → PNG', description: 'Passez d\'une image compressée à un format PNG.', icon: 'image-outline', endpoint: '/convert/jpg-to-png', mimeTypes: ['image/jpeg'], outputExt: 'png' },
     { id: 'png-to-jpg', category: 'Outils d\'Images', label: 'PNG → JPG', description: 'Réduisez le poids de vos PNG avec le JPG.', icon: 'image-outline', endpoint: '/convert/png-to-jpg', mimeTypes: ['image/png'], outputExt: 'jpg' },
@@ -93,7 +89,8 @@ export default function ConvertScreen() {
     const { t } = useTranslation();
     const styles = getStyles(colors);
 
-    const [step, setStep] = useState<'menu' | 'staging' | 'processing' | 'done'>('menu');
+    // Ajout de l'état "tool_intro"
+    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'processing' | 'done'>('menu');
     const [activeTab, setActiveTab] = useState<'files' | 'media'>('files');
     const [selectedService, setSelectedService] = useState<any>(null);
     const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
@@ -115,26 +112,14 @@ export default function ConvertScreen() {
         return () => subscription.unsubscribe();
     }, []);
 
-    const handleServicePress = async (service: any) => {
+    // 1. L'utilisateur clique sur une carte d'outil
+    const handleServicePress = (service: any) => {
         setSelectedService(service);
-        try {
-            const res = await DocumentPicker.getDocumentAsync({
-                type: service.mimeTypes,
-                copyToCacheDirectory: true,
-                multiple: service.multiple || false,
-            });
-
-            if (res.canceled) return;
-
-            setSelectedFiles(res.assets);
-            setStep('staging');
-
-        } catch (error) {
-            Alert.alert(t('common.error'), 'Impossible de sélectionner le fichier.');
-        }
+        setStep('tool_intro');
     };
 
-    const handleAddMoreFiles = async () => {
+    // 2. L'utilisateur clique sur "Choisir les fichiers" depuis l'intro ou "Ajouter" depuis le staging
+    const handleSelectFiles = async (append: boolean = false) => {
         try {
             const res = await DocumentPicker.getDocumentAsync({
                 type: selectedService.mimeTypes,
@@ -144,7 +129,12 @@ export default function ConvertScreen() {
 
             if (res.canceled) return;
             
-            setSelectedFiles(prev => [...prev, ...res.assets]);
+            if (append) {
+                setSelectedFiles(prev => [...prev, ...res.assets]);
+            } else {
+                setSelectedFiles(res.assets);
+                setStep('staging');
+            }
         } catch (error) {
             Alert.alert(t('common.error'), "Impossible d'ajouter les fichiers.");
         }
@@ -154,6 +144,7 @@ export default function ConvertScreen() {
         setSelectedFiles(prev => prev.filter((_, index) => index !== indexToRemove));
     };
 
+    // 3. L'utilisateur lance le traitement depuis le staging
     const processFiles = async () => {
         if (selectedFiles.length === 0) return;
         
@@ -162,7 +153,7 @@ export default function ConvertScreen() {
         // Nom sympa pour le fichier de sortie
         let baseName = selectedFiles[0].name.split('.').slice(0, -1).join('.');
         if (selectedFiles.length > 1 && selectedService.id === 'merge-pdf') {
-            baseName += '_fusionne';
+            baseName = 'document_fusionne';
         } else {
             baseName += '_converti';
         }
@@ -233,6 +224,9 @@ export default function ConvertScreen() {
     };
 
 
+    // -------------------------------------------------------------------------
+    // RENDER MENU
+    // -------------------------------------------------------------------------
     if (step === 'menu') {
         const toolsToDisplay = activeTab === 'files' ? FILE_TOOLS : MEDIA_TOOLS;
         const filteredTools = toolsToDisplay.filter(c => 
@@ -339,8 +333,11 @@ export default function ConvertScreen() {
             </SafeAreaView>
         );
     }
-    
-    if (step === 'staging') {
+
+    // -------------------------------------------------------------------------
+    // RENDER TOOL INTRO
+    // -------------------------------------------------------------------------
+    if (step === 'tool_intro') {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.backgroundGlow} pointerEvents="none" />
@@ -358,26 +355,78 @@ export default function ConvertScreen() {
                         </Pressable>
                     </View>
 
-                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { alignItems: 'center', paddingTop: 120 }]}>
+                    <View style={styles.centerContent}>
+                        <View style={{ width: 100, height: 100, borderRadius: 28, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', marginBottom: 24, borderWidth: 1, borderColor: colors.border }}>
+                            <Ionicons name={selectedService.icon as any} size={50} color={colors.primary} />
+                        </View>
+                        
+                        <Text style={styles.title}>{selectedService.label}</Text>
+                        <Text style={[styles.subtitle, { maxWidth: 500, marginBottom: 40, fontSize: 18, lineHeight: 28 }]}>
+                            {selectedService.description}
+                        </Text>
+
+                        <Pressable 
+                            style={({ pressed, hovered }: any) => [
+                                styles.hugePrimaryButton,
+                                (pressed || hovered) && { opacity: 0.9, transform: [{ scale: 0.98 }] }
+                            ]} 
+                            onPress={() => handleSelectFiles(false)}>
+                            <Ionicons name="add-circle-outline" size={28} color="#ffffff" />
+                            <Text style={styles.hugePrimaryButtonText}>Choisir les fichiers</Text>
+                        </Pressable>
+                        <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 16 }}>
+                            Tous vos fichiers sont supprimés de nos serveurs après 1 heure.
+                        </Text>
+                    </View>
+                </View>
+            </SafeAreaView>
+        );
+    }
+    
+    // -------------------------------------------------------------------------
+    // RENDER STAGING (L'ESPACE AJOUTER/TERMINER DE LA VIDÉO)
+    // -------------------------------------------------------------------------
+    if (step === 'staging') {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                <View style={styles.contentWrapper}>
+                    <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', paddingHorizontal: 32, paddingTop: 32, position: 'absolute', top: 0, zIndex: 20 }}>
+                        <Pressable 
+                            style={({ pressed, hovered }: any) => [
+                                styles.backButton,
+                                (pressed || hovered) && styles.backButtonHovered,
+                                { position: 'relative', top: 0, left: 0 }
+                            ]}
+                            onPress={reset}>
+                            <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                            <Text style={styles.backButtonText}>Annuler</Text>
+                        </Pressable>
+                    </View>
+
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { alignItems: 'center', paddingTop: 100 }]}>
                         <View style={{ alignItems: 'center', marginBottom: 40 }}>
-                            <View style={{ width: 80, height: 80, borderRadius: 24, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 1, borderColor: colors.border }}>
-                                <Ionicons name={selectedService.icon as any} size={40} color={colors.primary} />
-                            </View>
                             <Text style={styles.title}>{selectedService.label}</Text>
-                            <Text style={styles.subtitle}>Vérifiez vos fichiers avant de lancer le traitement</Text>
                         </View>
 
-                        <View style={{ width: '100%', maxWidth: 600, gap: 12, marginBottom: 32 }}>
+                        <View style={{ width: '100%', maxWidth: 700, gap: 12, marginBottom: 32 }}>
                             {selectedFiles.map((file, index) => (
                                 <View key={index} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}>
                                     <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
                                         <Ionicons name="document-text-outline" size={24} color={colors.text} />
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }} numberOfLines={1}>{file.name}</Text>
-                                        {file.size && <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 4 }}>{(file.size / 1024 / 1024).toFixed(2)} MB</Text>}
+                                        <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }} numberOfLines={1}>
+                                            {file.name}
+                                        </Text>
+                                        <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 4 }}>
+                                            {file.size ? (file.size / 1024 / 1024).toFixed(2) + ' MB' : 'Taille inconnue'}
+                                        </Text>
                                     </View>
-                                    <Pressable onPress={() => handleRemoveFile(index)} style={{ padding: 12 }}>
+                                    <Pressable 
+                                        onPress={() => handleRemoveFile(index)} 
+                                        style={({ hovered }) => [{ padding: 12, borderRadius: 8 }, hovered && { backgroundColor: 'rgba(255,68,68,0.1)' }]}
+                                    >
                                         <Ionicons name="trash-outline" size={22} color="#ff4444" />
                                     </Pressable>
                                 </View>
@@ -388,11 +437,11 @@ export default function ConvertScreen() {
                             )}
                         </View>
 
-                        <View style={{ flexDirection: 'row', gap: 16, width: '100%', maxWidth: 600 }}>
+                        <View style={{ flexDirection: 'row', gap: 16, width: '100%', maxWidth: 700 }}>
                             {selectedService.multiple && (
-                                <Pressable style={styles.secondaryButton} onPress={handleAddMoreFiles}>
-                                    <Ionicons name="add-outline" size={20} color={colors.text} />
-                                    <Text style={styles.secondaryButtonText}>Ajouter des fichiers</Text>
+                                <Pressable style={styles.secondaryButton} onPress={() => handleSelectFiles(true)}>
+                                    <Ionicons name="add-outline" size={22} color={colors.text} />
+                                    <Text style={styles.secondaryButtonText}>Ajouter</Text>
                                 </Pressable>
                             )}
                             <Pressable 
@@ -400,8 +449,8 @@ export default function ConvertScreen() {
                                 onPress={processFiles}
                                 disabled={selectedFiles.length === 0}
                             >
-                                <Ionicons name="flash-outline" size={20} color="#ffffff" />
-                                <Text style={styles.primaryButtonText}>{selectedService.label}</Text>
+                                <Ionicons name="checkmark-outline" size={22} color="#ffffff" />
+                                <Text style={styles.primaryButtonText}>Terminé</Text>
                             </Pressable>
                         </View>
                     </ScrollView>
@@ -410,6 +459,9 @@ export default function ConvertScreen() {
         );
     }
 
+    // -------------------------------------------------------------------------
+    // RENDER PROCESSING
+    // -------------------------------------------------------------------------
     if (step === 'processing') {
         return (
             <SafeAreaView style={styles.container}>
@@ -426,6 +478,9 @@ export default function ConvertScreen() {
         );
     }
 
+    // -------------------------------------------------------------------------
+    // RENDER DONE
+    // -------------------------------------------------------------------------
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.backgroundGlow} pointerEvents="none" />
@@ -590,7 +645,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     },
 
     title: {
-        fontSize: 32,
+        fontSize: 36,
         fontWeight: '900',
         color: colors.text,
         marginBottom: 8,
@@ -602,6 +657,7 @@ const getStyles = (colors: any) => StyleSheet.create({
         fontSize: 16,
         color: colors.textMuted,
         textAlign: 'center',
+        lineHeight: 24,
     },
 
     groupTitle: {
@@ -636,7 +692,7 @@ const getStyles = (colors: any) => StyleSheet.create({
         gap: 16,
         zIndex: 10,
         width: '100%',
-        maxWidth: 400,
+        maxWidth: 600,
     },
 
     downloadIcon: {
@@ -714,9 +770,9 @@ const getStyles = (colors: any) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        paddingVertical: 16,
+        gap: 10,
+        backgroundColor: colors.cardHovered,
+        paddingVertical: 18,
         borderRadius: 16,
         borderWidth: 1,
         borderColor: colors.border,
@@ -724,8 +780,8 @@ const getStyles = (colors: any) => StyleSheet.create({
 
     secondaryButtonText: {
         color: colors.text,
-        fontWeight: '600',
-        fontSize: 16,
+        fontWeight: '700',
+        fontSize: 18,
     },
 
     primaryButton: {
@@ -733,15 +789,37 @@ const getStyles = (colors: any) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
+        gap: 10,
         backgroundColor: colors.primary,
-        paddingVertical: 16,
+        paddingVertical: 18,
         borderRadius: 16,
     },
 
     primaryButtonText: {
         color: '#ffffff',
         fontWeight: '700',
-        fontSize: 16,
+        fontSize: 18,
+    },
+
+    hugePrimaryButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+        backgroundColor: colors.primary,
+        paddingVertical: 24,
+        paddingHorizontal: 48,
+        borderRadius: 20,
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
+        transitionDuration: '0.2s',
+    },
+
+    hugePrimaryButtonText: {
+        color: '#ffffff',
+        fontWeight: '800',
+        fontSize: 22,
     },
 });
