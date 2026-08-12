@@ -27,6 +27,7 @@ import ActionCard from '../components/ActionCard';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import PdfThumbnail from '../components/PdfThumbnail';
+import CompressionSelector, { CompressionLevel } from '../components/CompressionSelector';
 
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
@@ -105,6 +106,10 @@ export default function ConvertScreen() {
 
     const [pageCount, setPageCount] = useState<number>(0);
     const [splitPoints, setSplitPoints] = useState<number[]>([]);
+    const [fileName, setFileName] = useState<string>('document');
+    
+    // Compression state
+    const [compressionLevel, setCompressionLevel] = useState<CompressionLevel>('recommended');
     const [pdfDocRef, setPdfDocRef] = useState<any>(null);
     const [isSplitting, setIsSplitting] = useState(false);
 
@@ -314,6 +319,19 @@ export default function ConvertScreen() {
                 formData.append(fieldName, blob, file.name);
                 
                 if (!selectedService.multiple) break; 
+            }
+
+            if (selectedService.id === 'rotate-pdf') {
+                formData.append('rotation', '90');
+            }
+            if (selectedService.id === 'watermark-pdf') {
+                formData.append('text', 'CONFIDENTIEL');
+            }
+            if (selectedService.id === 'protect-pdf') {
+                formData.append('password', 'faas2024');
+            }
+            if (selectedService.id === 'compress-pdf') {
+                formData.append('compressionLevel', compressionLevel);
             }
 
             const response = await fetch(`${SERVER_URL}${selectedService.endpoint}`, {
@@ -752,6 +770,13 @@ export default function ConvertScreen() {
                                 </Pressable>
                             )}
                         </View>
+
+                        {selectedService.id === 'compress-pdf' && (
+                            <CompressionSelector 
+                                value={compressionLevel}
+                                onChange={setCompressionLevel}
+                            />
+                        )}
 
                         <View style={{ flexDirection: 'row', gap: 16, width: '100%', maxWidth: 400 }}>
                             <Pressable 

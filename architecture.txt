@@ -790,3 +790,15 @@ Afin de rendre l'interface de conversion parfaitement fluide sur le Web et répo
 - **Ajout des Vignettes (Thumbnails) 100% Client-Side :** L'interface affiche désormais les vraies pages du PDF à la place des icônes statiques "Page 1".
   - **Sur Web (`PdfThumbnail.web.tsx`) :** Utilisation de `pdfjs-dist` injecté via script CDN (pour éviter d'alourdir le bundle Webpack/Metro et éviter les crashes SSG). Le PDF est téléchargé dans le navigateur, décodé en arrière-plan, et chaque page est rendue sur un élément `<canvas>` HTML à l'échelle `0.5` pour garantir la performance.
   - **Sur Mobile (`PdfThumbnail.tsx`) :** Composant fallback implémenté temporairement avec des icônes génériques. (Une discussion avec l'utilisateur est en cours pour savoir s'il souhaite installer `react-native-webview` pour répliquer le comportement Web sur Mobile, ou utiliser l'API).
+
+### 13 Août 2026 à 01h02 et 30 secondes - Plan d'Implémentation : Interface de Niveaux de Compression PDF
+- **Contexte :** L'utilisateur a demandé d'améliorer l'outil "Compresser PDF" en s'inspirant des concurrents (Smallpdf, iLovePDF) qui proposent 3 niveaux de compression. L'objectif est d'aller plus loin en proposant une "Valeur Ajoutée" unique (UX Premium). De plus, l'utilisateur a exigé que **tous les plans d'implémentation soient consignés dans ce fichier d'architecture avant même d'écrire le code**.
+- **Analyse des Concurrents :** 
+  - Smallpdf offre : Simple, Modéré, Fort avec une estimation de la taille finale.
+  - iLovePDF offre : Basse, Recommandée, Extrême, avec un focus sur le ratio Qualité/Compression.
+- **La Décision Architecturale (Valeur Ajoutée) :**
+  - **Création du composant `CompressionSelector.tsx`** : Une interface avec 3 cartes interactives.
+  - **Niveaux choisis :** Basse Compression (Haute qualité), Recommandée (Équilibre parfait), Compression Extrême (Taille minimale).
+  - **Jauges Visuelles :** Au lieu de simples textes, chaque option intègre des jauges animées "Qualité préservée" vs "Réduction de taille" pour que le compromis soit visuellement évident.
+  - **Badges d'usage :** Ajout de badges contextuels (Ex: "Idéal Impression", "Idéal Web/Email", "Idéal Archivage").
+- **Intégration :** Le state `compressionLevel` sera ajouté dans `convert.tsx` et injecté dans le `FormData` lors de l'appel backend.
