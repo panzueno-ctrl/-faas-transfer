@@ -20,6 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { supabase } from '../lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import ActionCard from '../components/ActionCard';
@@ -91,7 +92,7 @@ export default function ConvertScreen() {
     const styles = getStyles(colors);
 
     // Ajout de l'état "tool_intro"
-    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'processing' | 'done'>('menu');
+    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'processing' | 'done'>('menu');
     const [activeTab, setActiveTab] = useState<'files' | 'media'>('files');
     const [selectedService, setSelectedService] = useState<any>(null);
     const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
@@ -100,6 +101,33 @@ export default function ConvertScreen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+    const [pageCount, setPageCount] = useState<number>(0);
+    const [splitPoints, setSplitPoints] = useState<number[]>([]);
+    const [pdfDocRef, setPdfDocRef] = useState<any>(null);
+    const [isSplitting, setIsSplitting] = useState(false);
+
+    const initSplitPDF = async (file: any) => {
+        try {
+            let arrayBuffer;
+            if (Platform.OS === 'web') {
+                arrayBuffer = await file.file.arrayBuffer();
+            } else {
+                const response = await fetch(file.uri);
+                arrayBuffer = await response.arrayBuffer();
+            }
+            const { PDFDocument } = await import('pdf-lib');
+            const pdfDoc = await PDFDocument.load(arrayBuffer);
+            const count = pdfDoc.getPageCount();
+            setPageCount(count);
+            setPdfDocRef(pdfDoc);
+            setSplitPoints([]);
+        } catch (e) {
+            console.error(e);
+            Alert.alert("Erreur", "Impossible de lire ce PDF.");
+            setStep('tool_intro');
+        }
+    };
 
     const onDragStart = (e: any, index: number) => {
         setDraggedIndex(index);
@@ -147,6 +175,69 @@ export default function ConvertScreen() {
         setDraggedIndex(null);
         setDragOverIndex(null);
     };
+
+    const handleSplitPDF = async () => {
+        if (!pdfDocRef) return;
+        setIsSplitting(true);
+        try {
+            const { PDFDocument } = await import('pdf-lib');
+            const JSZip = (await import('jszip')).default;
+
+            const zip = new JSZip();
+            let currentDoc = await PDFDocument.create();
+            let docIndex = 1;
+
+            const totalPages = pdfDocRef.getPageCount();
+            
+            for (let i = 0; i < totalPages; i++) {
+                const [copiedPage] = await currentDoc.copyPages(pdfDocRef, [i]);
+                currentDoc.addPage(copiedPage);
+
+                if (splitPoints.includes(i) || i === totalPages - 1) {
+                    const pdfBytes = await currentDoc.save();
+                    zip.file(`document_partie_${docIndex}.pdf`, pdfBytes);
+                    
+                    if (i < totalPages - 1) {
+                        currentDoc = await PDFDocument.create();
+                        docIndex++;
+                    }
+                }
+            }
+
+            const zipContent = await zip.generateAsync({ type: 'blob' });
+            
+            if (Platform.OS === 'web') {
+                const url = URL.createObjectURL(zipContent);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `documents_divises.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } else {
+                const fileReaderInstance = new FileReader();
+                fileReaderInstance.readAsDataURL(zipContent);
+                fileReaderInstance.onload = async () => {
+                    const base64data = (fileReaderInstance.result as string).split(',')[1];
+                    const uri = FileSystem.cacheDirectory + 'documents_divises.zip';
+                    await FileSystem.writeAsStringAsync(uri, base64data, { encoding: FileSystem.EncodingType.Base64 });
+                    const Sharing = await import('expo-sharing');
+                    if (await Sharing.isAvailableAsync()) {
+                        await Sharing.shareAsync({ url: uri });
+                    }
+                };
+            }
+            setStep('done');
+            setResultUrl('Téléchargement terminé.');
+        } catch (e) {
+            console.error(e);
+            Alert.alert("Erreur", "Une erreur est survenue lors de la division.");
+        } finally {
+            setIsSplitting(false);
+        }
+    };
+
     
     const [session, setSession] = useState<Session | null>(null);
 
@@ -183,7 +274,12 @@ export default function ConvertScreen() {
                 setSelectedFiles(prev => [...prev, ...res.assets]);
             } else {
                 setSelectedFiles(res.assets);
-                setStep('staging');
+                if (selectedService.id === 'split-pdf') {
+                    setStep('split_editor');
+                    initSplitPDF(res.assets[0]);
+                } else {
+                    setStep('staging');
+                }
             }
         } catch (error) {
             Alert.alert(t('common.error'), "Impossible d'ajouter les fichiers.");
@@ -435,6 +531,105 @@ export default function ConvertScreen() {
                             Tous vos fichiers sont supprimés de nos serveurs après 1 heure.
                         </Text>
                     </View>
+                </View>
+            </SafeAreaView>
+        );
+    }
+    
+    // -------------------------------------------------------------------------
+    // RENDER SPLIT EDITOR (Le découpage)
+    // -------------------------------------------------------------------------
+    if (step === 'split_editor') {
+        const resultCount = splitPoints.length + 1;
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                <View style={styles.contentWrapper}>
+                    <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', paddingHorizontal: 32, paddingTop: 32, position: 'absolute', top: 0, zIndex: 20 }}>
+                        <Pressable 
+                            style={({ pressed, hovered }: any) => [
+                                styles.backButton,
+                                (pressed || hovered) && styles.backButtonHovered,
+                                { position: 'relative', top: 0, left: 0 }
+                            ]}
+                            onPress={() => { setStep('tool_intro'); setPdfDocRef(null); }}>
+                            <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                            <Text style={styles.backButtonText}>Annuler</Text>
+                        </Pressable>
+
+                        <Pressable 
+                            style={({ pressed, hovered }: any) => [
+                                { backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, flexDirection: 'row', alignItems: 'center' },
+                                (pressed || hovered) && { opacity: 0.8 }
+                            ]}
+                            onPress={handleSplitPDF}>
+                            <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>
+                                {isSplitting ? 'Création...' : `Diviser (${resultCount} PDF)`}
+                            </Text>
+                        </Pressable>
+                    </View>
+
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { alignItems: 'center', paddingTop: 100 }]}>
+                        <View style={{ alignItems: 'center', marginBottom: 40 }}>
+                            <Text style={styles.title}>Diviser le PDF</Text>
+                            <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 8 }}>
+                                Cliquez sur les ciseaux pour séparer les pages.
+                            </Text>
+                        </View>
+
+                        <View style={{ width: '100%', maxWidth: 900, flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginBottom: 40 }}>
+                            {Array.from({ length: pageCount }).map((_, index) => {
+                                const hasCutAfter = splitPoints.includes(index);
+                                return (
+                                    <View key={index} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        {/* Carte de la Page */}
+                                        <View style={{
+                                            width: 140, 
+                                            height: 180, 
+                                            backgroundColor: colors.card, 
+                                            borderRadius: 12, 
+                                            borderWidth: 1, 
+                                            borderColor: colors.border,
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                        }}>
+                                            <Ionicons name="document-text-outline" size={32} color={colors.text} style={{ opacity: 0.5 }} />
+                                            <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600', marginTop: 12 }}>
+                                                Page {index + 1}
+                                            </Text>
+                                        </View>
+
+                                        {/* Ciseaux entre les pages (sauf pour la dernière) */}
+                                        {index < pageCount - 1 && (
+                                            <Pressable 
+                                                onPress={() => {
+                                                    setSplitPoints(prev => 
+                                                        prev.includes(index) 
+                                                            ? prev.filter(i => i !== index)
+                                                            : [...prev, index].sort((a,b) => a - b)
+                                                    );
+                                                }}
+                                                style={({ hovered }: any) => [
+                                                    { 
+                                                        padding: 8, 
+                                                        marginHorizontal: 8,
+                                                        borderRadius: 20,
+                                                        backgroundColor: hasCutAfter ? colors.danger : 'transparent',
+                                                        borderWidth: hasCutAfter ? 0 : 1,
+                                                        borderColor: colors.border,
+                                                        borderStyle: 'dashed' as any
+                                                    },
+                                                    hovered && { backgroundColor: hasCutAfter ? colors.dangerHovered : 'rgba(255,255,255,0.05)' }
+                                                ]}
+                                            >
+                                                <Ionicons name="cut-outline" size={20} color={hasCutAfter ? '#fff' : colors.textMuted} />
+                                            </Pressable>
+                                        )}
+                                    </View>
+                                );
+                            })}
+                        </View>
+                    </ScrollView>
                 </View>
             </SafeAreaView>
         );

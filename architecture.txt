@@ -743,3 +743,16 @@ Afin de rendre l'interface de conversion parfaitement fluide sur le Web et répo
    - Problème des noms de fichiers extrêmes : Certains fichiers (ex: `li_assicurazione_RSM_Assistenza_cittadini_stranieri_Extra_U.E...`) ne possédaient aucun espace, brisant le layout et rendant le composant gigantesque.
    - Solution : Application stricte de `<Text numberOfLines={1} ellipsizeMode="middle" width="100%">`. Cela force la troncature (`...`) au centre du nom de fichier, préservant ainsi l'extension visible à droite (ex: `.pdf`) sans casser la grille.
    - Guidage Utilisateur (Affordance) : Ajout d'un encart visuel dynamique sous le titre ("Maintenez et glissez un fichier pour modifier l'ordre") couplé à une icône de permutation (`swap-horizontal-outline`). Ce composant ne s'affiche intelligemment que lorsque la liste contient plus d'un élément (`selectedFiles.length > 1`).
+
+### Outil Diviser PDF (Split-PDF) : Traitement 100% Client-Side
+1. Objectif de performance absolue :
+   - Pour éviter de télécharger un PDF potentiellement lourd de 50 pages sur le backend juste pour compter ses pages, nous utilisons une architecture "Zéro Serveur" en exécutant le fractionnement localement sur le Web et Mobile.
+2. Dépendances de manipulation :
+   - `pdf-lib` : Chargé dynamiquement (`await import('pdf-lib')`) uniquement lorsque l'outil est sélectionné pour ne pas alourdir le bundle initial. Il permet d'ouvrir le buffer du fichier original, lire le nombre de pages (`getPageCount()`) et copier les pages voulues vers de nouveaux documents virtuels.
+   - `jszip` : Déjà existant dans le projet. Permet d'encapsuler la volée des mini-PDF (générés sous forme d'Uint8Array) dans une archive sans appel API.
+3. Représentation Graphique de la Coupe :
+   - Un état `split_editor` remplace le `staging` pour la division PDF.
+   - Une grille rend itérativement les pages de `0` à `pageCount - 1`. 
+   - Entre chaque page (index `i`), un composant de coupe (icône "Ciseaux") s'affiche. Si l'utilisateur clique dessus, l'index `i` est poussé dans le tableau de statut `splitPoints`. Le style est alors mis à jour (couleur `danger` : rouge, au lieu de `border-dashed`).
+4. Téléchargement Universel :
+   - L'archive finale (`zip.generateAsync({ type: 'blob' })`) est servie différemment. Sur Web, nous utilisons `URL.createObjectURL(blob)` injecté dans une balise `<a>`. Sur Mobile, c'est l'API native `expo-file-system` qui écrit le base64 dans `cacheDirectory`, puis invoque `expo-sharing` pour l'enregistrement.
