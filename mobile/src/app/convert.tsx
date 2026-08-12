@@ -1,7 +1,7 @@
 /**
  * app/convert.tsx
  *
- * Écran de conversion et traitement de fichiers.
+ * Écran de conversion et traitement de fichiers avec interface de Staging.
  */
 
 import { useState, useEffect } from 'react';
@@ -53,7 +53,7 @@ const FILE_TOOLS = [
     { id: 'word-to-pdf', category: 'Convertir vers PDF', label: 'Word → PDF', description: 'Convertissez vos documents DOCX en PDF parfait.', icon: 'document-text-outline', endpoint: '/convert/word-to-pdf', mimeTypes: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'], outputExt: 'pdf' },
     { id: 'pptx-to-pdf', category: 'Convertir vers PDF', label: 'PPTX → PDF', description: 'Transformez vos présentations en PDF.', icon: 'easel-outline', endpoint: '/convert/pptx-to-pdf', mimeTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'], outputExt: 'pdf' },
     { id: 'excel-to-pdf', category: 'Convertir vers PDF', label: 'Excel → PDF', description: 'Convertissez vos feuilles de calcul en PDF.', icon: 'grid-outline', endpoint: '/convert/excel-to-pdf', mimeTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'], outputExt: 'pdf' },
-    { id: 'image-to-pdf', category: 'Convertir vers PDF', label: 'JPG → PDF', description: 'Transformez vos photos et images en document PDF.', icon: 'images-outline', endpoint: '/convert/image-to-pdf', mimeTypes: ['image/*'], outputExt: 'pdf' },
+    { id: 'image-to-pdf', category: 'Convertir vers PDF', label: 'JPG → PDF', description: 'Transformez vos photos et images en document PDF.', icon: 'images-outline', endpoint: '/convert/image-to-pdf', mimeTypes: ['image/*'], outputExt: 'pdf', multiple: true },
     { id: 'html-to-pdf', category: 'Convertir vers PDF', label: 'HTML → PDF', description: 'Convertissez des pages web en fichiers PDF.', icon: 'globe-outline', endpoint: '/convert/html-to-pdf', mimeTypes: ['text/html'], outputExt: 'pdf' },
     { id: 'pages-to-pdf', category: 'Convertir vers PDF', label: 'Pages → PDF', description: 'Convertissez les documents Apple Pages.', icon: 'document-text-outline', endpoint: '/convert/pages-to-pdf', mimeTypes: ['application/vnd.apple.pages'], outputExt: 'pdf' },
     { id: 'keynote-to-pdf', category: 'Convertir vers PDF', label: 'Keynote → PDF', description: 'Convertissez les présentations Apple Keynote.', icon: 'easel-outline', endpoint: '/convert/keynote-to-pdf', mimeTypes: ['application/vnd.apple.keynote'], outputExt: 'pdf' },
@@ -93,9 +93,10 @@ export default function ConvertScreen() {
     const { t } = useTranslation();
     const styles = getStyles(colors);
 
-    const [step, setStep] = useState<'menu' | 'processing' | 'done'>('menu');
+    const [step, setStep] = useState<'menu' | 'staging' | 'processing' | 'done'>('menu');
     const [activeTab, setActiveTab] = useState<'files' | 'media'>('files');
     const [selectedService, setSelectedService] = useState<any>(null);
+    const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
     const [fileName, setFileName] = useState('');
     const [resultUrl, setResultUrl] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -125,34 +126,75 @@ export default function ConvertScreen() {
 
             if (res.canceled) return;
 
-            const file = res.assets[0];
-            setFileName(file.name);
-            await processFile(service, file);
+            setSelectedFiles(res.assets);
+            setStep('staging');
 
         } catch (error) {
             Alert.alert(t('common.error'), 'Impossible de sélectionner le fichier.');
         }
     };
 
-    const processFile = async (service: any, file: any) => {
+    const handleAddMoreFiles = async () => {
+        try {
+            const res = await DocumentPicker.getDocumentAsync({
+                type: selectedService.mimeTypes,
+                copyToCacheDirectory: true,
+                multiple: selectedService.multiple || false,
+            });
+
+            if (res.canceled) return;
+            
+            setSelectedFiles(prev => [...prev, ...res.assets]);
+        } catch (error) {
+            Alert.alert(t('common.error'), 'Impossible d\\'ajouter les fichiers.');
+        }
+    };
+
+    const handleRemoveFile = (indexToRemove: number) => {
+        setSelectedFiles(prev => prev.filter((_, index) => index !== indexToRemove));
+    };
+
+    const processFiles = async () => {
+        if (selectedFiles.length === 0) return;
+        
         setStep('processing');
+        
+        // Nom sympa pour le fichier de sortie
+        let baseName = selectedFiles[0].name.split('.').slice(0, -1).join('.');
+        if (selectedFiles.length > 1 && selectedService.id === 'merge-pdf') {
+            baseName += '_fusionne';
+        } else {
+            baseName += '_converti';
+        }
+        setFileName(baseName);
+
         try {
             const formData = new FormData();
-            const response_file = await fetch(file.uri);
-            const blob = await response_file.blob();
-            formData.append('file', blob, file.name);
+            
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                const response_file = await fetch(file.uri);
+                const blob = await response_file.blob();
+                
+                // Si le service supporte le multi-fichier, la route attend 'files'
+                // Sinon on envoie 'file' (et on se limite au premier fichier dans ce cas)
+                const fieldName = selectedService.multiple ? 'files' : 'file';
+                formData.append(fieldName, blob, file.name);
+                
+                if (!selectedService.multiple) break; 
+            }
 
-            if (service.id === 'rotate-pdf') {
+            if (selectedService.id === 'rotate-pdf') {
                 formData.append('rotation', '90');
             }
-            if (service.id === 'watermark-pdf') {
+            if (selectedService.id === 'watermark-pdf') {
                 formData.append('text', 'CONFIDENTIEL');
             }
-            if (service.id === 'protect-pdf') {
+            if (selectedService.id === 'protect-pdf') {
                 formData.append('password', 'faas2024');
             }
 
-            const response = await fetch(`${SERVER_URL}${service.endpoint}`, {
+            const response = await fetch(`${SERVER_URL}${selectedService.endpoint}`, {
                 method: 'POST',
                 body: formData,
             });
@@ -169,22 +211,23 @@ export default function ConvertScreen() {
         } catch (error) {
             Alert.alert(
                 t('common.error'),
-                'Le traitement a échoué. Vérifiez votre fichier et réessayez.'
+                'Le traitement a échoué. Vérifiez vos fichiers et réessayez.'
             );
-            setStep('menu');
+            setStep('staging'); // On retourne sur l'écran de staging en cas d'erreur
         }
     };
 
     const downloadResult = () => {
         const a = document.createElement('a');
         a.href = resultUrl;
-        a.download = `faas-${selectedService.id}.${selectedService.outputExt}`;
+        a.download = `${fileName}.${selectedService.outputExt}`;
         a.click();
     };
 
     const reset = () => {
         setStep('menu');
         setSelectedService(null);
+        setSelectedFiles([]);
         setFileName('');
         setResultUrl('');
     };
@@ -296,6 +339,76 @@ export default function ConvertScreen() {
             </SafeAreaView>
         );
     }
+    
+    if (step === 'staging') {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                <View style={styles.contentWrapper}>
+                    <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', paddingHorizontal: 32, paddingTop: 32, position: 'absolute', top: 0, zIndex: 20 }}>
+                        <Pressable 
+                            style={({ pressed, hovered }: any) => [
+                                styles.backButton,
+                                (pressed || hovered) && styles.backButtonHovered,
+                                { position: 'relative', top: 0, left: 0 }
+                            ]}
+                            onPress={reset}>
+                            <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                            <Text style={styles.backButtonText}>Retour aux outils</Text>
+                        </Pressable>
+                    </View>
+
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { alignItems: 'center', paddingTop: 120 }]}>
+                        <View style={{ alignItems: 'center', marginBottom: 40 }}>
+                            <View style={{ width: 80, height: 80, borderRadius: 24, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 1, borderColor: colors.border }}>
+                                <Ionicons name={selectedService.icon as any} size={40} color={colors.primary} />
+                            </View>
+                            <Text style={styles.title}>{selectedService.label}</Text>
+                            <Text style={styles.subtitle}>Vérifiez vos fichiers avant de lancer le traitement</Text>
+                        </View>
+
+                        <View style={{ width: '100%', maxWidth: 600, gap: 12, marginBottom: 32 }}>
+                            {selectedFiles.map((file, index) => (
+                                <View key={index} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}>
+                                    <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+                                        <Ionicons name="document-text-outline" size={24} color={colors.text} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ color: colors.text, fontSize: 16, fontWeight: '600' }} numberOfLines={1}>{file.name}</Text>
+                                        {file.size && <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 4 }}>{(file.size / 1024 / 1024).toFixed(2)} MB</Text>}
+                                    </View>
+                                    <Pressable onPress={() => handleRemoveFile(index)} style={{ padding: 12 }}>
+                                        <Ionicons name="trash-outline" size={22} color="#ff4444" />
+                                    </Pressable>
+                                </View>
+                            ))}
+                            
+                            {selectedFiles.length === 0 && (
+                                <Text style={[styles.subtitle, { padding: 20 }]}>Aucun fichier sélectionné.</Text>
+                            )}
+                        </View>
+
+                        <View style={{ flexDirection: 'row', gap: 16, width: '100%', maxWidth: 600 }}>
+                            {selectedService.multiple && (
+                                <Pressable style={styles.secondaryButton} onPress={handleAddMoreFiles}>
+                                    <Ionicons name="add-outline" size={20} color={colors.text} />
+                                    <Text style={styles.secondaryButtonText}>Ajouter des fichiers</Text>
+                                </Pressable>
+                            )}
+                            <Pressable 
+                                style={[styles.primaryButton, selectedFiles.length === 0 && { opacity: 0.5 }]} 
+                                onPress={processFiles}
+                                disabled={selectedFiles.length === 0}
+                            >
+                                <Ionicons name="flash-outline" size={20} color="#ffffff" />
+                                <Text style={styles.primaryButtonText}>{selectedService.label}</Text>
+                            </Pressable>
+                        </View>
+                    </ScrollView>
+                </View>
+            </SafeAreaView>
+        );
+    }
 
     if (step === 'processing') {
         return (
@@ -307,7 +420,7 @@ export default function ConvertScreen() {
                     </View>
                     <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={styles.processingTitle}>{t('convert.processing')}</Text>
-                    <Text style={styles.processingFile}>{fileName}</Text>
+                    <Text style={styles.processingFile}>{selectedFiles.length > 1 ? `${selectedFiles.length} fichiers en cours...` : fileName}</Text>
                 </View>
             </SafeAreaView>
         );
@@ -319,7 +432,7 @@ export default function ConvertScreen() {
             <View style={styles.centerContent}>
                 <Ionicons name="checkmark-circle" size={80} color={colors.success} />
                 <Text style={styles.successTitle}>{t('convert.done')}</Text>
-                <Text style={styles.successFile}>{fileName}</Text>
+                <Text style={styles.successFile}>{fileName}.{selectedService.outputExt}</Text>
 
                 <Pressable style={styles.downloadButton} onPress={downloadResult}>
                     <Ionicons name="download-outline" size={20} color="#ffffff" />
@@ -594,5 +707,41 @@ const getStyles = (colors: any) => StyleSheet.create({
         color: colors.text,
         fontSize: 16,
         fontWeight: '600',
+    },
+
+    secondaryButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        paddingVertical: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+
+    secondaryButtonText: {
+        color: colors.text,
+        fontWeight: '600',
+        fontSize: 16,
+    },
+
+    primaryButton: {
+        flex: 2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: colors.primary,
+        paddingVertical: 16,
+        borderRadius: 16,
+    },
+
+    primaryButtonText: {
+        color: '#ffffff',
+        fontWeight: '700',
+        fontSize: 16,
     },
 });
