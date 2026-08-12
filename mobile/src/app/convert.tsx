@@ -26,8 +26,6 @@ import { Session } from '@supabase/supabase-js';
 import ActionCard from '../components/ActionCard';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { PDFDocument } from 'pdf-lib';
-import JSZip from 'jszip';
 
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
@@ -118,14 +116,19 @@ export default function ConvertScreen() {
                 const response = await fetch(file.uri);
                 arrayBuffer = await response.arrayBuffer();
             }
+            const { PDFDocument } = require('pdf-lib');
             const pdfDoc = await PDFDocument.load(arrayBuffer);
             const count = pdfDoc.getPageCount();
             setPageCount(count);
             setPdfDocRef(pdfDoc);
             setSplitPoints([]);
-        } catch (e) {
+        } catch (e: any) {
             console.error("Error in initSplitPDF:", e);
-            Alert.alert("Erreur", "Impossible de lire ce PDF. Veuillez réessayer.");
+            if (Platform.OS === 'web') {
+                window.alert("Erreur: Impossible de charger l'outil PDF. Détails: " + (e.message || String(e)));
+            } else {
+                Alert.alert("Erreur", "Impossible de lire ce PDF. Veuillez réessayer.");
+            }
             setStep('tool_intro');
         }
     };
@@ -181,6 +184,9 @@ export default function ConvertScreen() {
         if (!pdfDocRef) return;
         setIsSplitting(true);
         try {
+            const { PDFDocument } = require('pdf-lib');
+            const JSZip = require('jszip');
+            
             const zip = new JSZip();
             let currentDoc = await PDFDocument.create();
             let docIndex = 1;
@@ -226,11 +232,16 @@ export default function ConvertScreen() {
                     }
                 };
             }
+            setPdfDocRef(null);
             setStep('done');
             setResultUrl('Téléchargement terminé.');
-        } catch (e) {
-            console.error(e);
-            Alert.alert("Erreur", "Une erreur est survenue lors de la division.");
+        } catch (e: any) {
+            console.error("Split error:", e);
+            if (Platform.OS === 'web') {
+                window.alert("Erreur lors du découpage: " + (e.message || String(e)));
+            } else {
+                Alert.alert("Erreur", "Une erreur est survenue lors du découpage.");
+            }
         } finally {
             setIsSplitting(false);
         }

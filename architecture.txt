@@ -758,3 +758,18 @@ Afin de rendre l'interface de conversion parfaitement fluide sur le Web et répo
    - Entre chaque page (index `i`), un composant de coupe (icône "Ciseaux") s'affiche. Si l'utilisateur clique dessus, l'index `i` est poussé dans le tableau de statut `splitPoints`. Le style est alors mis à jour (couleur `danger` : rouge, au lieu de `border-dashed`).
 4. Téléchargement Universel :
    - L'archive finale (`zip.generateAsync({ type: 'blob' })`) est servie différemment. Sur Web, nous utilisons `URL.createObjectURL(blob)` injecté dans une balise `<a>`. Sur Mobile, c'est l'API native `expo-file-system` qui écrit le base64 dans `cacheDirectory`, puis invoque `expo-sharing` pour l'enregistrement.
+
+---
+## HISTORIQUE DE CORRECTION DES BUGS ET ÉVOLUTIONS (APPEND-ONLY)
+
+### 12 Août 2026 - Crash Silencieux "Diviser PDF" et Vercel SSG
+- **Contexte :** Implémentation de la fonction "Diviser PDF" en local avec `pdf-lib` et `jszip`.
+- **Problème n°1 (Fausse Piste de l'Import Dynamique) :** L'application ne réagissait pas au clic sur le bouton d'ouverture. La cause initiale était que l'import dynamique `await import('pdf-lib')` échouait en silence car le module `pdf-lib` manquait dans le `package.json` sur Vercel (oubli du commit `package.json`). L'erreur silencieuse renvoyait l'utilisateur à l'état initial sans message clair.
+- **Problème n°2 (Crash SSG avec Imports Statiques) :** En pensant résoudre l'erreur d'import dynamique, un import statique `import { PDFDocument } from 'pdf-lib'` a été placé en haut de `convert.tsx`. Conséquence : une fois le `package.json` poussé, le déploiement Vercel a réussi, **mais la page `/convert` est devenue totalement blanche sur le navigateur client**. Raison technique : les imports statiques de modules Node.js lourds ou non conçus pour être évalués au top-level dans le contexte du Static Rendering (SSG) d'Expo Web crashent le rendu global de la page.
+- **Problème n°3 (ChunkLoadError avec Imports Dynamiques) :** Le retour à l'import asynchrone `await import('pdf-lib')` a continué de causer des échecs (absence de réaction) car le bundler Metro/Webpack de Vercel peinait à générer et résoudre correctement les chunks asynchrones (ChunkLoadError) de cette lourde librairie dans le navigateur.
+- **Solution Définitive :** Remplacement de `await import(...)` par des `require('...')` synchrones mais *inline* (à l'intérieur du gestionnaire de clic `initSplitPDF` et `handleSplitPDF`). 
+  *Avantages de cette approche :*
+  1. Le `require` force Metro à inclure la dépendance dans le bundle principal (fini les 404 ChunkLoadErrors).
+  2. Puisqu'il est invoqué à l'intérieur d'une fonction, il n'est **pas évalué** lors du SSG de Vercel. Le crash de la page blanche est évité.
+  3. L'exécution est robuste et instantanée au clic.
+- **Bonus UI :** Intégration d'un `window.alert` explicite pour le Web afin de s'assurer qu'aucune erreur ne sera jamais silencieuse à l'avenir.
