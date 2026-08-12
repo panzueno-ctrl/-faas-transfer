@@ -702,3 +702,16 @@ Une série de 5 audits professionnels supplémentaires a été validée avec suc
 - Audit Légal et Licences (Compliance) : 98% de dépendances MIT/Apache. L'exception Ghostscript (AGPL) est sécurisée car isolée via un appel `exec` asynchrone non-statique dans Docker, préservant le caractère propriétaire de l'IP Node.js.
 - Audit de Qualité du Code (Linter & TS) : Codebase typée strictement et saine, sans utilisation de `any` injustifiée, prêt pour l'intégration de nouveaux collaborateurs.
 - Audit i18n : Application 100% multilingue prête via les bundles `react-i18next`.
+
+
+=== MISE À JOUR : INTERFACE SMALLPDF ===
+Implémentation exacte du flux SmallPDF dans mobile/src/app/convert.tsx :
+1. Ajout de la page d'introduction de l'outil (tool_intro) avec grand bouton " Choisir les fichiers\.
+
+
+=== MISE À JOUR : AUDIT UI/UX PREMIUM ===
+Application de la règle de design UI/UX stricte sur tous les écrans (index, send, receive, auth, history).
+1. Standardisation des borderRadius à 16px pour tous les boutons principaux, secondaires et inputs.
+2. Standardisation des paddingVertical à 16px pour un touché mobile optimal et homogène.
+3. Amélioration des flex-scaling (flex: 1 vs flex: 1.5) pour éviter l'écrasement des textes sur petits écrans.
+4. Centralisation des styles premium (ombres, bordures) pour un rendu professionnel.

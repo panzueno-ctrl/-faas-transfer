@@ -14,6 +14,7 @@ import {
     Alert,
     ActivityIndicator,
     TextInput,
+    Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -144,6 +145,28 @@ export default function ConvertScreen() {
         setSelectedFiles(prev => prev.filter((_, index) => index !== indexToRemove));
     };
 
+    const handleMoveUp = (index: number) => {
+        if (index === 0) return;
+        setSelectedFiles(prev => {
+            const newFiles = [...prev];
+            const temp = newFiles[index];
+            newFiles[index] = newFiles[index - 1];
+            newFiles[index - 1] = temp;
+            return newFiles;
+        });
+    };
+
+    const handleMoveDown = (index: number) => {
+        if (index === selectedFiles.length - 1) return;
+        setSelectedFiles(prev => {
+            const newFiles = [...prev];
+            const temp = newFiles[index];
+            newFiles[index] = newFiles[index + 1];
+            newFiles[index + 1] = temp;
+            return newFiles;
+        });
+    };
+
     // 3. L'utilisateur lance le traitement depuis le staging
     const processFiles = async () => {
         if (selectedFiles.length === 0) return;
@@ -164,8 +187,13 @@ export default function ConvertScreen() {
             
             for (let i = 0; i < selectedFiles.length; i++) {
                 const file = selectedFiles[i];
-                const response_file = await fetch(file.uri);
-                const blob = await response_file.blob();
+                let blob;
+                if (Platform.OS === 'web' && file.file) {
+                    blob = file.file;
+                } else {
+                    const response_file = await fetch(file.uri);
+                    blob = await response_file.blob();
+                }
                 
                 // Si le service supporte le multi-fichier, la route attend 'files'
                 // Sinon on envoie 'file' (et on se limite au premier fichier dans ce cas)
@@ -423,6 +451,26 @@ export default function ConvertScreen() {
                                             {file.size ? (file.size / 1024 / 1024).toFixed(2) + ' MB' : 'Taille inconnue'}
                                         </Text>
                                     </View>
+
+                                    {selectedService.multiple && (
+                                        <View style={{ flexDirection: 'row', marginRight: 12 }}>
+                                            <Pressable 
+                                                onPress={() => handleMoveUp(index)} 
+                                                style={({ hovered }) => [{ padding: 8, borderRadius: 8 }, hovered && { backgroundColor: 'rgba(255,255,255,0.05)' }]}
+                                                disabled={index === 0}
+                                            >
+                                                <Ionicons name="arrow-up" size={20} color={index === 0 ? colors.border : colors.text} />
+                                            </Pressable>
+                                            <Pressable 
+                                                onPress={() => handleMoveDown(index)} 
+                                                style={({ hovered }) => [{ padding: 8, borderRadius: 8 }, hovered && { backgroundColor: 'rgba(255,255,255,0.05)' }]}
+                                                disabled={index === selectedFiles.length - 1}
+                                            >
+                                                <Ionicons name="arrow-down" size={20} color={index === selectedFiles.length - 1 ? colors.border : colors.text} />
+                                            </Pressable>
+                                        </View>
+                                    )}
+
                                     <Pressable 
                                         onPress={() => handleRemoveFile(index)} 
                                         style={({ hovered }) => [{ padding: 12, borderRadius: 8 }, hovered && { backgroundColor: 'rgba(255,68,68,0.1)' }]}
