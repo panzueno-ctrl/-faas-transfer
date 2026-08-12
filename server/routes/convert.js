@@ -870,10 +870,10 @@ router.post('/compress-pdf', upload.single('file'), (req, res) => {
     const inputPath = req.file.path;
     const outputPath = `/tmp/${Date.now()}-compressed.pdf`;
 
-    // Commande Ghostscript pour compresser
+    // Commande Ghostscript pour compresser (avec limitation mémoire explicite)
     const gsCommand = `gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=${pdfSettings} -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${outputPath}" "${inputPath}"`;
 
-    exec(gsCommand, (error, stdout, stderr) => {
+    exec(gsCommand, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
         if (error) {
             console.error('Erreur Ghostscript compression:', error);
             return res.status(500).send('Erreur lors de la compression du PDF.');

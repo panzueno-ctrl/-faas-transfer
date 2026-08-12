@@ -333,10 +333,16 @@ export default function ConvertScreen() {
                 formData.append('compressionLevel', compressionLevel);
             }
 
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 secondes de timeout (pour Render)
+
             const response = await fetch(`${SERVER_URL}${selectedService.endpoint}`, {
                 method: 'POST',
                 body: formData,
+                signal: controller.signal
             });
+
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
                 throw new Error('Erreur serveur');
@@ -347,14 +353,16 @@ export default function ConvertScreen() {
             setResultUrl(url);
             setStep('done');
 
-        } catch (error) {
+        } catch (error: any) {
+            let errorMsg = 'Le traitement a échoué. Vérifiez vos fichiers et réessayez.';
+            if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
+                errorMsg = 'Le serveur (hébergement gratuit) met trop de temps à répondre pour ce fichier lourd. Le délai a expiré.';
+            }
+
             if (Platform.OS === 'web') {
-                window.alert('Le traitement a échoué. Vérifiez vos fichiers et réessayez.');
+                window.alert(errorMsg);
             } else {
-                Alert.alert(
-                    t('common.error'),
-                    'Le traitement a échoué. Vérifiez vos fichiers et réessayez.'
-                );
+                Alert.alert(t('common.error'), errorMsg);
             }
             setStep('staging');
         }
