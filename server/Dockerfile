@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y \
     poppler-utils \
     tesseract-ocr \
     tesseract-ocr-fra \
+    ghostscript \
+    zip \
     && rm -rf /var/lib/apt/lists/*
 
 # Fix pour autoriser ImageMagick à lire/écrire des PDF (nécessaire sur Debian/Ubuntu récent)

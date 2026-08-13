@@ -390,8 +390,9 @@ router.post('/split-pdf', upload.single('file'), async (req, res) => {
 
         // On sauvegarde chaque PDF temporairement puis on zippe
         const tempFiles = [];
+        const timestamp = Date.now();
         for (let i = 0; i < splitPdfs.length; i++) {
-            const tempPath = `/tmp/page-${i + 1}.pdf`;
+            const tempPath = `/tmp/${timestamp}-page-${i + 1}.pdf`;
             fs.writeFileSync(tempPath, splitPdfs[i]);
             tempFiles.push(tempPath);
         }

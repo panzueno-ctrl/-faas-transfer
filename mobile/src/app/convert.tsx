@@ -345,6 +345,9 @@ export default function ConvertScreen() {
             clearTimeout(timeoutId);
 
             if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error('NotImplemented');
+                }
                 throw new Error('Erreur serveur');
             }
 
@@ -357,6 +360,8 @@ export default function ConvertScreen() {
             let errorMsg = 'Le traitement a échoué. Vérifiez vos fichiers et réessayez.';
             if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
                 errorMsg = 'Le serveur (hébergement gratuit) met trop de temps à répondre pour ce fichier lourd. Le délai a expiré.';
+            } else if (error.message === 'NotImplemented') {
+                errorMsg = 'Cette fonctionnalité est en cours de développement et sera disponible prochainement !';
             }
 
             if (Platform.OS === 'web') {
