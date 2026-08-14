@@ -35,6 +35,7 @@ import RotationSelector, { RotationAngle } from '../components/RotationSelector'
 import ConversionOptions, { ConversionQuality } from '../components/ConversionOptions';
 import NumberingSelector, { NumberingConfig } from '../components/NumberingSelector';
 import OcrLanguageSelector, { OcrLanguage } from '../components/OcrLanguageSelector';
+import { PDFDocument } from 'pdf-lib';
 
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
@@ -138,7 +139,6 @@ export default function ConvertScreen() {
                 const response = await fetch(file.uri);
                 arrayBuffer = await response.arrayBuffer();
             }
-            const { PDFDocument } = require('pdf-lib/dist/pdf-lib.min.js');
             const pdfDoc = await PDFDocument.load(arrayBuffer);
             const count = pdfDoc.getPageCount();
             setPageCount(count);
@@ -206,7 +206,6 @@ export default function ConvertScreen() {
         if (!pdfDocRef) return;
         setIsSplitting(true);
         try {
-            const { PDFDocument } = require('pdf-lib/dist/pdf-lib.min.js');
             const JSZip = require('jszip');
             
             const zip = new JSZip();
