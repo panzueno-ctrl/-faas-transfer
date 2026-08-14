@@ -170,7 +170,7 @@ const addWatermark = async (filePath, text, position = 'diagonal') => {
 // Numéroter les pages d'un PDF
 // filePath = chemin vers le PDF
 // ─────────────────────────────────────────────
-const numberPages = async (filePath) => {
+const numberPages = async (filePath, position = 'bottom-center', format = 'total') => {
 
     const pdfBytes = fs.readFileSync(filePath);
     const pdf = await PDFDocument.load(pdfBytes);
@@ -179,12 +179,30 @@ const numberPages = async (filePath) => {
     const totalPages = pages.length;
 
     pages.forEach((page, i) => {
-        const { width } = page.getSize();
+        const { width, height } = page.getSize();
+        
+        let text = '';
+        if (format === 'simple') text = `${i + 1}`;
+        else if (format === 'page') text = `Page ${i + 1}`;
+        else text = `${i + 1} / ${totalPages}`;
 
-        // On ajoute le numéro de page en bas au centre
-        page.drawText(`${i + 1} / ${totalPages}`, {
-            x: width / 2 - 20,
-            y: 20,
+        let x = width / 2 - (text.length * 4);
+        let y = 20;
+
+        if (position === 'top-center') {
+            y = height - 30;
+        } else if (position === 'top-right') {
+            x = width - (text.length * 8) - 20;
+            y = height - 30;
+        } else if (position === 'bottom-right') {
+            x = width - (text.length * 8) - 20;
+            y = 20;
+        }
+
+        // On ajoute le numéro de page
+        page.drawText(text, {
+            x,
+            y,
             size: 12,
             font,
             color: rgb(0, 0, 0),

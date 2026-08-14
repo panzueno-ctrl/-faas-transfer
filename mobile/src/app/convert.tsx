@@ -33,6 +33,8 @@ import WatermarkConfig from '../components/WatermarkConfig';
 import SplitSelector, { SplitMode } from '../components/SplitSelector';
 import RotationSelector, { RotationAngle } from '../components/RotationSelector';
 import ConversionOptions, { ConversionQuality } from '../components/ConversionOptions';
+import NumberingSelector, { NumberingConfig } from '../components/NumberingSelector';
+import OcrLanguageSelector, { OcrLanguage } from '../components/OcrLanguageSelector';
 
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
@@ -121,6 +123,8 @@ export default function ConvertScreen() {
     const [splitMode, setSplitMode] = useState<SplitMode>('all');
     const [rotationAngle, setRotationAngle] = useState<RotationAngle>(90);
     const [conversionQuality, setConversionQuality] = useState<ConversionQuality>('standard');
+    const [numberingConfig, setNumberingConfig] = useState<NumberingConfig>({ position: 'bottom-center', format: 'total' });
+    const [ocrLang, setOcrLang] = useState<OcrLanguage>('fra');
     
     const [pdfDocRef, setPdfDocRef] = useState<any>(null);
     const [isSplitting, setIsSplitting] = useState(false);
@@ -348,6 +352,13 @@ export default function ConvertScreen() {
             }
             if (selectedService.id === 'split-pdf') {
                 formData.append('splitMode', splitMode);
+            }
+            if (selectedService.id === 'number-pdf') {
+                formData.append('position', numberingConfig.position);
+                formData.append('format', numberingConfig.format);
+            }
+            if (selectedService.id === 'ocr-pdf') {
+                formData.append('lang', ocrLang);
             }
             if (selectedService.id === 'pdf-to-image' || selectedService.id === 'image-to-pdf') {
                 formData.append('quality', conversionQuality);
@@ -829,6 +840,14 @@ export default function ConvertScreen() {
 
                         {selectedService.id === 'rotate-pdf' && (
                             <RotationSelector onChange={setRotationAngle} />
+                        )}
+                        
+                        {selectedService.id === 'number-pdf' && (
+                            <NumberingSelector onChange={setNumberingConfig} />
+                        )}
+
+                        {selectedService.id === 'ocr-pdf' && (
+                            <OcrLanguageSelector onChange={setOcrLang} />
                         )}
 
                         {(selectedService.id === 'pdf-to-image' || selectedService.id === 'image-to-pdf') && (

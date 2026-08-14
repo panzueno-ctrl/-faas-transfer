@@ -489,7 +489,9 @@ router.post('/number-pdf', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
 
     try {
-        const numberedBytes = await numberPages(req.file.path);
+        const position = req.body.position || 'bottom-center';
+        const format = req.body.format || 'total';
+        const numberedBytes = await numberPages(req.file.path, position, format);
 
         res.setHeader('Content-Disposition', 'attachment; filename="numbered.pdf"');
         res.setHeader('Content-Type', 'application/pdf');
@@ -559,12 +561,12 @@ router.post('/ocr-image', upload.single('file'), async (req, res) => {
 // POST /convert/ocr-pdf
 // Extrait le texte d'un PDF via Tesseract
 // Chaque page du PDF est convertie en image puis analysée
-// Query params: lang (default: eng, fra pour français)
+// Query params or body params: lang (default: eng, fra pour français)
 // ─────────────────────────────────────────────
 router.post('/ocr-pdf', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
 
-    const lang = req.query.lang || 'eng';
+    const lang = req.body.lang || req.query.lang || 'eng';
 
     try {
         const text = await extractTextFromPDF(req.file.path, lang);
