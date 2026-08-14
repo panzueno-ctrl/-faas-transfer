@@ -831,3 +831,21 @@ Afin de rendre l'interface de conversion parfaitement fluide sur le Web et répo
   - **Problème Détecté :** L'interface frontend (mobile/web) propose 42 outils de conversion dans la grille, mais le backend ne supporte actuellement que 29 routes. Les clics sur les outils manquants (ex: Modifier PDF, Signer PDF) provoquaient une erreur 404 (Non Trouvé) incompréhensible ou une boucle infinie de chargement.
   - **Décision Technique pour maintenir l'esthétique de l'App :** Au lieu de casser la grille et de supprimer 13 icônes qui donnent un côté premium à l'application, nous avons mis en place un `Catch` d'erreur 404 spécifique dans `convert.tsx`. Si l'utilisateur clique sur une fonctionnalité non codée côté serveur, il verra une alerte bienveillante : *"Cette fonctionnalité est en cours de développement et sera disponible prochainement !"*.
 - **Statut Final :** Le module de conversion est robuste, les dépendances sont corrigées, et l'UX est protégée contre les erreurs 404. Le code est sécurisé pour la production.
+
+### Samedi, 15 Août 2026 à 01h52 et 45 secondes - Walkthrough : Mission Accomplie sur l'UX Premium des Outils de Conversion
+- **Contexte :** Implémentation de la dernière vague d'interfaces utilisateur interactives pour chaque outil de conversion, rivalisant avec Smallpdf/iLovePDF.
+- **Nouveaux Composants UI Créés :**
+  - `PasswordProtector.tsx` : Champ de saisie avec jauge dynamique de force de mot de passe.
+  - `WatermarkConfig.tsx` : Sélection de position et option rapide "CONFIDENTIEL".
+  - `SplitSelector.tsx` : Cartes interactives (Toutes, Paires, Impaires) pour filtrer les pages.
+  - `RotationSelector.tsx` : Boutons visuels (Gauche -90, Droite +90, Envers 180).
+  - `ConversionOptions.tsx` : Sélecteur de qualité d'image (Standard / HD).
+  - `NumberingSelector.tsx` : Grille de sélection pour placer les numéros (Haut/Bas, Droite/Centre) et définir le format.
+  - `OcrLanguageSelector.tsx` : Sélecteur de langues (FR, EN, ES, DE) avec drapeaux.
+- **Intégration Backend (pdfLib.js & convert.js) :** 
+  - Refonte de `addWatermark` pour cibler des coordonnées X/Y exactes.
+  - Refonte de `numberPages` pour ajuster la position.
+  - La route `/split-pdf` filtre dorénavant les numéros de page pour exclure les paires/impaires selon le cas, au lieu de tout zipper bêtement.
+  - La route d'OCR utilise `req.body.lang` injecté par le FormData.
+- **Bilan et Défis :** L'interface de `convert.tsx` a été complexifiée pour injecter dynamiquement le composant requis selon `selectedService.id`. Toutes ces modifications ont été testées et poussent le projet faas-transfer vers une expérience utilisateur ultra-premium et un backend parfaitement synchronisé.
+
