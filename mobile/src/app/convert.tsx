@@ -28,6 +28,11 @@ import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import PdfThumbnail from '../components/PdfThumbnail';
 import CompressionSelector, { CompressionLevel } from '../components/CompressionSelector';
+import PasswordProtector from '../components/PasswordProtector';
+import WatermarkConfig from '../components/WatermarkConfig';
+import SplitSelector, { SplitMode } from '../components/SplitSelector';
+import RotationSelector, { RotationAngle } from '../components/RotationSelector';
+import ConversionOptions, { ConversionQuality } from '../components/ConversionOptions';
 
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
@@ -109,6 +114,14 @@ export default function ConvertScreen() {
     
     // Compression state
     const [compressionLevel, setCompressionLevel] = useState<CompressionLevel>('recommended');
+    
+    // Premium UI states
+    const [pdfPassword, setPdfPassword] = useState('');
+    const [watermarkConfig, setWatermarkConfig] = useState({ text: '', position: 'diagonal' });
+    const [splitMode, setSplitMode] = useState<SplitMode>('all');
+    const [rotationAngle, setRotationAngle] = useState<RotationAngle>(90);
+    const [conversionQuality, setConversionQuality] = useState<ConversionQuality>('standard');
+    
     const [pdfDocRef, setPdfDocRef] = useState<any>(null);
     const [isSplitting, setIsSplitting] = useState(false);
 
@@ -321,16 +334,23 @@ export default function ConvertScreen() {
             }
 
             if (selectedService.id === 'rotate-pdf') {
-                formData.append('rotation', '90');
+                formData.append('rotation', rotationAngle.toString());
             }
             if (selectedService.id === 'watermark-pdf') {
-                formData.append('text', 'CONFIDENTIEL');
+                formData.append('text', watermarkConfig.text || 'CONFIDENTIEL');
+                formData.append('position', watermarkConfig.position);
             }
             if (selectedService.id === 'protect-pdf') {
-                formData.append('password', 'faas2024');
+                formData.append('password', pdfPassword || 'faas2024');
             }
             if (selectedService.id === 'compress-pdf') {
                 formData.append('compressionLevel', compressionLevel);
+            }
+            if (selectedService.id === 'split-pdf') {
+                formData.append('splitMode', splitMode);
+            }
+            if (selectedService.id === 'pdf-to-image' || selectedService.id === 'image-to-pdf') {
+                formData.append('quality', conversionQuality);
             }
 
             const controller = new AbortController();
@@ -792,6 +812,29 @@ export default function ConvertScreen() {
                                 value={compressionLevel}
                                 onChange={setCompressionLevel}
                                 fileSize={selectedFiles[0]?.size || 0}
+                            />
+                        )}
+
+                        {selectedService.id === 'protect-pdf' && (
+                            <PasswordProtector onChange={setPdfPassword} />
+                        )}
+
+                        {selectedService.id === 'watermark-pdf' && (
+                            <WatermarkConfig onChange={setWatermarkConfig} />
+                        )}
+
+                        {selectedService.id === 'split-pdf' && (
+                            <SplitSelector onChange={setSplitMode} />
+                        )}
+
+                        {selectedService.id === 'rotate-pdf' && (
+                            <RotationSelector onChange={setRotationAngle} />
+                        )}
+
+                        {(selectedService.id === 'pdf-to-image' || selectedService.id === 'image-to-pdf') && (
+                            <ConversionOptions 
+                                type={selectedService.id} 
+                                onChange={setConversionQuality} 
                             />
                         )}
 

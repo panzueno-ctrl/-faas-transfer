@@ -124,9 +124,12 @@ router.post('/pdf-to-image', upload.single('file'), (req, res) => {
     // Préfixe pour les fichiers de sortie — pdftoppm ajoute -1, -2, -3...
     const outputPrefix = `/tmp/${Date.now()}-page`;
 
+    // Gestion de la qualité (HD = 300 DPI, Standard = 150 DPI)
+    const quality = req.body.quality || 'standard';
+    const dpi = quality === 'hd' ? 300 : 150;
+
     // Commande pdftoppm pour convertir toutes les pages en images
-    // -r 150 = résolution 150 DPI (bon équilibre qualité/taille)
-    const command = `pdftoppm -${format === 'jpeg' ? 'jpeg' : 'png'} -r 150 "${inputPath}" "${outputPrefix}"`;
+    const command = `pdftoppm -${format === 'jpeg' ? 'jpeg' : 'png'} -r ${dpi} "${inputPath}" "${outputPrefix}"`;
 
     exec(command, (error) => {
         if (error) {
@@ -190,9 +193,13 @@ router.post('/image-to-pdf', upload.single('file'), (req, res) => {
 
     const inputPath = req.file.path;
     const pdfPath = `/tmp/${Date.now()}-output.pdf`;
+    
+    const quality = req.body.quality || 'standard';
+    const density = quality === 'hd' ? 300 : 150;
+    const jpegQuality = quality === 'hd' ? 100 : 75;
 
-    // Commande ImageMagick pour convertir l'image en PDF
-    const command = `convert "${inputPath}" "${pdfPath}"`;
+    // Commande ImageMagick pour convertir l'image en PDF avec paramètres de qualité
+    const command = `convert -density ${density} -quality ${jpegQuality} "${inputPath}" "${pdfPath}"`;
 
     exec(command, (error) => {
         if (error) {
@@ -391,8 +398,16 @@ router.post('/split-pdf', upload.single('file'), async (req, res) => {
         // On sauvegarde chaque PDF temporairement puis on zippe
         const tempFiles = [];
         const timestamp = Date.now();
+        const splitMode = req.body.splitMode || 'all';
+
         for (let i = 0; i < splitPdfs.length; i++) {
-            const tempPath = `/tmp/${timestamp}-page-${i + 1}.pdf`;
+            const pageNumber = i + 1;
+            const isEven = pageNumber % 2 === 0;
+
+            if (splitMode === 'even' && !isEven) continue;
+            if (splitMode === 'odd' && isEven) continue;
+
+            const tempPath = `/tmp/${timestamp}-page-${pageNumber}.pdf`;
             fs.writeFileSync(tempPath, splitPdfs[i]);
             tempFiles.push(tempPath);
         }
@@ -450,10 +465,11 @@ router.post('/rotate-pdf', upload.single('file'), async (req, res) => {
 // ─────────────────────────────────────────────
 router.post('/watermark-pdf', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
-    if (!req.body.text) return res.status(400).json({ message: 'Texte du filigrane manquant.' });
 
     try {
-        const watermarkedBytes = await addWatermark(req.file.path, req.body.text);
+        const text = req.body.text || 'CONFIDENTIEL';
+        const position = req.body.position || 'diagonal';
+        const watermarkedBytes = await addWatermark(req.file.path, text, position);
 
         res.setHeader('Content-Disposition', 'attachment; filename="watermarked.pdf"');
         res.setHeader('Content-Type', 'application/pdf');

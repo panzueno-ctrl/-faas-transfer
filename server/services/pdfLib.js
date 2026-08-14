@@ -119,29 +119,47 @@ const rotatePages = async (filePath, rotation, pageIndices = null) => {
 };
 
 // ─────────────────────────────────────────────
-// Ajouter un filigrane texte à un PDF
-// filePath = chemin vers le PDF
-// text = texte du filigrane
-// ─────────────────────────────────────────────
-const addWatermark = async (filePath, text) => {
+const addWatermark = async (filePath, text, position = 'diagonal') => {
 
     const pdfBytes = fs.readFileSync(filePath);
     const pdf = await PDFDocument.load(pdfBytes);
-    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const font = await pdf.embedFont(StandardFonts.HelveticaBold);
     const pages = pdf.getPages();
 
     pages.forEach(page => {
         const { width, height } = page.getSize();
+        
+        let x = width / 4;
+        let y = height / 2;
+        let rotateAngle = 45;
+        let size = 50;
 
-        // On dessine le texte en diagonale au centre de la page
+        if (position === 'top-center') {
+            x = width / 2 - (text.length * 10);
+            y = height - 50;
+            rotateAngle = 0;
+            size = 30;
+        } else if (position === 'bottom-right') {
+            x = width - (text.length * 15) - 30;
+            y = 50;
+            rotateAngle = 0;
+            size = 24;
+        } else {
+            // diagonal default
+            x = width / 4;
+            y = height / 2 - 50;
+            rotateAngle = 45;
+            size = 60;
+        }
+
         page.drawText(text, {
-            x: width / 4,
-            y: height / 2,
-            size: 50,
+            x,
+            y,
+            size,
             font,
-            color: rgb(0.8, 0.8, 0.8), // gris clair
-            opacity: 0.3,
-            rotate: degrees(45),
+            color: rgb(0.8, 0.2, 0.2), // Premium red for confidential
+            opacity: position === 'diagonal' ? 0.3 : 0.6,
+            rotate: degrees(rotateAngle),
         });
     });
 
