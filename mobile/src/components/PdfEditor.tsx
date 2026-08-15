@@ -131,7 +131,7 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
             setSelectedEditId(null);
         }
 
-        if (activeTool !== 'text') return;
+        if (activeTool !== 'text' && activeTool !== 'replace') return;
         
         // Use nativeEvent for cross-platform local coordinates
         // Cross-platform coordinate calculation
