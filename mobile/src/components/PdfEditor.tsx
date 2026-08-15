@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import SignaturePad, { SignatureData } from './SignaturePad';
+import Svg, { Path } from 'react-native-svg';
 
 const DraggableItem = ({ x, y, canvasSize, onDragEnd, isSelected, onSelect, children }: any) => {
     const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
@@ -60,7 +62,7 @@ const DraggableItem = ({ x, y, canvasSize, onDragEnd, isSelected, onSelect, chil
     );
 };
 
-export type PdfEditType = 'text' | 'image' | 'draw' | 'replace';
+export type PdfEditType = 'text' | 'image' | 'draw' | 'replace' | 'signature';
 
 export interface PdfEditItem {
     id: string;
@@ -77,6 +79,7 @@ export interface PdfEditItem {
     fontWeight?: 'normal' | 'bold';
     fontStyle?: 'normal' | 'italic';
     textAlign?: 'left' | 'center' | 'right';
+    signatureData?: SignatureData;
 }
 
 interface PdfEditorProps {
@@ -84,15 +87,24 @@ interface PdfEditorProps {
     onComplete: (edits: PdfEditItem[]) => void;
     onCancel: () => void;
     colors: any;
+    autoOpenSignTool?: boolean;
 }
 
-export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEditorProps) {
+export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpenSignTool }: PdfEditorProps) {
     const { t } = useTranslation();
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [edits, setEdits] = useState<PdfEditItem[]>([]);
     const [activeTool, setActiveTool] = useState<PdfEditType | null>(null);
     const [selectedColor, setSelectedColor] = useState('#e74c3c');
     const [canvasSize, setCanvasSize] = useState({ width: 800, height: 1131 });
+    const [isSignaturePadOpen, setIsSignaturePadOpen] = useState(false);
+    
+    useEffect(() => {
+        if (autoOpenSignTool) {
+            setActiveTool('signature');
+            setIsSignaturePadOpen(true);
+        }
+    }, [autoOpenSignTool]);
     
     // Text formatting states
     const [selectedSize, setSelectedSize] = useState(18);
@@ -216,6 +228,22 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
         }
     };
 
+    const handleSignatureSave = (signature: SignatureData) => {
+        // Place signature at center of screen initially
+        const newEdit: PdfEditItem = {
+            id: Date.now().toString(),
+            pageIndex: currentPageIndex,
+            type: 'signature',
+            x: 40,
+            y: 40,
+            width: 20,
+            height: 10,
+            signatureData: signature
+        };
+        setEdits([...edits, newEdit]);
+        setSelectedEditId(newEdit.id);
+    };
+
     const removeEdit = (id: string) => {
         setEdits(edits.filter(e => e.id !== id));
         if (selectedEditId === id) setSelectedEditId(null);
@@ -252,6 +280,14 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
                         >
                             <Ionicons name="create" size={20} color={activeTool === 'replace' ? '#e74c3c' : colors.text} />
                             <Text style={[styles.toolBtnText, { color: activeTool === 'replace' ? '#e74c3c' : colors.text }]}>Remplacer texte</Text>
+                        </Pressable>
+
+                        <Pressable 
+                            style={[styles.toolBtn, { marginLeft: 8 }]} 
+                            onPress={() => setIsSignaturePadOpen(true)}
+                        >
+                            <Ionicons name="pencil" size={20} color={colors.text} />
+                            <Text style={[styles.toolBtnText, { color: colors.text }]}>Signer</Text>
                         </Pressable>
                     </View>
 
@@ -385,6 +421,13 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
                     </View>
                 </View>
             </View>
+
+            <SignaturePad
+                visible={isSignaturePadOpen}
+                onClose={() => setIsSignaturePadOpen(false)}
+                onSave={handleSignatureSave}
+                colors={colors}
+            />
         </View>
     );
 }
@@ -684,6 +727,47 @@ function PdfEditItemView({ edit, isSelected, canvasSize, onSelect, onRemove, onC
                 )}
 
                 {isSelected && hasBg && (
+                    <View {...resizePanResponder.panHandlers} style={styles.resizeHandle} />
+                )}
+            </View>
+        );
+    }
+
+    if (edit.type === 'signature' && edit.signatureData) {
+        const boxWidth = edit.width ? edit.width * (canvasSize.width / 100) : 100;
+        const boxHeight = edit.height ? edit.height * (canvasSize.height / 100) : 50;
+        const sig = edit.signatureData;
+
+        return (
+            <View style={[styles.premiumEditBox, isSelected && styles.premiumEditBoxSelected]}>
+                {isSelected && (
+                    <View style={styles.premiumToolbar}>
+                        <View {...panHandlers} style={[styles.premiumDragHandle, { cursor: Platform.OS === 'web' ? 'grab' : 'default' }] as any}>
+                            <Ionicons name="move" size={16} color="#fff" />
+                        </View>
+                        <Pressable onPress={onRemove} style={styles.premiumDeleteBtn}>
+                            <Ionicons name="trash" size={16} color="#fff" />
+                        </Pressable>
+                    </View>
+                )}
+                
+                <Pressable onPress={onSelect} style={{ width: boxWidth, height: boxHeight, justifyContent: 'center', alignItems: 'center' }}>
+                    {sig.type === 'text' && (
+                        <Text style={{ fontFamily: 'serif', fontStyle: 'italic', fontSize: boxHeight * 0.8, color: '#000' }} numberOfLines={1} adjustsFontSizeToFit>
+                            {sig.data}
+                        </Text>
+                    )}
+                    {sig.type === 'path' && (
+                        <Svg width="100%" height="100%" viewBox={`0 0 ${sig.width} ${sig.height}`} preserveAspectRatio="xMidYMid meet">
+                            <Path d={sig.data} stroke="#000" strokeWidth={4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                        </Svg>
+                    )}
+                    {sig.type === 'image' && (
+                        <Image source={{ uri: sig.data }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                    )}
+                </Pressable>
+
+                {isSelected && (
                     <View {...resizePanResponder.panHandlers} style={styles.resizeHandle} />
                 )}
             </View>

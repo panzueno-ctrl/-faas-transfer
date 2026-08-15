@@ -887,8 +887,67 @@ Afin de rendre l'interface de conversion parfaitement fluide sur le Web et répo
   - Intégration de balises de données structurées **JSON-LD (Schema.org)** déclarant l'application en tant que `WebSite` et définissant `"alternateName": ["Fast Transfer", "FaaS Transfer App"]` afin que Google associe formellement ces termes au site FaaS Transfer.
 - **Résultat :** L'application est maintenant hautement optimisée pour les moteurs de recherche, et toute recherche pour "Fast Transfer" sera liée organiquement au site.
 
+### Samedi, 15 Août 2026 à 18h31 et 45 secondes - Refonte Premium de l'Éditeur PDF (WYSIWYG, Drag&Drop, Toolbar, Masquage)
+- **Contexte :** Demande de l'utilisateur pour améliorer l'expérience d'édition des PDF en la rendant "Premium", flexible et similaire à des outils professionnels comme *SmallPDF*, *iLovePDF* ou *Adobe Acrobat*.
+- **Analyse :**
+  - **Drag & Drop :** Les textes ajoutés étaient fixés après un clic et difficiles à bouger librement.
+  - **Design UI/UX :** L'éditeur manquait d'une véritable interface de formatage (Taille, Gras, Italique, Alignement, Couleurs) attachée au texte sélectionné.
+  - **Modification du texte d'origine :** L'utilisateur souhaitait modifier le texte natif du PDF ("comme un fichier Word"). Techniquement impossible avec `pdf-lib` sans OCR avancé coûteux. La solution standard (utilisée par SmallPDF) consiste à proposer un outil "Whiteout" (effaceur blanc) pour masquer le texte original avant de récrire par-dessus.
+- **Modifications (Frontend - `PdfEditor.tsx`) :**
+  - Implémentation complète de l'API `PanResponder` et `Animated.View` de React Native pour offrir un système de Glisser-Déposer (Drag & Drop) fluide.
+  - Refonte de la logique de sélection (`selectedEditId`) : un texte sélectionné affiche désormais une **bordure bleue pointillée** et une **barre d'outils flottante** contenant une icône de déplacement (`move`) et de suppression (`trash`).
+  - Ajout d'une barre d'outils complète supérieure pour le formatage riche : boutons de taille (+/-), **Gras**, *Italique*, Alignement (gauche, centre, droite) et palette de couleurs.
+  - Création de l'outil **Effacer (Masque)** générant un rectangle blanc déplaçable.
+- **Modifications (Backend/Conversion - `convert.tsx`) :**
+  - Intégration des polices standard via `pdf-lib` (`Helvetica`, `HelveticaBold`, `HelveticaOblique`, `HelveticaBoldOblique`).
+  - Mise à jour du moteur de rendu pour appliquer le gras, l'italique, la taille, la couleur et l'alignement (`textAlign` en ajustant le `xOffset` selon la `widthOfTextAtSize`) aux textes ajoutés avant de sauvegarder le document.
+  - Intégration du dessin de rectangles blancs (Whiteout) pour occulter le contenu original.
+- **Résultat :** Le module d'édition PDF est désormais de niveau professionnel. Le formatage riche et l'outil de masquage offrent une liberté d'édition similaire aux leaders du marché.
+
+### Samedi, 15 Août 2026 à 18h40 et 30 secondes - Smart Replace (Fusion du Masque et de l'Édition)
+- **Contexte :** L'outil "Effacer (Masque)" était trop visible et peu ergonomique (processus en deux étapes). L'utilisateur souhaitait modifier le texte existant sans que l'on se rende compte de la "supercherie" du masque blanc.
+- **Analyse :** 
+  - La méthode idéale pour masquer ce processus consiste à créer une zone de saisie qui génère **elle-même** son propre masque de fond en temps réel.
+  - Cela nécessite que cette zone soit dotée d'une poignée de redimensionnement (`Resize Handle`) pour recouvrir parfaitement le texte d'origine, quelle que soit sa longueur.
+- **Modification (`PdfEditor.tsx`) :**
+  - Suppression de l'outil autonome `whiteout`. Création de l'outil **Remplacer texte**.
+  - Modification de `PdfEditItem` pour inclure `backgroundColor`, `width`, et `height`.
+  - Intégration du composant `PdfEditItemView` gérant un `PanResponder` pour la poignée de redimensionnement (en bas à droite de la zone). 
+  - Un texte avec `backgroundColor` prend désormais la totalité de la surface (width/height), masquant ainsi instantanément l'arrière-plan.
+- **Modification (`convert.tsx`) :**
+  - Ajout de la logique de rendu PDF : si un texte possède une propriété `backgroundColor`, le moteur `pdf-lib` dessine un `drawRectangle` à la couleur et aux dimensions demandées *juste avant* de dessiner le texte, occulant ainsi le contenu d'origine du fichier PDF.
+- **Résultat :** Le flux de remplacement de texte est maintenant invisible et professionnel. L'utilisateur a véritablement l'illusion d'effacer le texte natif du PDF pour écrire à sa place.
+
+### Samedi, 15 Août 2026 à 19h03 - Correction des Bugs d'Interaction du Smart Replace
+- **Contexte :** L'outil Smart Replace présentait deux défauts majeurs d'expérience utilisateur :
+  1. Le bloc sautait et grandissait de façon exponentielle lors du redimensionnement répété.
+  2. Le champ de texte remontait brutalement au coin supérieur gauche lors de la saisie au clavier.
+- **Analyse et Corrections (`PdfEditor.tsx`) :**
+  - *Bug de saut (Stale Closure)* : Le `PanResponder` de redimensionnement conservait une référence obsolète à la largeur initiale. Correction via l'utilisation d'une référence immuable (`useRef`) stockant la taille initiale exacte `onPanResponderGrant`, afin d'y additionner la distance parcourue sans effet cumulatif.
+  - *Bug de focus (Auto-scroll de React Native Web)* : L'attribut `autoFocus={true}` du `TextInput` provoquait un comportement de défilement automatique du navigateur à chaque nouvelle frappe (car le composant se re-rend). Suppression de cet attribut au profit d'une focalisation par référence (`useRef` + `useEffect` focalisant l'élément uniquement lors de la sélection du composant).
+  - *Bug de saut (Stale Closure sur le conteneur principal)* : Le `PanResponder` principal du composant parent (`DraggableItem`) souffrait du même défaut et gardait en mémoire la position X et Y de la toute première création du composant. Dès qu'on cliquait dessus (même sans le glisser), il renvoyait l'objet à son point d'origine. Correction effectuée via un système de `useRef` couplé à un `useEffect` pour conserver les dernières coordonnées connues.
+- **Résultat :** Le déplacement et le redimensionnement sont désormais 100% fluides. La frappe au clavier est stable.
 
 
 
+### Dimanche, 16 Août 2026 - Implémentation Fonctionnalité "Signer un PDF"
+- **Objectif :** Permettre aux utilisateurs d'ajouter une signature (texte, dessin ou image importée) et de la sauvegarder localement pour de futures utilisations, à l'instar d'Adobe Acrobat et SmallPDF.
+- **Analyse des Composants :**
+  1. `SignaturePad.tsx` (Nouveau) : Modal/BottomSheet proposant 3 onglets (Dessiner, Taper, Importer).
+  2. Stockage : Sauvegarde des signatures créées (sous forme Base64 ou SVG Path) dans `AsyncStorage` (`faas_saved_signatures`).
+  3. `PdfEditor.tsx` (Modification) : Ajout de l'outil `sign`, ouverture du menu de sélection de signatures sauvegardées ou de création. Gestion du Drag & Drop des blocs de type `signature`.
+  4. `convert.tsx` (Modification) : Mise à jour du moteur de rendu `pdf-lib` pour utiliser `pdfDoc.embedPng()` / `embedJpg()` et `page.drawImage()` pour apposer la signature sur le document exporté.
+- **Statut :** Plan validé, exécution en cours.
 
-
+### Dimanche, 16 Août 2026 à 01h40 - Finalisation et Amélioration de l'Expérience "Signer un PDF"
+- **Contexte :** L'utilisateur a demandé d'aligner l'expérience utilisateur (UX) sur les standards du marché (Adobe, SmallPDF, iLovePDF) pour l'outil de signature.
+- **Ajouts et Modifications :**
+  1. **Modale Intermédiaire "Qui va signer ?" (`convert.tsx`) :** 
+     - Ajout de l'étape `sign_choice` interceptant la sélection du fichier si l'outil est `sign-pdf`. 
+     - Offre le choix entre "Uniquement moi" (Je signe moi-même) et "Plusieurs personnes" (Bientôt disponible - Demande de signature).
+  2. **Ouverture Automatique de l'Éditeur (`convert.tsx` et `PdfEditor.tsx`) :** 
+     - En cliquant sur "Uniquement moi", le système passe le paramètre `autoOpenSignTool={true}`.
+     - L'éditeur s'ouvre alors avec l'outil de signature actif et la modale (`SignaturePad`) immédiatement visible à l'écran.
+  3. **Vérification de la Mobilité de l'Outil :** 
+     - Application des corrections `useRef` pour la mobilité de la signature. Le comportement est parfait et les signatures sauvegardées sont directement prêtes à être apposées.
+- **Résultat :** Le flux correspond exactement aux attentes (Ouverture -> Choix d'acteur -> Editeur -> Signature directe), marquant l'achèvement de la fonctionnalité.

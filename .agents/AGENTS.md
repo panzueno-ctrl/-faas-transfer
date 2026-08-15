@@ -19,3 +19,8 @@
 - **RÈGLE STRICTE ET SYSTÉMATIQUE :** À chaque fois que tu travailles sur le projet, PEU IMPORTE LE SUJET (petit ajustement, correction mineure, ou grosse refonte, création de plan ou walkthrough), tu DOIS OBLIGATOIREMENT ajouter une nouvelle entrée détaillée et brute à la fin de `architecture.txt` en y expliquant tous les défis et détails.
 - Ne manque JAMAIS à cette règle, c'est une exigence fondamentale pour permettre à l'utilisateur de suivre l'historique complet.
 </RULE[architecture_detailed_notes]>
+
+<RULE[no_floating_plans]>
+- INTERDICTION FORMELLE DE LAISSER DES "FICHIERS VOLANTS" : Chaque fois qu'un document de type `implementation_plan.md` ou `walkthrough.md` est généré, son contenu entier doit être systématiquement copié/écrit dans `architecture.txt` sous une nouvelle entrée datée.
+- Tout doit être dans `architecture.txt`. C'est l'ordre absolu.
+</RULE[no_floating_plans]>
