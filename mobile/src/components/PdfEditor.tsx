@@ -18,6 +18,15 @@ import { useTranslation } from 'react-i18next';
 const DraggableItem = ({ x, y, canvasSize, onDragEnd, isSelected, onSelect, children }: any) => {
     const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
 
+    // Use refs to keep latest values and avoid stale closures in PanResponder
+    const posRef = useRef({ x, y });
+    const dragEndRef = useRef(onDragEnd);
+
+    useEffect(() => {
+        posRef.current = { x, y };
+        dragEndRef.current = onDragEnd;
+    }, [x, y, onDragEnd]);
+
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
@@ -29,7 +38,7 @@ const DraggableItem = ({ x, y, canvasSize, onDragEnd, isSelected, onSelect, chil
             onPanResponderRelease: (e, gestureState) => {
                 const percentDx = (gestureState.dx / canvasSize.width) * 100;
                 const percentDy = (gestureState.dy / canvasSize.height) * 100;
-                onDragEnd(x + percentDx, y + percentDy);
+                dragEndRef.current(posRef.current.x + percentDx, posRef.current.y + percentDy);
                 pan.setValue({ x: 0, y: 0 });
             }
         })
