@@ -131,9 +131,10 @@ router.post('/pdf-to-image', upload.single('file'), (req, res) => {
     // Commande pdftoppm pour convertir toutes les pages en images
     const command = `pdftoppm -${format === 'jpeg' ? 'jpeg' : 'png'} -r ${dpi} "${inputPath}" "${outputPrefix}"`;
 
-    exec(command, (error) => {
+    exec(command, (error, stdout, stderr) => {
         if (error) {
-            return res.status(500).json({ message: 'La conversion a échoué. Veuillez réessayer.' });
+            console.error("pdftoppm error:", error, stderr);
+            return res.status(500).json({ message: 'La conversion a échoué. Veuillez réessayer.', error: error.message, stderr: stderr });
         }
 
         // On liste toutes les images générées par pdftoppm

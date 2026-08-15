@@ -192,7 +192,10 @@ export default function ConvertScreen() {
                 }
             });
 
-            if (!res.ok) throw new Error("Échec de la génération des images");
+            if (!res.ok) {
+                const errText = await res.text();
+                throw new Error("Échec de la génération des images: " + errText);
+            }
 
             const contentType = res.headers.get('content-type');
             const blob = await res.blob();
