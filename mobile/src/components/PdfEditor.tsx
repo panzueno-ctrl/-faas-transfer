@@ -587,22 +587,38 @@ const styles = StyleSheet.create({
 
 // Component to handle individual edit items and their resize handlers
 function PdfEditItemView({ edit, isSelected, canvasSize, onSelect, onRemove, onChangeText, onResize, panHandlers }: any) {
+    const editRef = React.useRef(edit);
+    React.useEffect(() => {
+        editRef.current = edit;
+    }, [edit]);
+
+    const initialSizeRef = React.useRef({ width: edit.width || 15, height: edit.height || 4 });
+
     const resizePanResponder = React.useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
             onMoveShouldSetPanResponder: () => true,
+            onPanResponderGrant: () => {
+                initialSizeRef.current = { width: editRef.current.width || 15, height: editRef.current.height || 4 };
+            },
             onPanResponderMove: (e, gestureState) => {
                 const percentDx = (gestureState.dx / canvasSize.width) * 100;
                 const percentDy = (gestureState.dy / canvasSize.height) * 100;
-                const currentWidth = edit.width || 15;
-                const currentHeight = edit.height || 4;
-                onResize(Math.max(2, currentWidth + percentDx), Math.max(1, currentHeight + percentDy));
+                onResize(
+                    Math.max(2, initialSizeRef.current.width + percentDx), 
+                    Math.max(1, initialSizeRef.current.height + percentDy)
+                );
             },
-            onPanResponderRelease: () => {
-                // Done resizing
-            }
+            onPanResponderRelease: () => {}
         })
     ).current;
+
+    const inputRef = React.useRef<any>(null);
+    React.useEffect(() => {
+        if (isSelected && inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, [isSelected]);
 
     const baseStyle = { 
         color: edit.color, 
@@ -632,12 +648,12 @@ function PdfEditItemView({ edit, isSelected, canvasSize, onSelect, onRemove, onC
                 
                 {isSelected ? (
                     <TextInput 
+                        ref={inputRef}
                         style={[styles.premiumTextInput, baseStyle, hasBg && { flex: 1, padding: 4 }]}
                         value={edit.text}
                         onChangeText={onChangeText}
                         placeholder="Taper ici..."
                         placeholderTextColor="rgba(150,150,150,0.5)"
-                        autoFocus={true}
                         multiline
                     />
                 ) : (
