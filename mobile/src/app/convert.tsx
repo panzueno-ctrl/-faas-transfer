@@ -175,14 +175,14 @@ export default function ConvertScreen() {
 
             // 2. Envoyer au backend pour générer les images des pages
             const formData = new FormData();
-            let blob;
+            let fileBlob;
             if (Platform.OS === 'web' && file.file) {
-                blob = file.file;
+                fileBlob = file.file;
             } else {
                 const response_file = await fetch(file.uri);
-                blob = await response_file.blob();
+                fileBlob = await response_file.blob();
             }
-            formData.append('file', blob, file.name);
+            formData.append('file', fileBlob, file.name);
 
             const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard`, {
                 method: 'POST',
