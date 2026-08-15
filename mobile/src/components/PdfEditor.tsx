@@ -136,6 +136,15 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
     }, [selectedEditId]);
 
     const handleCanvasPress = (e: any) => {
+        if (Platform.OS === 'web') {
+            const nativeEvent = e.nativeEvent as any;
+            const targetId = nativeEvent.target?.id;
+            // Ne pas traiter le clic si on a cliqué sur un élément enfant (comme un champ texte ou un bouton)
+            if (targetId !== 'pdf-canvas-overlay') {
+                return;
+            }
+        }
+
         if (selectedEditId) {
             setSelectedEditId(null);
         }
@@ -337,6 +346,7 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
                         
                         {/* Overlay for interactions */}
                         <Pressable 
+                            nativeID="pdf-canvas-overlay"
                             style={styles.interactionOverlay} 
                             onLayout={(e) => setCanvasSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
                             onPress={handleCanvasPress}
