@@ -618,7 +618,7 @@ function PdfEditItemView({ edit, isSelected, canvasSize, onSelect, onRemove, onC
         const boxHeight = hasBg && edit.height ? edit.height * (canvasSize.height / 100) : undefined;
 
         return (
-            <View style={[styles.premiumEditBox, isSelected && styles.premiumEditBoxSelected, hasBg && { backgroundColor: edit.backgroundColor, width: boxWidth, height: boxHeight, overflow: 'hidden' }]}>
+            <View style={[styles.premiumEditBox, isSelected && styles.premiumEditBoxSelected, hasBg && { backgroundColor: edit.backgroundColor, width: boxWidth, height: boxHeight }]}>
                 {isSelected && (
                     <View style={styles.premiumToolbar}>
                         <View {...panHandlers} style={[styles.premiumDragHandle, { cursor: Platform.OS === 'web' ? 'grab' : 'default' }] as any}>
