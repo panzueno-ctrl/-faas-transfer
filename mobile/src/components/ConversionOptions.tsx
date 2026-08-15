@@ -18,7 +18,7 @@ export default function ConversionOptions({ onChange, type }: ConversionOptionsP
         onChange(quality);
     }, [quality]);
 
-    const title = type === 'pdf-to-image' ? 'Qualité d\\'extraction' : 'Qualité de conversion';
+    const title = type === 'pdf-to-image' ? "Qualité d'extraction" : 'Qualité de conversion';
     const subtitle = type === 'pdf-to-image' 
         ? 'Choisissez la résolution des images extraites du PDF.'
         : 'Sélectionnez la qualité du document final.';

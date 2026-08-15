@@ -871,6 +871,13 @@ Afin de rendre l'interface de conversion parfaitement fluide sur le Web et répo
   - Remplacement du `require('jszip')` inline par un import ESM standard en haut de page (`import JSZip from 'jszip';`).
 - **Résultat :** Les dépendances problématiques sont maintenant gérées correctement et nativement par le Web Bundler.
 
+### Samedi, 15 Août 2026 à 02h18 et 45 secondes - Correction de syntaxe dans ConversionOptions.tsx
+- **Contexte :** Le dernier correctif de Vercel a introduit une erreur de syntaxe empêchant la compilation (`Unexpected token, expected ":" (21:57)`).
+- **Analyse :** Le problème provenait de la ligne 21 de `mobile/src/components/ConversionOptions.tsx`. Le texte `'Qualité d\\'extraction'` contenait un double backslash (échappement de l'antislash lui-même, ce qui laissait l'apostrophe fermer la chaîne de caractères prématurément).
+- **Correction :** Modification de la syntaxe par l'usage des doubles guillemets pour éviter tout problème d'échappement : `"Qualité d'extraction"`.
+- **Résultat :** Le fichier TypeScript compile désormais correctement, permettant au build de se poursuivre.
+
+
 
 
 
