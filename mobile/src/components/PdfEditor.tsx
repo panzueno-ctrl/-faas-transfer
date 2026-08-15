@@ -51,7 +51,7 @@ const DraggableItem = ({ x, y, canvasSize, onDragEnd, isSelected, onSelect, chil
     );
 };
 
-export type PdfEditType = 'text' | 'image' | 'draw';
+export type PdfEditType = 'text' | 'image' | 'draw' | 'whiteout';
 
 export interface PdfEditItem {
     id: string;
@@ -59,9 +59,14 @@ export interface PdfEditItem {
     type: PdfEditType;
     x: number; // percentage 0-100
     y: number; // percentage 0-100
+    width?: number; // for whiteout
+    height?: number; // for whiteout
     text?: string;
     color?: string;
     size?: number;
+    fontWeight?: 'normal' | 'bold';
+    fontStyle?: 'normal' | 'italic';
+    textAlign?: 'left' | 'center' | 'right';
 }
 
 interface PdfEditorProps {
@@ -79,8 +84,41 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
     const [selectedColor, setSelectedColor] = useState('#e74c3c');
     const [canvasSize, setCanvasSize] = useState({ width: 800, height: 1131 });
     
+    // Text formatting states
+    const [selectedSize, setSelectedSize] = useState(18);
+    const [selectedWeight, setSelectedWeight] = useState<'normal' | 'bold'>('normal');
+    const [selectedStyle, setSelectedStyle] = useState<'normal' | 'italic'>('normal');
+    const [selectedAlign, setSelectedAlign] = useState<'left' | 'center' | 'right'>('left');
+
     // For handling dragging and temporary text
     const [selectedEditId, setSelectedEditId] = useState<string | null>(null);
+
+    // Sync formatting states when an edit is selected
+    useEffect(() => {
+        if (selectedEditId) {
+            const edit = edits.find(e => e.id === selectedEditId);
+            if (edit) {
+                if (edit.color) setSelectedColor(edit.color);
+                if (edit.size) setSelectedSize(edit.size);
+                if (edit.fontWeight) setSelectedWeight(edit.fontWeight);
+                if (edit.fontStyle) setSelectedStyle(edit.fontStyle);
+                if (edit.textAlign) setSelectedAlign(edit.textAlign);
+            }
+        }
+    }, [selectedEditId]);
+
+    // Update formatting for new items AND the currently selected item
+    const updateFormatting = (updates: Partial<PdfEditItem>) => {
+        if (updates.color) setSelectedColor(updates.color);
+        if (updates.size) setSelectedSize(updates.size);
+        if (updates.fontWeight) setSelectedWeight(updates.fontWeight);
+        if (updates.fontStyle) setSelectedStyle(updates.fontStyle);
+        if (updates.textAlign) setSelectedAlign(updates.textAlign);
+        
+        if (selectedEditId) {
+            setEdits(prev => prev.map(e => e.id === selectedEditId ? { ...e, ...updates } : e));
+        }
+    };
 
     // Nettoyage des textes vides lors de la désélection
     useEffect(() => {
@@ -119,18 +157,36 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
             y = (locationY / canvasSize.height) * 100;
         }
         
-        const newEdit: PdfEditItem = {
-            id: Date.now().toString(),
-            pageIndex: currentPageIndex,
-            type: 'text',
-            x,
-            y,
-            text: '',
-            color: selectedColor,
-            size: 18,
-        };
-        setEdits([...edits, newEdit]);
-        setSelectedEditId(newEdit.id);
+        if (activeTool === 'whiteout') {
+            const newEdit: PdfEditItem = {
+                id: Date.now().toString(),
+                pageIndex: currentPageIndex,
+                type: 'whiteout',
+                x, y,
+                width: 15, // 15% of page width
+                height: 3,  // 3% of page height
+            };
+            setEdits([...edits, newEdit]);
+            return;
+        }
+
+        if (activeTool === 'text') {
+            const newEdit: PdfEditItem = {
+                id: Date.now().toString(),
+                pageIndex: currentPageIndex,
+                type: 'text',
+                x,
+                y,
+                text: '',
+                color: selectedColor,
+                size: selectedSize,
+                fontWeight: selectedWeight,
+                fontStyle: selectedStyle,
+                textAlign: selectedAlign,
+            };
+            setEdits([...edits, newEdit]);
+            setSelectedEditId(newEdit.id);
+        }
     };
 
     const removeEdit = (id: string) => {
@@ -153,25 +209,79 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
                     </Text>
                 </View>
 
-                <View style={styles.toolbarCenter}>
-                    <Pressable 
-                        style={[styles.toolBtn, activeTool === 'text' && { backgroundColor: 'rgba(52, 152, 219, 0.2)' }]} 
-                        onPress={() => setActiveTool(activeTool === 'text' ? null : 'text')}
-                    >
-                        <Ionicons name="text" size={20} color={activeTool === 'text' ? '#3498db' : colors.text} />
-                        <Text style={[styles.toolBtnText, { color: activeTool === 'text' ? '#3498db' : colors.text }]}>Texte</Text>
-                    </Pressable>
-                    {/* Add more tools here like 'image', 'draw' in the future */}
-                    
+                <View style={[styles.toolbarCenter, { flex: 1, paddingHorizontal: 16 }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.03)', padding: 4, borderRadius: 8 }}>
+                        <Pressable 
+                            style={[styles.toolBtn, activeTool === 'text' && styles.toolBtnActive]} 
+                            onPress={() => setActiveTool(activeTool === 'text' ? null : 'text')}
+                        >
+                            <Ionicons name="text" size={20} color={activeTool === 'text' ? '#3498db' : colors.text} />
+                            <Text style={[styles.toolBtnText, { color: activeTool === 'text' ? '#3498db' : colors.text }]}>Texte</Text>
+                        </Pressable>
+
+                        <Pressable 
+                            style={[styles.toolBtn, activeTool === 'whiteout' && styles.toolBtnActive, { marginLeft: 8 }]} 
+                            onPress={() => setActiveTool(activeTool === 'whiteout' ? null : 'whiteout')}
+                        >
+                            <Ionicons name="square" size={20} color={activeTool === 'whiteout' ? '#e74c3c' : colors.text} />
+                            <Text style={[styles.toolBtnText, { color: activeTool === 'whiteout' ? '#e74c3c' : colors.text }]}>Effacer (Masque)</Text>
+                        </Pressable>
+                    </View>
+
+                    <View style={styles.toolbarDivider} />
+
                     {activeTool === 'text' && (
-                        <View style={styles.colorPicker}>
-                            {COLORS.map(c => (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {/* Font Size */}
+                            <View style={styles.richTextGroup}>
+                                <Pressable onPress={() => updateFormatting({ size: Math.max(8, selectedSize - 2) })} style={styles.richTextBtn}>
+                                    <Ionicons name="remove" size={16} color={colors.text} />
+                                </Pressable>
+                                <Text style={{ width: 24, textAlign: 'center', fontSize: 14 }}>{selectedSize}</Text>
+                                <Pressable onPress={() => updateFormatting({ size: Math.min(72, selectedSize + 2) })} style={styles.richTextBtn}>
+                                    <Ionicons name="add" size={16} color={colors.text} />
+                                </Pressable>
+                            </View>
+
+                            {/* Formatting */}
+                            <View style={styles.richTextGroup}>
                                 <Pressable 
-                                    key={c} 
-                                    style={[styles.colorSwatch, { backgroundColor: c }, selectedColor === c && styles.colorSwatchActive]}
-                                    onPress={() => setSelectedColor(c)}
-                                />
-                            ))}
+                                    onPress={() => updateFormatting({ fontWeight: selectedWeight === 'bold' ? 'normal' : 'bold' })} 
+                                    style={[styles.richTextBtn, selectedWeight === 'bold' && { backgroundColor: 'rgba(52, 152, 219, 0.2)' }]}
+                                >
+                                    <Text style={{ fontWeight: 'bold', fontSize: 16, color: selectedWeight === 'bold' ? '#3498db' : colors.text }}>B</Text>
+                                </Pressable>
+                                <Pressable 
+                                    onPress={() => updateFormatting({ fontStyle: selectedStyle === 'italic' ? 'normal' : 'italic' })} 
+                                    style={[styles.richTextBtn, selectedStyle === 'italic' && { backgroundColor: 'rgba(52, 152, 219, 0.2)' }]}
+                                >
+                                    <Text style={{ fontStyle: 'italic', fontSize: 16, fontFamily: 'serif', color: selectedStyle === 'italic' ? '#3498db' : colors.text }}>I</Text>
+                                </Pressable>
+                            </View>
+
+                            {/* Alignment */}
+                            <View style={styles.richTextGroup}>
+                                <Pressable onPress={() => updateFormatting({ textAlign: 'left' })} style={[styles.richTextBtn, selectedAlign === 'left' && { backgroundColor: 'rgba(52, 152, 219, 0.2)' }]}>
+                                    <Ionicons name="menu" size={16} color={selectedAlign === 'left' ? '#3498db' : colors.text} style={{ transform: [{ scaleX: 0.8 }, { translateX: -2 }] }} />
+                                </Pressable>
+                                <Pressable onPress={() => updateFormatting({ textAlign: 'center' })} style={[styles.richTextBtn, selectedAlign === 'center' && { backgroundColor: 'rgba(52, 152, 219, 0.2)' }]}>
+                                    <Ionicons name="menu" size={16} color={selectedAlign === 'center' ? '#3498db' : colors.text} style={{ transform: [{ scaleX: 0.8 }] }} />
+                                </Pressable>
+                                <Pressable onPress={() => updateFormatting({ textAlign: 'right' })} style={[styles.richTextBtn, selectedAlign === 'right' && { backgroundColor: 'rgba(52, 152, 219, 0.2)' }]}>
+                                    <Ionicons name="menu" size={16} color={selectedAlign === 'right' ? '#3498db' : colors.text} style={{ transform: [{ scaleX: 0.8 }, { translateX: 2 }] }} />
+                                </Pressable>
+                            </View>
+
+                            {/* Color Picker */}
+                            <View style={styles.colorPicker}>
+                                {COLORS.map(c => (
+                                    <Pressable 
+                                        key={c} 
+                                        style={[styles.colorSwatch, { backgroundColor: c }, selectedColor === c && styles.colorSwatchActive]}
+                                        onPress={() => updateFormatting({ color: c })}
+                                    />
+                                ))}
+                            </View>
                         </View>
                     )}
                 </View>
@@ -244,7 +354,13 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
                                                 {edit.type === 'text' && (
                                                     isSelected ? (
                                                         <TextInput 
-                                                            style={[styles.premiumTextInput, { color: edit.color, fontSize: edit.size || 18 }]}
+                                                            style={[styles.premiumTextInput, { 
+                                                                color: edit.color, 
+                                                                fontSize: edit.size || 18,
+                                                                fontWeight: edit.fontWeight || 'normal',
+                                                                fontStyle: edit.fontStyle || 'normal',
+                                                                textAlign: edit.textAlign || 'left',
+                                                            }]}
                                                             value={edit.text}
                                                             onChangeText={(t) => setEdits(prev => prev.map(e => e.id === edit.id ? { ...e, text: t } : e))}
                                                             placeholder="Taper ici..."
@@ -254,11 +370,20 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
                                                         />
                                                     ) : (
                                                         <Pressable onPress={() => setSelectedEditId(edit.id)}>
-                                                            <Text style={[styles.premiumTextInput, { color: edit.color, fontSize: edit.size || 18 }]}>
+                                                            <Text style={[styles.premiumTextInput, { 
+                                                                color: edit.color, 
+                                                                fontSize: edit.size || 18,
+                                                                fontWeight: edit.fontWeight || 'normal',
+                                                                fontStyle: edit.fontStyle || 'normal',
+                                                                textAlign: edit.textAlign || 'left',
+                                                            }]}>
                                                                 {edit.text || " "}
                                                             </Text>
                                                         </Pressable>
                                                     )
+                                                )}
+                                                {edit.type === 'whiteout' && (
+                                                    <View style={{ width: (edit.width || 15) * (canvasSize.width / 100), height: (edit.height || 3) * (canvasSize.height / 100), backgroundColor: '#ffffff', borderColor: isSelected ? '#3498db' : '#e0e0e0', borderWidth: 1 }} />
                                                 )}
                                             </View>
                                         )}
@@ -445,8 +570,31 @@ const styles = StyleSheet.create({
     },
     premiumTextInput: {
         fontSize: 18,
-        fontWeight: 'bold',
         minWidth: 100,
         outlineStyle: 'none',
     },
+    toolBtnActive: {
+        backgroundColor: 'rgba(52, 152, 219, 0.2)',
+    },
+    toolbarDivider: {
+        width: 1,
+        height: 24,
+        backgroundColor: '#e0e0e0',
+        marginHorizontal: 12,
+    },
+    richTextGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.03)',
+        borderRadius: 6,
+        padding: 2,
+        marginRight: 8,
+    },
+    richTextBtn: {
+        padding: 6,
+        borderRadius: 4,
+        minWidth: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+    }
 });

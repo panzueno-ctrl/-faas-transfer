@@ -36,7 +36,7 @@ import ConversionOptions, { ConversionQuality } from '../components/ConversionOp
 import NumberingSelector, { NumberingConfig } from '../components/NumberingSelector';
 import OcrLanguageSelector, { OcrLanguage } from '../components/OcrLanguageSelector';
 import PdfEditor, { PdfEditItem } from '../components/PdfEditor';
-import { PDFDocument, rgb } from 'pdf-lib/dist/pdf-lib.esm.js';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib/dist/pdf-lib.esm.js';
 import JSZip from 'jszip';
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
@@ -237,18 +237,40 @@ export default function ConvertScreen() {
             const pdfDoc = await PDFDocument.load(pdfOriginalBuffer);
             const pdfPages = pdfDoc.getPages();
 
+            // Embed fonts
+            const fontNormal = await pdfDoc.embedFont(StandardFonts.Helvetica);
+            const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+            const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+            const fontBoldItalic = await pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique);
+
             for (const edit of edits) {
                 const page = pdfPages[edit.pageIndex];
                 if (!page) continue;
 
                 const { width, height } = page.getSize();
-                // Convert percentage coordinates (0-100) to absolute PDF coordinates
-                const x = (edit.x / 100) * width;
-                // PDF Y is inverted (0 is bottom)
-                const y = height - ((edit.y / 100) * height) - (edit.size || 24);
+                
+                if (edit.type === 'whiteout') {
+                    const rectWidth = (edit.width || 15) * (width / 100);
+                    const rectHeight = (edit.height || 3) * (height / 100);
+                    const x = (edit.x / 100) * width;
+                    const y = height - ((edit.y / 100) * height) - rectHeight;
+
+                    page.drawRectangle({
+                        x,
+                        y,
+                        width: rectWidth,
+                        height: rectHeight,
+                        color: rgb(1, 1, 1), // White
+                    });
+                    continue;
+                }
 
                 if (edit.type === 'text' && edit.text) {
-                    // Convert color hex to RGB
+                    const x = (edit.x / 100) * width;
+                    const fontSize = edit.size || 24;
+                    // Approximative Y position
+                    const y = height - ((edit.y / 100) * height) - fontSize;
+
                     let r = 0, g = 0, b = 0;
                     if (edit.color && edit.color.startsWith('#')) {
                         const hex = edit.color.replace('#', '');
@@ -257,10 +279,27 @@ export default function ConvertScreen() {
                         b = parseInt(hex.substring(4, 6), 16) / 255;
                     }
 
+                    let fontToUse = fontNormal;
+                    if (edit.fontWeight === 'bold' && edit.fontStyle === 'italic') {
+                        fontToUse = fontBoldItalic;
+                    } else if (edit.fontWeight === 'bold') {
+                        fontToUse = fontBold;
+                    } else if (edit.fontStyle === 'italic') {
+                        fontToUse = fontItalic;
+                    }
+
+                    let xOffset = 0;
+                    if (edit.textAlign === 'center' || edit.textAlign === 'right') {
+                        const textWidth = fontToUse.widthOfTextAtSize(edit.text, fontSize);
+                        if (edit.textAlign === 'center') xOffset = -textWidth / 2;
+                        if (edit.textAlign === 'right') xOffset = -textWidth;
+                    }
+
                     page.drawText(edit.text, {
-                        x,
+                        x: x + xOffset,
                         y,
-                        size: edit.size || 24,
+                        size: fontSize,
+                        font: fontToUse,
                         color: rgb(r, g, b),
                     });
                 }
