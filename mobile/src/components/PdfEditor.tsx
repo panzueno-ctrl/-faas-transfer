@@ -9,9 +9,48 @@ import {
     TextInput,
     Platform,
     Dimensions,
+    PanResponder,
+    Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+
+const DraggableItem = ({ x, y, canvasSize, onDragEnd, children }: any) => {
+    const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
+            onPanResponderRelease: (e, gestureState) => {
+                const percentDx = (gestureState.dx / canvasSize.width) * 100;
+                const percentDy = (gestureState.dy / canvasSize.height) * 100;
+                onDragEnd(x + percentDx, y + percentDy);
+                pan.setValue({ x: 0, y: 0 });
+            }
+        })
+    ).current;
+
+    return (
+        <Animated.View
+            style={{
+                position: 'absolute',
+                left: `${x}%`,
+                top: `${y}%`,
+                transform: [{ translateX: pan.x }, { translateY: pan.y }],
+                flexDirection: 'row',
+                alignItems: 'center',
+                zIndex: 1000,
+            }}
+        >
+            <View {...panResponder.panHandlers} style={{ padding: 4, cursor: Platform.OS === 'web' ? 'grab' : 'default', backgroundColor: 'rgba(200,200,200,0.5)', borderRadius: 4, marginRight: 4 }}>
+                <Ionicons name="move" size={16} color="#333" />
+            </View>
+            {children}
+        </Animated.View>
+    );
+};
 
 export type PdfEditType = 'text' | 'image' | 'draw';
 
@@ -180,7 +219,15 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
                         >
                             {/* Render existing edits for this page */}
                             {edits.filter(e => e.pageIndex === currentPageIndex).map(edit => (
-                                <View key={edit.id} style={[styles.renderedEdit, { left: `${edit.x}%`, top: `${edit.y}%` }]}>
+                                <DraggableItem 
+                                    key={edit.id} 
+                                    x={edit.x} 
+                                    y={edit.y} 
+                                    canvasSize={canvasSize} 
+                                    onDragEnd={(newX: number, newY: number) => {
+                                        setEdits(prev => prev.map(e => e.id === edit.id ? { ...e, x: newX, y: newY } : e));
+                                    }}
+                                >
                                     {edit.type === 'text' && (
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                             <Text style={{ color: edit.color, fontSize: 18, fontWeight: 'bold' }}>{edit.text}</Text>
@@ -189,24 +236,33 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
                                             </Pressable>
                                         </View>
                                     )}
-                                </View>
+                                </DraggableItem>
                             ))}
 
                             {/* Render active draft text */}
                             {draftText && (
-                                <View style={[styles.draftTextContainer, { left: `${draftText.x}%`, top: `${draftText.y}%` }]}>
-                                    <TextInput 
-                                        ref={textInputRef}
-                                        style={[styles.draftTextInput, { color: selectedColor }]}
-                                        value={draftText.text}
-                                        onChangeText={(t) => setDraftText({ ...draftText, text: t })}
-                                        placeholder="Taper ici..."
-                                        placeholderTextColor="rgba(150,150,150,0.5)"
-                                        autoFocus
-                                        onBlur={commitDraftText}
-                                        onSubmitEditing={commitDraftText}
-                                    />
-                                </View>
+                                <DraggableItem
+                                    x={draftText.x}
+                                    y={draftText.y}
+                                    canvasSize={canvasSize}
+                                    onDragEnd={(newX: number, newY: number) => {
+                                        setDraftText({ ...draftText, x: newX, y: newY });
+                                    }}
+                                >
+                                    <View style={styles.draftTextContainer}>
+                                        <TextInput 
+                                            ref={textInputRef}
+                                            style={[styles.draftTextInput, { color: selectedColor }]}
+                                            value={draftText.text}
+                                            onChangeText={(t) => setDraftText({ ...draftText, text: t })}
+                                            placeholder="Taper ici..."
+                                            placeholderTextColor="rgba(150,150,150,0.5)"
+                                            autoFocus
+                                            onBlur={commitDraftText}
+                                            onSubmitEditing={commitDraftText}
+                                        />
+                                    </View>
+                                </DraggableItem>
                             )}
                         </Pressable>
                     </View>
