@@ -49,10 +49,29 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
         if (activeTool !== 'text') return;
         
         // Use nativeEvent for cross-platform local coordinates
-        const { locationX, locationY } = e.nativeEvent;
-        
-        const x = (locationX / canvasSize.width) * 100;
-        const y = (locationY / canvasSize.height) * 100;
+        // Cross-platform coordinate calculation
+        let x = 0;
+        let y = 0;
+
+        if (Platform.OS === 'web') {
+            // Sur le web, e.nativeEvent.offsetX/offsetY est le plus fiable
+            const nativeEvent = e.nativeEvent as any;
+            if (nativeEvent.offsetX !== undefined) {
+                x = (nativeEvent.offsetX / canvasSize.width) * 100;
+                y = (nativeEvent.offsetY / canvasSize.height) * 100;
+            } else {
+                // Fallback avec getBoundingClientRect
+                const target = e.target as HTMLElement;
+                const rect = target.getBoundingClientRect();
+                x = ((nativeEvent.clientX - rect.left) / rect.width) * 100;
+                y = ((nativeEvent.clientY - rect.top) / rect.height) * 100;
+            }
+        } else {
+            // Sur mobile natif
+            const { locationX, locationY } = e.nativeEvent;
+            x = (locationX / canvasSize.width) * 100;
+            y = (locationY / canvasSize.height) * 100;
+        }
         
         if (draftText) {
             commitDraftText();
