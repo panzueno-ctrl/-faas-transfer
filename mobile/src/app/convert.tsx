@@ -35,9 +35,9 @@ import RotationSelector, { RotationAngle } from '../components/RotationSelector'
 import ConversionOptions, { ConversionQuality } from '../components/ConversionOptions';
 import NumberingSelector, { NumberingConfig } from '../components/NumberingSelector';
 import OcrLanguageSelector, { OcrLanguage } from '../components/OcrLanguageSelector';
-import { PDFDocument } from 'pdf-lib/dist/pdf-lib.esm.js';
+import PdfEditor, { PdfEditItem } from '../components/PdfEditor';
+import { PDFDocument, rgb } from 'pdf-lib/dist/pdf-lib.esm.js';
 import JSZip from 'jszip';
-
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
 const FILE_TOOLS = [
@@ -103,7 +103,7 @@ export default function ConvertScreen() {
     const styles = getStyles(colors);
 
     // Ajout de l'état "tool_intro"
-    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'processing' | 'done'>('menu');
+    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'pdf_editor' | 'preparing_editor' | 'processing' | 'done'>('menu');
     const [activeTab, setActiveTab] = useState<'files' | 'media'>('files');
     const [selectedService, setSelectedService] = useState<any>(null);
     const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
@@ -130,6 +130,10 @@ export default function ConvertScreen() {
     
     const [pdfDocRef, setPdfDocRef] = useState<any>(null);
     const [isSplitting, setIsSplitting] = useState(false);
+    
+    // PdfEditor states
+    const [pdfEditorPages, setPdfEditorPages] = useState<string[]>([]);
+    const [pdfOriginalBuffer, setPdfOriginalBuffer] = useState<ArrayBuffer | null>(null);
 
     const initSplitPDF = async (file: any) => {
         try {
@@ -153,6 +157,119 @@ export default function ConvertScreen() {
                 Alert.alert("Erreur", "Impossible de lire ce PDF. Veuillez réessayer.");
             }
             setStep('tool_intro');
+        }
+    };
+
+    const initPdfEditor = async (file: any) => {
+        setStep('preparing_editor');
+        try {
+            // 1. Lire le buffer original
+            let arrayBuffer: ArrayBuffer;
+            if (Platform.OS === 'web' && file.file) {
+                arrayBuffer = await file.file.arrayBuffer();
+            } else {
+                const response = await fetch(file.uri);
+                arrayBuffer = await response.arrayBuffer();
+            }
+            setPdfOriginalBuffer(arrayBuffer);
+
+            // 2. Envoyer au backend pour générer les images des pages
+            const formData = new FormData();
+            formData.append('file', {
+                uri: file.uri,
+                name: file.name,
+                type: 'application/pdf',
+                ...((Platform.OS === 'web' && file.file) ? { size: file.file.size } : {})
+            } as any);
+
+            const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard`, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/zip, image/jpeg'
+                }
+            });
+
+            if (!res.ok) throw new Error("Échec de la génération des images");
+
+            const contentType = res.headers.get('content-type');
+            const blob = await res.blob();
+            const pages: string[] = [];
+
+            if (contentType?.includes('zip')) {
+                const zip = new JSZip();
+                const unzipped = await zip.loadAsync(blob);
+                const fileNames = Object.keys(unzipped.files).sort(); // Sort by name to keep page order
+                for (const filename of fileNames) {
+                    const f = unzipped.files[filename];
+                    if (!f.dir) {
+                        const imgBlob = await f.async('blob');
+                        pages.push(URL.createObjectURL(imgBlob));
+                    }
+                }
+            } else {
+                // Single page
+                pages.push(URL.createObjectURL(blob));
+            }
+
+            setPdfEditorPages(pages);
+            setStep('pdf_editor');
+        } catch (e: any) {
+            console.error("Error in initPdfEditor:", e);
+            if (Platform.OS === 'web') {
+                window.alert("Erreur: Impossible de préparer l'éditeur PDF. Détails: " + (e.message || String(e)));
+            } else {
+                Alert.alert("Erreur", "Impossible de préparer l'éditeur PDF. Veuillez réessayer.");
+            }
+            setStep('staging');
+        }
+    };
+
+    const handlePdfEditorComplete = async (edits: PdfEditItem[]) => {
+        if (!pdfOriginalBuffer) return;
+        setStep('processing');
+        try {
+            const pdfDoc = await PDFDocument.load(pdfOriginalBuffer);
+            const pdfPages = pdfDoc.getPages();
+
+            for (const edit of edits) {
+                const page = pdfPages[edit.pageIndex];
+                if (!page) continue;
+
+                const { width, height } = page.getSize();
+                // Convert percentage coordinates (0-100) to absolute PDF coordinates
+                const x = (edit.x / 100) * width;
+                // PDF Y is inverted (0 is bottom)
+                const y = height - ((edit.y / 100) * height) - (edit.size || 24);
+
+                if (edit.type === 'text' && edit.text) {
+                    // Convert color hex to RGB
+                    let r = 0, g = 0, b = 0;
+                    if (edit.color && edit.color.startsWith('#')) {
+                        const hex = edit.color.replace('#', '');
+                        r = parseInt(hex.substring(0, 2), 16) / 255;
+                        g = parseInt(hex.substring(2, 4), 16) / 255;
+                        b = parseInt(hex.substring(4, 6), 16) / 255;
+                    }
+
+                    page.drawText(edit.text, {
+                        x,
+                        y,
+                        size: edit.size || 24,
+                        color: rgb(r, g, b),
+                    });
+                }
+            }
+
+            const modifiedPdfBytes = await pdfDoc.save();
+            const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            setResultUrl(url);
+            setStep('done');
+        } catch (e: any) {
+            console.error("Error applying PDF edits:", e);
+            Alert.alert("Erreur", "Échec de l'application des modifications.");
+            setStep('staging');
         }
     };
 
@@ -291,6 +408,8 @@ export default function ConvertScreen() {
                 if (selectedService.id === 'split-pdf') {
                     setStep('split_editor');
                     initSplitPDF(res.assets[0]);
+                } else if (selectedService.id === 'edit-pdf') {
+                    initPdfEditor(res.assets[0]);
                 } else {
                     setStep('staging');
                 }
@@ -869,6 +988,30 @@ export default function ConvertScreen() {
                     </ScrollView>
                 </View>
             </SafeAreaView>
+        );
+    }
+
+    if (step === 'preparing_editor') {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                <View style={styles.centerContent}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={styles.processingTitle}>Préparation de l'éditeur...</Text>
+                    <Text style={styles.processingFile}>Veuillez patienter pendant la génération des aperçus.</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (step === 'pdf_editor') {
+        return (
+            <PdfEditor 
+                pages={pdfEditorPages} 
+                colors={colors}
+                onComplete={handlePdfEditorComplete}
+                onCancel={() => setStep('tool_intro')}
+            />
         );
     }
 
