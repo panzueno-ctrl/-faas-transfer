@@ -849,3 +849,19 @@ Afin de rendre l'interface de conversion parfaitement fluide sur le Web et répo
   - La route d'OCR utilise `req.body.lang` injecté par le FormData.
 - **Bilan et Défis :** L'interface de `convert.tsx` a été complexifiée pour injecter dynamiquement le composant requis selon `selectedService.id`. Toutes ces modifications ont été testées et poussent le projet faas-transfer vers une expérience utilisateur ultra-premium et un backend parfaitement synchronisé.
 
+### Samedi, 15 Août 2026 à 01h59 et 50 secondes - Correction : Build Vercel (pdf-lib)
+- **Contexte :** Le déploiement automatique sur Vercel a échoué avec l'erreur `Unable to resolve module pdf-lib from src/app/convert.tsx`.
+- **Analyse :** Le Web Bundler d'Expo-Router sur Vercel n'arrivait pas à résoudre le deep import `require('pdf-lib/dist/pdf-lib.min.js')` utilisé précédemment dans l'application pour manipuler le PDF côté client.
+- **Correction :** 
+  - Remplacement de l'import restrictif par l'import standard ES6 au sommet du fichier : `import { PDFDocument } from 'pdf-lib';`.
+  - Suppression des `require` inline dans les fonctions asynchrones de manipulation de pages.
+- **Résultat :** Le code TypeScript compile correctement et le bundling Vercel peut reprendre son cours normal, rétablissant le site en production.
+
+### Samedi, 15 Août 2026 à 02h04 et 15 secondes - Correction Mineure : Bug de chargement infini sur l'écran d'envoi
+- **Contexte :** L'utilisateur a signalé un bug dans `send.tsx` : lorsqu'on clique sur une catégorie (ex: "Photos" ou "Audio") et qu'on quitte la galerie/explorateur de fichiers sans rien sélectionner, l'application restait bloquée indéfiniment sur la page de chargement ("Traitement en cours...").
+- **Analyse :** La fonction `pickFile` définissait l'état `setIsPicking(true)` dès le clic sur la catégorie. Cependant, si l'utilisateur annulait l'explorateur natif, le code effectuait un `if (res.canceled) return;` anticipé **sans** remettre l'état `setIsPicking(false)`. L'UI restait alors verrouillée.
+- **Correction :** Ajout systématique de `setIsPicking(false)` avant tous les `return` anticipés liés aux annulations de `DocumentPicker` et `ImagePicker` dans `mobile/src/app/send.tsx`.
+- **Résultat :** Lorsqu'on annule la sélection, l'application annule le chargement et la grille des catégories redevient instantanément interactive.
+
+
+

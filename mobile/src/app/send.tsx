@@ -157,12 +157,16 @@ export default function SendScreen() {
                         copyToCacheDirectory: false,
                         multiple: true,
                     });
-                    if (res.canceled) return;
+                    if (res.canceled) {
+                        setIsPicking(false);
+                        return;
+                    }
                     files = res.assets;
                 } else {
                     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
                     if (permissionResult.granted === false) {
                         Alert.alert("Permission requise", "Vous devez autoriser l'accès à vos photos.");
+                        setIsPicking(false);
                         return;
                     }
 
@@ -172,7 +176,10 @@ export default function SendScreen() {
                         preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
                     });
 
-                    if (result.canceled) return;
+                    if (result.canceled) {
+                        setIsPicking(false);
+                        return;
+                    }
                     
                     files = result.assets.map(asset => ({
                         uri: asset.uri,
@@ -188,7 +195,10 @@ export default function SendScreen() {
                     copyToCacheDirectory: false,
                     multiple: true,
                 });
-                if (res.canceled) return;
+                if (res.canceled) {
+                    setIsPicking(false);
+                    return;
+                }
                 files = res.assets.map(asset => {
                     let finalName = asset.name || (asset.file && (asset.file as any).name) || 'fichier';
                     const mime = asset.mimeType || (asset.file && (asset.file as any).type) || '';
