@@ -863,5 +863,14 @@ Afin de rendre l'interface de conversion parfaitement fluide sur le Web et répo
 - **Correction :** Ajout systématique de `setIsPicking(false)` avant tous les `return` anticipés liés aux annulations de `DocumentPicker` et `ImagePicker` dans `mobile/src/app/send.tsx`.
 - **Résultat :** Lorsqu'on annule la sélection, l'application annule le chargement et la grille des catégories redevient instantanément interactive.
 
+### Samedi, 15 Août 2026 à 02h11 et 00 secondes - Correction Majeure : Build Vercel (pdf-lib et jszip)
+- **Contexte :** Le précédent correctif pour `pdf-lib` n'a pas suffi à rétablir le build sur Vercel. L'erreur `Unable to resolve module` persistait, souvent causée par l'incapacité du bundler Metro Web d'Expo à gérer les modules Node.js natifs (`fs`, `zlib`) requis par l'entrée par défaut de `pdf-lib`, ou par l'utilisation de `require()` inline pour `jszip`.
+- **Analyse :** Le Webpack/Metro d'Expo a besoin qu'on lui pointe explicitement la version navigateur (ESM) de la librairie pour éviter qu'il ne tente de résoudre les dépendances Node.js.
+- **Correction :** 
+  - Changement de l'import : `import { PDFDocument } from 'pdf-lib/dist/pdf-lib.esm.js';` pour forcer l'utilisation de la version ESM 100% compatible navigateur.
+  - Remplacement du `require('jszip')` inline par un import ESM standard en haut de page (`import JSZip from 'jszip';`).
+- **Résultat :** Les dépendances problématiques sont maintenant gérées correctement et nativement par le Web Bundler.
+
+
 
 
