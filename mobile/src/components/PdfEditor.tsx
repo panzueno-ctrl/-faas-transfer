@@ -15,13 +15,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-const DraggableItem = ({ x, y, canvasSize, onDragEnd, children }: any) => {
+const DraggableItem = ({ x, y, canvasSize, onDragEnd, isSelected, onSelect, children }: any) => {
     const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
 
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
             onMoveShouldSetPanResponder: () => true,
+            onPanResponderGrant: () => {
+                if (onSelect) onSelect();
+            },
             onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
             onPanResponderRelease: (e, gestureState) => {
                 const percentDx = (gestureState.dx / canvasSize.width) * 100;
@@ -39,15 +42,11 @@ const DraggableItem = ({ x, y, canvasSize, onDragEnd, children }: any) => {
                 left: `${x}%`,
                 top: `${y}%`,
                 transform: [{ translateX: pan.x }, { translateY: pan.y }],
-                flexDirection: 'row',
-                alignItems: 'center',
-                zIndex: 1000,
+                flexDirection: 'column',
+                zIndex: isSelected ? 1000 : 100,
             }}
         >
-            <View {...panResponder.panHandlers} style={{ padding: 4, cursor: Platform.OS === 'web' ? 'grab' : 'default', backgroundColor: 'rgba(200,200,200,0.5)', borderRadius: 4, marginRight: 4 }}>
-                <Ionicons name="move" size={16} color="#333" />
-            </View>
-            {children}
+            {children(panResponder.panHandlers)}
         </Animated.View>
     );
 };
@@ -81,10 +80,18 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
     const [canvasSize, setCanvasSize] = useState({ width: 800, height: 1131 });
     
     // For handling dragging and temporary text
-    const [draftText, setDraftText] = useState<{ x: number, y: number, text: string } | null>(null);
-    const textInputRef = useRef<TextInput>(null);
+    const [selectedEditId, setSelectedEditId] = useState<string | null>(null);
+
+    // Nettoyage des textes vides lors de la désélection
+    useEffect(() => {
+        setEdits(prev => prev.filter(e => e.type !== 'text' || e.text?.trim() !== '' || e.id === selectedEditId));
+    }, [selectedEditId]);
 
     const handleCanvasPress = (e: any) => {
+        if (selectedEditId) {
+            setSelectedEditId(null);
+        }
+
         if (activeTool !== 'text') return;
         
         // Use nativeEvent for cross-platform local coordinates
@@ -112,34 +119,23 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
             y = (locationY / canvasSize.height) * 100;
         }
         
-        if (draftText) {
-            commitDraftText();
-        } else {
-            setDraftText({ x, y, text: '' });
-            setTimeout(() => textInputRef.current?.focus(), 50);
-        }
-    };
-
-    const commitDraftText = () => {
-        if (draftText && draftText.text.trim().length > 0) {
-            const newEdit: PdfEditItem = {
-                id: Date.now().toString(),
-                pageIndex: currentPageIndex,
-                type: 'text',
-                x: draftText.x,
-                y: draftText.y,
-                text: draftText.text,
-                color: selectedColor,
-                size: 24, // default relative size
-            };
-            setEdits([...edits, newEdit]);
-        }
-        setDraftText(null);
-        setActiveTool(null);
+        const newEdit: PdfEditItem = {
+            id: Date.now().toString(),
+            pageIndex: currentPageIndex,
+            type: 'text',
+            x,
+            y,
+            text: '',
+            color: selectedColor,
+            size: 18,
+        };
+        setEdits([...edits, newEdit]);
+        setSelectedEditId(newEdit.id);
     };
 
     const removeEdit = (id: string) => {
         setEdits(edits.filter(e => e.id !== id));
+        if (selectedEditId === id) setSelectedEditId(null);
     };
 
     const COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#000000', '#ffffff'];
@@ -181,7 +177,7 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
                 </View>
 
                 <View style={styles.toolbarRight}>
-                    <Pressable style={styles.primaryButton} onPress={() => { commitDraftText(); onComplete(edits); }}>
+                    <Pressable style={styles.primaryButton} onPress={() => { setSelectedEditId(null); onComplete(edits); }}>
                         <Ionicons name="checkmark" size={20} color="#fff" />
                         <Text style={styles.primaryButtonText}>Terminer</Text>
                     </Pressable>
@@ -217,53 +213,58 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
                             onLayout={(e) => setCanvasSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
                             onPress={handleCanvasPress}
                         >
-                            {/* Render existing edits for this page */}
-                            {edits.filter(e => e.pageIndex === currentPageIndex).map(edit => (
-                                <DraggableItem 
-                                    key={edit.id} 
-                                    x={edit.x} 
-                                    y={edit.y} 
-                                    canvasSize={canvasSize} 
-                                    onDragEnd={(newX: number, newY: number) => {
-                                        setEdits(prev => prev.map(e => e.id === edit.id ? { ...e, x: newX, y: newY } : e));
-                                    }}
-                                >
-                                    {edit.type === 'text' && (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <Text style={{ color: edit.color, fontSize: 18, fontWeight: 'bold' }}>{edit.text}</Text>
-                                            <Pressable style={styles.deleteEditBtn} onPress={() => removeEdit(edit.id)}>
-                                                <Ionicons name="close-circle" size={16} color="#ff4444" />
-                                            </Pressable>
-                                        </View>
-                                    )}
-                                </DraggableItem>
-                            ))}
-
-                            {/* Render active draft text */}
-                            {draftText && (
-                                <DraggableItem
-                                    x={draftText.x}
-                                    y={draftText.y}
-                                    canvasSize={canvasSize}
-                                    onDragEnd={(newX: number, newY: number) => {
-                                        setDraftText({ ...draftText, x: newX, y: newY });
-                                    }}
-                                >
-                                    <View style={styles.draftTextContainer}>
-                                        <TextInput 
-                                            ref={textInputRef}
-                                            style={[styles.draftTextInput, { color: selectedColor }]}
-                                            value={draftText.text}
-                                            onChangeText={(t) => setDraftText({ ...draftText, text: t })}
-                                            placeholder="Taper ici..."
-                                            placeholderTextColor="rgba(150,150,150,0.5)"
-                                            autoFocus
-                                            onBlur={commitDraftText}
-                                            onSubmitEditing={commitDraftText}
-                                        />
-                                    </View>
-                                </DraggableItem>
-                            )}
+                            {/* Render all text edits for this page */}
+                            {edits.filter(e => e.pageIndex === currentPageIndex).map(edit => {
+                                const isSelected = edit.id === selectedEditId;
+                                return (
+                                    <DraggableItem 
+                                        key={edit.id} 
+                                        x={edit.x} 
+                                        y={edit.y} 
+                                        canvasSize={canvasSize} 
+                                        isSelected={isSelected}
+                                        onSelect={() => setSelectedEditId(edit.id)}
+                                        onDragEnd={(newX: number, newY: number) => {
+                                            setEdits(prev => prev.map(e => e.id === edit.id ? { ...e, x: newX, y: newY } : e));
+                                        }}
+                                    >
+                                        {(panHandlers: any) => (
+                                            <View style={[styles.premiumEditBox, isSelected && styles.premiumEditBoxSelected]}>
+                                                {isSelected && (
+                                                    <View style={styles.premiumToolbar}>
+                                                        <View {...panHandlers} style={[styles.premiumDragHandle, { cursor: Platform.OS === 'web' ? 'grab' : 'default' }]}>
+                                                            <Ionicons name="move" size={16} color="#fff" />
+                                                        </View>
+                                                        <Pressable onPress={() => removeEdit(edit.id)} style={styles.premiumDeleteBtn}>
+                                                            <Ionicons name="trash" size={16} color="#fff" />
+                                                        </Pressable>
+                                                    </View>
+                                                )}
+                                                
+                                                {edit.type === 'text' && (
+                                                    isSelected ? (
+                                                        <TextInput 
+                                                            style={[styles.premiumTextInput, { color: edit.color, fontSize: edit.size || 18 }]}
+                                                            value={edit.text}
+                                                            onChangeText={(t) => setEdits(prev => prev.map(e => e.id === edit.id ? { ...e, text: t } : e))}
+                                                            placeholder="Taper ici..."
+                                                            placeholderTextColor="rgba(150,150,150,0.5)"
+                                                            autoFocus={true}
+                                                            multiline
+                                                        />
+                                                    ) : (
+                                                        <Pressable onPress={() => setSelectedEditId(edit.id)}>
+                                                            <Text style={[styles.premiumTextInput, { color: edit.color, fontSize: edit.size || 18 }]}>
+                                                                {edit.text || " "}
+                                                            </Text>
+                                                        </Pressable>
+                                                    )
+                                                )}
+                                            </View>
+                                        )}
+                                    </DraggableItem>
+                                );
+                            })}
                         </Pressable>
                     </View>
                 </View>
@@ -415,26 +416,37 @@ const styles = StyleSheet.create({
         top: 0, left: 0, right: 0, bottom: 0,
         cursor: 'crosshair' as any,
     },
-    renderedEdit: {
-        position: 'absolute',
-        transform: [{ translateY: -12 }], // center roughly
-    },
-    deleteEditBtn: {
-        marginLeft: 8,
-        padding: 4,
-    },
-    draftTextContainer: {
-        position: 'absolute',
-        transform: [{ translateY: -12 }], // center roughly
-    },
-    draftTextInput: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        minWidth: 150,
-        backgroundColor: 'rgba(255,255,255,0.8)',
-        borderWidth: 1,
-        borderColor: '#3498db',
+    premiumEditBox: {
         padding: 4,
         borderRadius: 4,
-    }
+        borderWidth: 1,
+        borderColor: 'transparent',
+    },
+    premiumEditBoxSelected: {
+        borderColor: '#3498db',
+        borderStyle: 'dashed',
+        backgroundColor: 'rgba(52, 152, 219, 0.05)',
+    },
+    premiumToolbar: {
+        position: 'absolute',
+        top: -30,
+        left: -1,
+        flexDirection: 'row',
+        backgroundColor: '#3498db',
+        borderRadius: 4,
+        overflow: 'hidden',
+    },
+    premiumDragHandle: {
+        padding: 6,
+        backgroundColor: '#2980b9',
+    },
+    premiumDeleteBtn: {
+        padding: 6,
+    },
+    premiumTextInput: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        minWidth: 100,
+        outlineStyle: 'none',
+    },
 });
