@@ -249,27 +249,29 @@ export default function ConvertScreen() {
 
                 const { width, height } = page.getSize();
                 
-                if (edit.type === 'whiteout') {
-                    const rectWidth = (edit.width || 15) * (width / 100);
-                    const rectHeight = (edit.height || 3) * (height / 100);
-                    const x = (edit.x / 100) * width;
-                    const y = height - ((edit.y / 100) * height) - rectHeight;
-
-                    page.drawRectangle({
-                        x,
-                        y,
-                        width: rectWidth,
-                        height: rectHeight,
-                        color: rgb(1, 1, 1), // White
-                    });
-                    continue;
-                }
-
                 if (edit.type === 'text' && edit.text) {
                     const x = (edit.x / 100) * width;
                     const fontSize = edit.size || 24;
-                    // Approximative Y position
                     const y = height - ((edit.y / 100) * height) - fontSize;
+
+                    if (edit.backgroundColor && edit.backgroundColor.startsWith('#')) {
+                        const bgHex = edit.backgroundColor.replace('#', '');
+                        const bgR = parseInt(bgHex.substring(0, 2), 16) / 255;
+                        const bgG = parseInt(bgHex.substring(2, 4), 16) / 255;
+                        const bgB = parseInt(bgHex.substring(4, 6), 16) / 255;
+                        
+                        const rectWidth = (edit.width || 15) * (width / 100);
+                        const rectHeight = (edit.height || 4) * (height / 100);
+                        const rectY = height - ((edit.y / 100) * height) - rectHeight;
+
+                        page.drawRectangle({
+                            x,
+                            y: rectY,
+                            width: rectWidth,
+                            height: rectHeight,
+                            color: rgb(bgR, bgG, bgB),
+                        });
+                    }
 
                     let r = 0, g = 0, b = 0;
                     if (edit.color && edit.color.startsWith('#')) {

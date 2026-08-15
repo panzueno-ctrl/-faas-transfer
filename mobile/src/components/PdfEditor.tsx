@@ -51,7 +51,7 @@ const DraggableItem = ({ x, y, canvasSize, onDragEnd, isSelected, onSelect, chil
     );
 };
 
-export type PdfEditType = 'text' | 'image' | 'draw' | 'whiteout';
+export type PdfEditType = 'text' | 'image' | 'draw' | 'replace';
 
 export interface PdfEditItem {
     id: string;
@@ -59,8 +59,9 @@ export interface PdfEditItem {
     type: PdfEditType;
     x: number; // percentage 0-100
     y: number; // percentage 0-100
-    width?: number; // for whiteout
-    height?: number; // for whiteout
+    width?: number; // for replace background
+    height?: number; // for replace background
+    backgroundColor?: string; // for replace background
     text?: string;
     color?: string;
     size?: number;
@@ -157,16 +158,24 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
             y = (locationY / canvasSize.height) * 100;
         }
         
-        if (activeTool === 'whiteout') {
+        if (activeTool === 'replace') {
             const newEdit: PdfEditItem = {
                 id: Date.now().toString(),
                 pageIndex: currentPageIndex,
-                type: 'whiteout',
+                type: 'text',
                 x, y,
-                width: 15, // 15% of page width
-                height: 3,  // 3% of page height
+                width: 15,
+                height: 4,
+                backgroundColor: '#ffffff',
+                text: '',
+                color: selectedColor,
+                size: selectedSize,
+                fontWeight: selectedWeight,
+                fontStyle: selectedStyle,
+                textAlign: selectedAlign,
             };
             setEdits([...edits, newEdit]);
+            setSelectedEditId(newEdit.id);
             return;
         }
 
@@ -220,17 +229,17 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
                         </Pressable>
 
                         <Pressable 
-                            style={[styles.toolBtn, activeTool === 'whiteout' && styles.toolBtnActive, { marginLeft: 8 }]} 
-                            onPress={() => setActiveTool(activeTool === 'whiteout' ? null : 'whiteout')}
+                            style={[styles.toolBtn, activeTool === 'replace' && styles.toolBtnActive, { marginLeft: 8 }]} 
+                            onPress={() => setActiveTool(activeTool === 'replace' ? null : 'replace')}
                         >
-                            <Ionicons name="square" size={20} color={activeTool === 'whiteout' ? '#e74c3c' : colors.text} />
-                            <Text style={[styles.toolBtnText, { color: activeTool === 'whiteout' ? '#e74c3c' : colors.text }]}>Effacer (Masque)</Text>
+                            <Ionicons name="create" size={20} color={activeTool === 'replace' ? '#e74c3c' : colors.text} />
+                            <Text style={[styles.toolBtnText, { color: activeTool === 'replace' ? '#e74c3c' : colors.text }]}>Remplacer texte</Text>
                         </Pressable>
                     </View>
 
                     <View style={styles.toolbarDivider} />
 
-                    {activeTool === 'text' && (
+                    {(activeTool === 'text' || activeTool === 'replace') && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
                             {/* Font Size */}
                             <View style={styles.richTextGroup}>
@@ -339,53 +348,16 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors }: PdfEd
                                         }}
                                     >
                                         {(panHandlers: any) => (
-                                            <View style={[styles.premiumEditBox, isSelected && styles.premiumEditBoxSelected]}>
-                                                {isSelected && (
-                                                    <View style={styles.premiumToolbar}>
-                                                        <View {...panHandlers} style={[styles.premiumDragHandle, { cursor: Platform.OS === 'web' ? 'grab' : 'default' }]}>
-                                                            <Ionicons name="move" size={16} color="#fff" />
-                                                        </View>
-                                                        <Pressable onPress={() => removeEdit(edit.id)} style={styles.premiumDeleteBtn}>
-                                                            <Ionicons name="trash" size={16} color="#fff" />
-                                                        </Pressable>
-                                                    </View>
-                                                )}
-                                                
-                                                {edit.type === 'text' && (
-                                                    isSelected ? (
-                                                        <TextInput 
-                                                            style={[styles.premiumTextInput, { 
-                                                                color: edit.color, 
-                                                                fontSize: edit.size || 18,
-                                                                fontWeight: edit.fontWeight || 'normal',
-                                                                fontStyle: edit.fontStyle || 'normal',
-                                                                textAlign: edit.textAlign || 'left',
-                                                            }]}
-                                                            value={edit.text}
-                                                            onChangeText={(t) => setEdits(prev => prev.map(e => e.id === edit.id ? { ...e, text: t } : e))}
-                                                            placeholder="Taper ici..."
-                                                            placeholderTextColor="rgba(150,150,150,0.5)"
-                                                            autoFocus={true}
-                                                            multiline
-                                                        />
-                                                    ) : (
-                                                        <Pressable onPress={() => setSelectedEditId(edit.id)}>
-                                                            <Text style={[styles.premiumTextInput, { 
-                                                                color: edit.color, 
-                                                                fontSize: edit.size || 18,
-                                                                fontWeight: edit.fontWeight || 'normal',
-                                                                fontStyle: edit.fontStyle || 'normal',
-                                                                textAlign: edit.textAlign || 'left',
-                                                            }]}>
-                                                                {edit.text || " "}
-                                                            </Text>
-                                                        </Pressable>
-                                                    )
-                                                )}
-                                                {edit.type === 'whiteout' && (
-                                                    <View style={{ width: (edit.width || 15) * (canvasSize.width / 100), height: (edit.height || 3) * (canvasSize.height / 100), backgroundColor: '#ffffff', borderColor: isSelected ? '#3498db' : '#e0e0e0', borderWidth: 1 }} />
-                                                )}
-                                            </View>
+                                            <PdfEditItemView
+                                                edit={edit}
+                                                isSelected={isSelected}
+                                                canvasSize={canvasSize}
+                                                onSelect={() => setSelectedEditId(edit.id)}
+                                                onRemove={() => removeEdit(edit.id)}
+                                                onChangeText={(t: string) => setEdits(prev => prev.map(e => e.id === edit.id ? { ...e, text: t } : e))}
+                                                onResize={(w: number, h: number) => setEdits(prev => prev.map(e => e.id === edit.id ? { ...e, width: w, height: h } : e))}
+                                                panHandlers={panHandlers}
+                                            />
                                         )}
                                     </DraggableItem>
                                 );
@@ -569,10 +541,24 @@ const styles = StyleSheet.create({
         padding: 6,
     },
     premiumTextInput: {
-        fontSize: 18,
         minWidth: 100,
-        outlineStyle: 'none',
+        outlineStyle: 'none' as any,
+        padding: 0,
+        margin: 0,
     },
+    resizeHandle: {
+        position: 'absolute',
+        bottom: -6,
+        right: -6,
+        width: 16,
+        height: 16,
+        backgroundColor: '#3498db',
+        borderRadius: 8,
+        borderWidth: 2,
+        borderColor: '#fff',
+        zIndex: 101,
+        cursor: Platform.OS === 'web' ? 'nwse-resize' : 'default',
+    } as any,
     toolBtnActive: {
         backgroundColor: 'rgba(52, 152, 219, 0.2)',
     },
@@ -598,3 +584,76 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     }
 });
+
+// Component to handle individual edit items and their resize handlers
+function PdfEditItemView({ edit, isSelected, canvasSize, onSelect, onRemove, onChangeText, onResize, panHandlers }: any) {
+    const resizePanResponder = React.useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onPanResponderMove: (e, gestureState) => {
+                const percentDx = (gestureState.dx / canvasSize.width) * 100;
+                const percentDy = (gestureState.dy / canvasSize.height) * 100;
+                const currentWidth = edit.width || 15;
+                const currentHeight = edit.height || 4;
+                onResize(Math.max(2, currentWidth + percentDx), Math.max(1, currentHeight + percentDy));
+            },
+            onPanResponderRelease: () => {
+                // Done resizing
+            }
+        })
+    ).current;
+
+    const baseStyle = { 
+        color: edit.color, 
+        fontSize: edit.size || 18,
+        fontWeight: edit.fontWeight || 'normal',
+        fontStyle: edit.fontStyle || 'normal',
+        textAlign: edit.textAlign || 'left',
+    } as any;
+
+    if (edit.type === 'text') {
+        const hasBg = !!edit.backgroundColor;
+        const boxWidth = hasBg && edit.width ? edit.width * (canvasSize.width / 100) : undefined;
+        const boxHeight = hasBg && edit.height ? edit.height * (canvasSize.height / 100) : undefined;
+
+        return (
+            <View style={[styles.premiumEditBox, isSelected && styles.premiumEditBoxSelected, hasBg && { backgroundColor: edit.backgroundColor, width: boxWidth, height: boxHeight, overflow: 'hidden' }]}>
+                {isSelected && (
+                    <View style={styles.premiumToolbar}>
+                        <View {...panHandlers} style={[styles.premiumDragHandle, { cursor: Platform.OS === 'web' ? 'grab' : 'default' }] as any}>
+                            <Ionicons name="move" size={16} color="#fff" />
+                        </View>
+                        <Pressable onPress={onRemove} style={styles.premiumDeleteBtn}>
+                            <Ionicons name="trash" size={16} color="#fff" />
+                        </Pressable>
+                    </View>
+                )}
+                
+                {isSelected ? (
+                    <TextInput 
+                        style={[styles.premiumTextInput, baseStyle, hasBg && { flex: 1, padding: 4 }]}
+                        value={edit.text}
+                        onChangeText={onChangeText}
+                        placeholder="Taper ici..."
+                        placeholderTextColor="rgba(150,150,150,0.5)"
+                        autoFocus={true}
+                        multiline
+                    />
+                ) : (
+                    <Pressable onPress={onSelect} style={hasBg && { flex: 1, padding: 4 }}>
+                        <Text style={[styles.premiumTextInput, baseStyle, hasBg && { flex: 1 }]}>
+                            {edit.text || " "}
+                        </Text>
+                    </Pressable>
+                )}
+
+                {isSelected && hasBg && (
+                    <View {...resizePanResponder.panHandlers} style={styles.resizeHandle} />
+                )}
+            </View>
+        );
+    }
+
+    return null;
+}
