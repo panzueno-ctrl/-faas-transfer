@@ -161,3 +161,10 @@ sequenceDiagram
 2. **Économie serveur :** Le backend (512 Mo RAM) ne crashera plus en essayant de manipuler des PDF de 200 Mo.
 3. **Confidentialité absolue :** Les documents confidentiels ne quittent jamais l'appareil de l'utilisateur lors de l'édition.
 4. **UX Premium :** Permet des éditeurs visuels interactifs (comme RotationEditor ou WatermarkEditor) avec prévisualisation en temps réel, à l'image des leaders comme Smallpdf.
+
+### Cas Spécifique de l'outil "Organiser PDF" (Multi-fichiers)
+L'outil \Organiser PDF\ pousse cette architecture Client-Side encore plus loin en gérant **plusieurs fichiers simultanément** :
+1. L'utilisateur sélectionne N fichiers PDF.
+2. Le navigateur génère les miniatures de toutes les pages de tous les fichiers, et associe un **code couleur** unique à chaque fichier source.
+3. L'utilisateur peut faire du **Drag & Drop** (glisser-déposer) pour réorganiser librement toutes ces pages dans une grille géante interactive.
+4. À la validation, \pdf-lib\ charge les N documents originaux en mémoire, crée un document final vierge, et copie les pages une par une depuis les différents documents selon l'ordre final choisi. Le tout se fait localement en une fraction de seconde.
