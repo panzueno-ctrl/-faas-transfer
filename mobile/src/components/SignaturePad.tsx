@@ -88,7 +88,8 @@ export default function SignaturePad({ visible, onClose, onSave, colors }: Signa
                 setCurrentPath(currentPathRef.current);
             },
             onPanResponderRelease: () => {
-                setPaths(prev => [...prev, currentPathRef.current]);
+                const finishedPath = currentPathRef.current;
+                setPaths(prev => [...prev, finishedPath]);
                 currentPathRef.current = '';
                 setCurrentPath('');
             }
