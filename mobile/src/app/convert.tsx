@@ -133,7 +133,6 @@ export default function ConvertScreen() {
     
     // PdfEditor states
     const [pdfEditorPages, setPdfEditorPages] = useState<string[]>([]);
-    const [pdfOriginalBuffer, setPdfOriginalBuffer] = useState<ArrayBuffer | null>(null);
 
     const initSplitPDF = async (file: any) => {
         try {
