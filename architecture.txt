@@ -973,3 +973,14 @@ Les outils PDF tels que Filigrane (Watermark), Rotation, et Organiser (multi-fic
    - Ajout Dynamique : L'utilisateur peut ajouter de nouveaux fichiers PDF à la volée via le bouton (+). Le processus d'extraction d'images s'exécute pour ces nouveaux fichiers et les fusionne à la liste existante.
    - Synchronisation Drag & Drop Fichiers : Glisser-déposer un fichier dans la barre latérale réorganise automatiquement *toutes les pages* de ce fichier dans la zone principale, assurant une cohérence entre l'ordre des documents sources et l'ordre des pages.
    - Robustesse Multi-Fichiers (Fail-Safe) : Si l'extraction d'images échoue pour l'un des fichiers (timeout Render ou erreur réseau "Failed to fetch"), le processus ne s'arrête plus. Le fichier corrompu ou bloqué est ignoré, et l'éditeur s'ouvre avec les autres fichiers fonctionnels, tout en avertissant l'utilisateur des fichiers ignorés.
+
+============================================================
+  PROTECTION DE FICHIER (PROTÉGER PDF)
+============================================================
+
+1. REFONTE INTERFACE U.I. :
+   - Refonte du composant `PasswordProtector.tsx` pour s'aligner sur les standards de l'industrie (type SmallPDF).
+   - Ajout de deux champs de saisie : "Définis ton mot de passe" et "Confirme ton mot de passe".
+   - Ajout de la bascule d'affichage du mot de passe (icône œil).
+   - Le bouton "Terminer" (`convert.tsx`) est désormais désactivé si les mots de passe sont vides ou ne correspondent pas.
+   - Indication de sécurité "Protection par cryptage AES 128 bits" affichée en bas du formulaire.
