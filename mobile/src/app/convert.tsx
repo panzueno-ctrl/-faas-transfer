@@ -29,7 +29,7 @@ import { useTranslation } from 'react-i18next';
 import PdfThumbnail from '../components/PdfThumbnail';
 import CompressionSelector, { CompressionLevel } from '../components/CompressionSelector';
 import PasswordProtector from '../components/PasswordProtector';
-import WatermarkConfig from '../components/WatermarkConfig';
+import WatermarkEditor, { WatermarkSettings } from '../components/WatermarkEditor';
 import SplitSelector, { SplitMode } from '../components/SplitSelector';
 import RotationSelector, { RotationAngle } from '../components/RotationSelector';
 import ConversionOptions, { ConversionQuality } from '../components/ConversionOptions';
@@ -120,7 +120,8 @@ export default function ConvertScreen() {
     
     // Premium UI states
     const [pdfPassword, setPdfPassword] = useState('');
-    const [watermarkConfig, setWatermarkConfig] = useState({ text: '', position: 'diagonal' });
+    const [pdfOriginalBuffer, setPdfOriginalBuffer] = useState<ArrayBuffer | null>(null);
+    const [watermarkConfig, setWatermarkConfig] = useState<WatermarkSettings | null>(null);
     const [splitMode, setSplitMode] = useState<SplitMode>('all');
     const [rotationAngle, setRotationAngle] = useState<RotationAngle>(90);
     const [conversionQuality, setConversionQuality] = useState<ConversionQuality>('standard');
@@ -159,7 +160,7 @@ export default function ConvertScreen() {
         }
     };
 
-    const initPdfEditor = async (file: any) => {
+    const initPdfEditor = async (file: any, targetStep: string = 'pdf_editor') => {
         setStep('preparing_editor');
         try {
             // 1. Lire le buffer original
@@ -217,7 +218,7 @@ export default function ConvertScreen() {
             }
 
             setPdfEditorPages(pages);
-            setStep('pdf_editor');
+            setStep(targetStep as any);
         } catch (e: any) {
             console.error("Error in initPdfEditor:", e);
             if (Platform.OS === 'web') {
@@ -352,6 +353,51 @@ export default function ConvertScreen() {
         } catch (e: any) {
             console.error("Error applying PDF edits:", e);
             Alert.alert("Erreur", "Échec de l'application des modifications.");
+            setStep('staging');
+        }
+    };
+
+    const handleWatermarkComplete = async (settings: WatermarkSettings) => {
+        if (!pdfOriginalBuffer) return;
+        setStep('processing');
+        try {
+            const pdfDoc = await PDFDocument.load(pdfOriginalBuffer);
+            const pdfPages = pdfDoc.getPages();
+            const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+            let r = 0, g = 0, b = 0;
+            if (settings.color && settings.color.startsWith('#')) {
+                const hex = settings.color.replace('#', '');
+                r = parseInt(hex.substring(0, 2), 16) / 255;
+                g = parseInt(hex.substring(2, 4), 16) / 255;
+                b = parseInt(hex.substring(4, 6), 16) / 255;
+            }
+
+            // Let's improve the text centering using widthOfTextAtSize
+            pdfPages.forEach(page => {
+                const { width, height } = page.getSize();
+                const textWidth = fontBold.widthOfTextAtSize(settings.text, settings.size);
+                const textHeight = settings.size; // approximate
+                
+                page.drawText(settings.text, {
+                    x: (width / 2) - (textWidth / 2) * Math.cos(45 * Math.PI / 180) + (textHeight/2) * Math.sin(45 * Math.PI / 180),
+                    y: (height / 2) - (textWidth / 2) * Math.sin(45 * Math.PI / 180) - (textHeight/2) * Math.cos(45 * Math.PI / 180),
+                    size: settings.size,
+                    font: fontBold,
+                    color: rgb(r, g, b),
+                    opacity: settings.opacity,
+                    rotate: degrees(45), // use positive 45 for diagonal going up-right
+                });
+            });
+
+            const modifiedPdfBytes = await pdfDoc.save();
+            const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            setResultUrl(url);
+            setStep('done');
+        } catch (e: any) {
+            console.error("Error applying watermark:", e);
+            Alert.alert("Erreur", "Échec de l'application du filigrane.");
             setStep('staging');
         }
     };
@@ -495,6 +541,8 @@ export default function ConvertScreen() {
                     setStep('sign_choice');
                 } else if (selectedService.id === 'edit-pdf') {
                     initPdfEditor(res.assets[0]);
+                } else if (selectedService.id === 'watermark-pdf') {
+                    initPdfEditor(res.assets[0], 'watermark_editor');
                 } else {
                     setStep('staging');
                 }
@@ -1106,9 +1154,7 @@ export default function ConvertScreen() {
                             <PasswordProtector onChange={setPdfPassword} />
                         )}
 
-                        {selectedService.id === 'watermark-pdf' && (
-                            <WatermarkConfig onChange={setWatermarkConfig} />
-                        )}
+                        {/* watermark-pdf configurator has been moved to WatermarkEditor */}
 
                         {selectedService.id === 'split-pdf' && (
                             <SplitSelector onChange={setSplitMode} />
@@ -1170,6 +1216,17 @@ export default function ConvertScreen() {
                 onComplete={handlePdfEditorComplete}
                 onCancel={() => setStep('tool_intro')}
                 autoOpenSignTool={selectedService?.id === 'sign-pdf'}
+            />
+        );
+    }
+
+    if (step === 'watermark_editor') {
+        return (
+            <WatermarkEditor 
+                pages={pdfEditorPages} 
+                colors={colors}
+                onComplete={handleWatermarkComplete}
+                onCancel={() => setStep('tool_intro')}
             />
         );
     }
