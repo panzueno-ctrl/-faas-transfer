@@ -1356,9 +1356,9 @@ export default function ConvertScreen() {
 
                         <View style={{ flexDirection: 'row', gap: 16, width: '100%', maxWidth: 400 }}>
                             <Pressable 
-                                style={[styles.primaryButton, selectedFiles.length === 0 && { opacity: 0.5 }]} 
+                                style={[styles.primaryButton, (selectedFiles.length === 0 || (selectedService.id === 'protect-pdf' && (!pdfPassword || pdfPassword.trim() === ''))) && { opacity: 0.5 }]} 
                                 onPress={processFiles}
-                                disabled={selectedFiles.length === 0}
+                                disabled={selectedFiles.length === 0 || (selectedService.id === 'protect-pdf' && (!pdfPassword || pdfPassword.trim() === ''))}
                             >
                                 <Ionicons name="checkmark-outline" size={22} color="#ffffff" />
                                 <Text style={styles.primaryButtonText}>Terminer</Text>
