@@ -321,7 +321,7 @@ export default function ConvertScreen() {
                         const scaleY = rectHeight / (sig.height || 200);
                         const scale = Math.min(scaleX, scaleY);
                         page.drawSvgPath(sig.data, {
-                            x, y: y + rectHeight, scale, color: rgb(0,0,0), borderColor: rgb(0,0,0), borderWidth: 2
+                            x, y: y + rectHeight, scale, borderColor: rgb(0,0,0), borderWidth: 2
                         });
                     } else if (sig.type === 'image') {
                         try {
