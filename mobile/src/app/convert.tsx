@@ -364,81 +364,101 @@ export default function ConvertScreen() {
             const pastelColors = ['#ffcfcf', '#cbf2e8', '#fff0b5', '#dfd5f6', '#c2ebf9'];
             const newOrganizePages: OrganizePageItem[] = appendToExisting ? [...organizePages] : [];
             const newOrganizeFiles: any[] = appendToExisting ? [...organizeFiles] : [];
-
             const startIndex = newOrganizeFiles.length;
+            const failedFiles: string[] = [];
 
             for (let i = 0; i < files.length; i++) {
                 const fileIndex = startIndex + i;
                 const file = files[i];
                 const color = pastelColors[fileIndex % pastelColors.length];
                 
-                let arrayBuffer: ArrayBuffer;
-                if (Platform.OS === 'web' && file.file) {
-                    arrayBuffer = await file.file.arrayBuffer();
-                } else {
-                    const response = await fetch(file.uri);
-                    arrayBuffer = await response.arrayBuffer();
-                }
-                
-                newOrganizeFiles.push({ name: file.name, color, originalIndex: fileIndex, buffer: arrayBuffer });
-
-                // Génération des miniatures via backend
-                const formData = new FormData();
-                let fileBlob;
-                if (Platform.OS === 'web' && file.file) {
-                    fileBlob = file.file;
-                } else {
-                    const response_file = await fetch(file.uri);
-                    fileBlob = await response_file.blob();
-                }
-                formData.append('file', fileBlob, file.name);
-
-                const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard`, {
-                    method: 'POST',
-                    body: formData,
-                    headers: { 'Accept': 'application/zip, image/jpeg' }
-                });
-
-                if (!res.ok) {
-                    const errText = await res.text();
-                    throw new Error("Échec de la génération des images pour " + file.name + ": " + errText);
-                }
-
-                const contentType = res.headers.get('content-type');
-                const blob = await res.blob();
-
-                if (contentType?.includes('zip')) {
-                    const zip = new JSZip();
-                    const unzipped = await zip.loadAsync(blob);
-                    const fileNames = Object.keys(unzipped.files).sort();
-                    for (let j = 0; j < fileNames.length; j++) {
-                        const filename = fileNames[j];
-                        const f = unzipped.files[filename];
-                        if (!f.dir) {
-                            const imgBlob = await f.async('blob');
-                            newOrganizePages.push({
-                                id: `${fileIndex}-${j}-${Date.now()}`,
-                                fileIndex: fileIndex,
-                                fileName: file.name,
-                                pageIndex: j,
-                                imageUri: URL.createObjectURL(imgBlob)
-                            });
-                        }
+                try {
+                    let arrayBuffer: ArrayBuffer;
+                    if (Platform.OS === 'web' && file.file) {
+                        arrayBuffer = await file.file.arrayBuffer();
+                    } else {
+                        const response = await fetch(file.uri);
+                        arrayBuffer = await response.arrayBuffer();
                     }
-                } else {
-                    newOrganizePages.push({
-                        id: `${fileIndex}-0-${Date.now()}`,
-                        fileIndex: fileIndex,
-                        fileName: file.name,
-                        pageIndex: 0,
-                        imageUri: URL.createObjectURL(blob)
+                    
+                    newOrganizeFiles.push({ name: file.name, color, originalIndex: fileIndex, buffer: arrayBuffer });
+
+                    // Génération des miniatures via backend
+                    const formData = new FormData();
+                    let fileBlob;
+                    if (Platform.OS === 'web' && file.file) {
+                        fileBlob = file.file;
+                    } else {
+                        const response_file = await fetch(file.uri);
+                        fileBlob = await response_file.blob();
+                    }
+                    formData.append('file', fileBlob, file.name);
+
+                    const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard`, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'Accept': 'application/zip, image/jpeg' }
                     });
+
+                    if (!res.ok) {
+                        const errText = await res.text();
+                        throw new Error(`Erreur backend: ${res.status} - ${errText}`);
+                    }
+
+                    const contentType = res.headers.get('content-type');
+                    const blob = await res.blob();
+
+                    if (contentType?.includes('zip')) {
+                        const zip = new JSZip();
+                        const unzipped = await zip.loadAsync(blob);
+                        const fileNames = Object.keys(unzipped.files).sort();
+                        for (let j = 0; j < fileNames.length; j++) {
+                            const filename = fileNames[j];
+                            const f = unzipped.files[filename];
+                            if (!f.dir) {
+                                const imgBlob = await f.async('blob');
+                                newOrganizePages.push({
+                                    id: `${fileIndex}-${j}-${Date.now()}`,
+                                    fileIndex: fileIndex,
+                                    fileName: file.name,
+                                    pageIndex: j,
+                                    imageUri: URL.createObjectURL(imgBlob)
+                                });
+                            }
+                        }
+                    } else {
+                        newOrganizePages.push({
+                            id: `${fileIndex}-0-${Date.now()}`,
+                            fileIndex: fileIndex,
+                            fileName: file.name,
+                            pageIndex: 0,
+                            imageUri: URL.createObjectURL(blob)
+                        });
+                    }
+                } catch (fileError: any) {
+                    console.error(`Erreur pour le fichier ${file.name}:`, fileError);
+                    failedFiles.push(`${file.name} (${fileError.message})`);
                 }
             }
 
             setOrganizeFiles(newOrganizeFiles);
             setOrganizePages(newOrganizePages);
-            if (!appendToExisting) setStep('organize_editor');
+            
+            if (failedFiles.length > 0) {
+                const errorMsg = `Impossible de générer l'aperçu pour ${failedFiles.length} fichier(s):\n${failedFiles.join('\n')}`;
+                if (Platform.OS === 'web') {
+                    window.alert(errorMsg);
+                } else {
+                    Alert.alert("Erreur partielle", errorMsg);
+                }
+            }
+
+            // Enter the editor if at least one file succeeded (or if we already had files)
+            if (newOrganizeFiles.length > 0) {
+                if (!appendToExisting) setStep('organize_editor');
+            } else {
+                if (!appendToExisting) setStep('staging');
+            }
         } catch (e: any) {
             console.error("Error in initOrganizeEditor:", e);
             if (Platform.OS === 'web') {
