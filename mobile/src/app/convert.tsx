@@ -36,7 +36,7 @@ import ConversionOptions, { ConversionQuality } from '../components/ConversionOp
 import NumberingSelector, { NumberingConfig } from '../components/NumberingSelector';
 import OcrLanguageSelector, { OcrLanguage } from '../components/OcrLanguageSelector';
 import PdfEditor, { PdfEditItem } from '../components/PdfEditor';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib/dist/pdf-lib.esm.js';
+import { PDFDocument, rgb, StandardFonts, degrees } from 'pdf-lib/dist/pdf-lib.esm.js';
 import JSZip from 'jszip';
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
@@ -589,10 +589,6 @@ export default function ConvertScreen() {
 
             if (selectedService.id === 'rotate-pdf') {
                 formData.append('rotation', rotationAngle.toString());
-            }
-            if (selectedService.id === 'watermark-pdf') {
-                formData.append('text', watermarkConfig.text || 'CONFIDENTIEL');
-                formData.append('position', watermarkConfig.position);
             }
             if (selectedService.id === 'protect-pdf') {
                 formData.append('password', pdfPassword || 'faas2024');
