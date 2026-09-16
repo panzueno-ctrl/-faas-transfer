@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 export interface OrganizePageItem {
     id: string;
-    fileIndex: number; // reference to the original file index
+    fileIndex: number;
     fileName: string;
     pageIndex: number;
     imageUri: string;
@@ -107,7 +107,6 @@ export default function OrganizeEditor({
             const item = next.splice(draggedFile, 1)[0];
             next.splice(targetIndex, 0, item);
             
-            // Reorder pages based on new file order
             reorderPagesByFiles(next);
             
             return next;
@@ -118,7 +117,6 @@ export default function OrganizeEditor({
     const reorderPagesByFiles = (newFilesOrder: OrganizeFileItem[]) => {
         setPages(prev => {
             const groupedPages = new Map<number, OrganizePageItem[]>();
-            // Group existing pages by their original fileIndex
             prev.forEach(p => {
                 if (!groupedPages.has(p.fileIndex)) {
                     groupedPages.set(p.fileIndex, []);
@@ -127,7 +125,6 @@ export default function OrganizeEditor({
             });
 
             const newPages: OrganizePageItem[] = [];
-            // Re-append pages in the new file order
             newFilesOrder.forEach(file => {
                 const pagesForFile = groupedPages.get(file.originalIndex);
                 if (pagesForFile) {
@@ -143,9 +140,9 @@ export default function OrganizeEditor({
     };
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: '#f4f4f4' }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
             {/* TOOLBAR */}
-            <View style={[styles.toolbar, { backgroundColor: '#fff', borderBottomColor: colors.border }]}>
+            <View style={[styles.toolbar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <Pressable onPress={onCancel} style={styles.backButton}>
                     <Ionicons name="close" size={28} color={colors.text} />
                 </Pressable>
@@ -176,20 +173,8 @@ export default function OrganizeEditor({
                             const isDragged = draggedPage === index;
                             const isDragOver = dragOverPage === index;
 
-                            return (
-                                <View 
-                                    key={page.id}
-                                    style={[
-                                        styles.pageWrapper,
-                                        isDragged && styles.pageWrapperDragging,
-                                        isDragOver && styles.pageWrapperDragOver,
-                                    ]}
-                                    draggable={Platform.OS === 'web'}
-                                    onDragStart={(e) => Platform.OS === 'web' && onPageDragStart(e, index)}
-                                    onDragOver={(e) => Platform.OS === 'web' && onPageDragOver(e, index)}
-                                    onDrop={(e) => Platform.OS === 'web' && onPageDrop(e, index)}
-                                    onDragEnd={() => { setDraggedPage(null); setDragOverPage(null); }}
-                                >
+                            const content = (
+                                <>
                                     <View style={[
                                         styles.pageContainer, 
                                         { borderColor: fileInfo.color }
@@ -210,6 +195,37 @@ export default function OrganizeEditor({
                                         </Pressable>
                                     </View>
                                     <Text style={[styles.pageNumber, { color: colors.textMuted }]}>{index + 1}</Text>
+                                </>
+                            );
+
+                            return Platform.OS === 'web' ? (
+                                <div
+                                    key={page.id}
+                                    style={{
+                                        ...StyleSheet.flatten([
+                                            styles.pageWrapper,
+                                            isDragged && styles.pageWrapperDragging,
+                                            isDragOver && styles.pageWrapperDragOver,
+                                        ])
+                                    }}
+                                    draggable={true}
+                                    onDragStart={(e: any) => onPageDragStart(e, index)}
+                                    onDragOver={(e: any) => onPageDragOver(e, index)}
+                                    onDrop={(e: any) => onPageDrop(e, index)}
+                                    onDragEnd={() => { setDraggedPage(null); setDragOverPage(null); }}
+                                >
+                                    {content}
+                                </div>
+                            ) : (
+                                <View 
+                                    key={page.id}
+                                    style={[
+                                        styles.pageWrapper,
+                                        isDragged && styles.pageWrapperDragging,
+                                        isDragOver && styles.pageWrapperDragOver,
+                                    ]}
+                                >
+                                    {content}
                                 </View>
                             );
                         })}
@@ -217,7 +233,7 @@ export default function OrganizeEditor({
                 </View>
 
                 {/* SIDEBAR */}
-                <View style={[styles.sidebar, { backgroundColor: '#fff', borderLeftColor: colors.border }]}>
+                <View style={[styles.sidebar, { backgroundColor: colors.card, borderLeftColor: colors.border }]}>
                     <View style={styles.sidebarHeader}>
                         <Text style={[styles.sidebarTitle, { color: colors.text }]}>Fichiers</Text>
                     </View>
@@ -228,7 +244,39 @@ export default function OrganizeEditor({
                             const isDragged = draggedFile === i;
                             const isDragOver = dragOverFile === i;
 
-                            return (
+                            const content = (
+                                <View style={[styles.fileItem, { backgroundColor: file.color }]}>
+                                    <View style={styles.fileIcon}>
+                                        <Ionicons name="swap-vertical" size={16} color="#333" />
+                                    </View>
+                                    <Text style={[styles.fileName, { color: '#333' }]} numberOfLines={1}>
+                                        {String.fromCharCode(65 + i)}: {file.name}
+                                    </Text>
+                                    <Text style={[styles.pageCount, { color: '#555' }]}>
+                                        ({count})
+                                    </Text>
+                                </View>
+                            );
+
+                            return Platform.OS === 'web' ? (
+                                <div 
+                                    key={file.originalIndex} 
+                                    style={{
+                                        ...StyleSheet.flatten([
+                                            styles.fileItemWrapper,
+                                            isDragged && styles.fileItemDragging,
+                                            isDragOver && styles.fileItemDragOver
+                                        ])
+                                    }}
+                                    draggable={true}
+                                    onDragStart={(e: any) => onFileDragStart(e, i)}
+                                    onDragOver={(e: any) => onFileDragOver(e, i)}
+                                    onDrop={(e: any) => onFileDrop(e, i)}
+                                    onDragEnd={() => { setDraggedFile(null); setDragOverFile(null); }}
+                                >
+                                    {content}
+                                </div>
+                            ) : (
                                 <View 
                                     key={file.originalIndex} 
                                     style={[
@@ -236,23 +284,8 @@ export default function OrganizeEditor({
                                         isDragged && styles.fileItemDragging,
                                         isDragOver && styles.fileItemDragOver
                                     ]}
-                                    draggable={Platform.OS === 'web'}
-                                    onDragStart={(e) => Platform.OS === 'web' && onFileDragStart(e, i)}
-                                    onDragOver={(e) => Platform.OS === 'web' && onFileDragOver(e, i)}
-                                    onDrop={(e) => Platform.OS === 'web' && onFileDrop(e, i)}
-                                    onDragEnd={() => { setDraggedFile(null); setDragOverFile(null); }}
                                 >
-                                    <View style={[styles.fileItem, { backgroundColor: file.color }]}>
-                                        <View style={styles.fileIcon}>
-                                            <Ionicons name="swap-vertical" size={16} color="#333" />
-                                        </View>
-                                        <Text style={[styles.fileName, { color: '#333' }]} numberOfLines={1}>
-                                            {String.fromCharCode(65 + i)}: {file.name}
-                                        </Text>
-                                        <Text style={[styles.pageCount, { color: '#555' }]}>
-                                            ({count})
-                                        </Text>
-                                    </View>
+                                    {content}
                                 </View>
                             );
                         })}
@@ -357,7 +390,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 2,
         elevation: 2,
-        padding: 4, // white padding inside border
+        padding: 4, 
     },
     pageImage: {
         width: 140,
