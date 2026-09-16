@@ -31,7 +31,7 @@ import CompressionSelector, { CompressionLevel } from '../components/Compression
 import PasswordProtector from '../components/PasswordProtector';
 import WatermarkEditor, { WatermarkSettings } from '../components/WatermarkEditor';
 import SplitSelector, { SplitMode } from '../components/SplitSelector';
-import RotationSelector, { RotationAngle } from '../components/RotationSelector';
+import RotationEditor from '../components/RotationEditor';
 import ConversionOptions, { ConversionQuality } from '../components/ConversionOptions';
 import NumberingSelector, { NumberingConfig } from '../components/NumberingSelector';
 import OcrLanguageSelector, { OcrLanguage } from '../components/OcrLanguageSelector';
@@ -102,7 +102,7 @@ export default function ConvertScreen() {
     const styles = getStyles(colors);
 
     // Ajout de l'état "tool_intro"
-    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'sign_choice' | 'pdf_editor' | 'preparing_editor' | 'processing' | 'done'>('menu');
+    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'sign_choice' | 'pdf_editor' | 'watermark_editor' | 'rotation_editor' | 'preparing_editor' | 'processing' | 'done'>('menu');
     const [activeTab, setActiveTab] = useState<'files' | 'media'>('files');
     const [selectedService, setSelectedService] = useState<any>(null);
     const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
@@ -123,7 +123,6 @@ export default function ConvertScreen() {
     const [pdfOriginalBuffer, setPdfOriginalBuffer] = useState<ArrayBuffer | null>(null);
     const [watermarkConfig, setWatermarkConfig] = useState<WatermarkSettings | null>(null);
     const [splitMode, setSplitMode] = useState<SplitMode>('all');
-    const [rotationAngle, setRotationAngle] = useState<RotationAngle>(90);
     const [conversionQuality, setConversionQuality] = useState<ConversionQuality>('standard');
     const [numberingConfig, setNumberingConfig] = useState<NumberingConfig>({ position: 'bottom-center', format: 'total' });
     const [ocrLang, setOcrLang] = useState<OcrLanguage>('fra');
@@ -401,6 +400,32 @@ export default function ConvertScreen() {
         }
     };
 
+    const handleRotationComplete = async (rotations: number[]) => {
+        if (!pdfOriginalBuffer) return;
+        setStep('processing');
+        try {
+            const pdfDoc = await PDFDocument.load(pdfOriginalBuffer);
+            const pdfPages = pdfDoc.getPages();
+            
+            pdfPages.forEach((page, index) => {
+                if (rotations[index] !== 0) {
+                    const currentAngle = page.getRotation().angle;
+                    page.setRotation(degrees(currentAngle + rotations[index]));
+                }
+            });
+
+            const modifiedPdfBytes = await pdfDoc.save();
+            const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            setResultUrl(url);
+            setStep('done');
+        } catch (e: any) {
+            console.error("Error applying rotation:", e);
+            Alert.alert("Erreur", "Échec de l'application de la rotation.");
+            setStep('staging');
+        }
+    };
+
     const onDragStart = (e: any, index: number) => {
         setDraggedIndex(index);
         const dataTransfer = e.dataTransfer || (e.nativeEvent && e.nativeEvent.dataTransfer);
@@ -542,6 +567,8 @@ export default function ConvertScreen() {
                     initPdfEditor(res.assets[0]);
                 } else if (selectedService.id === 'watermark-pdf') {
                     initPdfEditor(res.assets[0], 'watermark_editor');
+                } else if (selectedService.id === 'rotate-pdf') {
+                    initPdfEditor(res.assets[0], 'rotation_editor');
                 } else {
                     setStep('staging');
                 }
@@ -587,9 +614,6 @@ export default function ConvertScreen() {
                 if (!selectedService.multiple) break; 
             }
 
-            if (selectedService.id === 'rotate-pdf') {
-                formData.append('rotation', rotationAngle.toString());
-            }
             if (selectedService.id === 'protect-pdf') {
                 formData.append('password', pdfPassword || 'faas2024');
             }
@@ -1154,10 +1178,6 @@ export default function ConvertScreen() {
                         {selectedService.id === 'split-pdf' && (
                             <SplitSelector onChange={setSplitMode} />
                         )}
-
-                        {selectedService.id === 'rotate-pdf' && (
-                            <RotationSelector onChange={setRotationAngle} />
-                        )}
                         
                         {selectedService.id === 'number-pdf' && (
                             <NumberingSelector onChange={setNumberingConfig} />
@@ -1221,6 +1241,17 @@ export default function ConvertScreen() {
                 pages={pdfEditorPages} 
                 colors={colors}
                 onComplete={handleWatermarkComplete}
+                onCancel={() => setStep('tool_intro')}
+            />
+        );
+    }
+
+    if (step === 'rotation_editor') {
+        return (
+            <RotationEditor 
+                pages={pdfEditorPages} 
+                colors={colors}
+                onComplete={handleRotationComplete}
                 onCancel={() => setStep('tool_intro')}
             />
         );
