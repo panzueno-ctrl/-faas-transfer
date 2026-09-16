@@ -968,3 +968,7 @@ Les outils PDF tels que Filigrane (Watermark), Rotation, et Organiser (multi-fic
    - Une fois les modifications validées (Rotation, Tri, Suppression), le fichier est assemblé localement dans la mémoire du navigateur.
    - Aucun fichier n'est envoyé au backend pour modification. 
    - Avantage : Zéro surcharge mémoire sur Render, vitesse d'exécution instantanée, confidentialité totale des documents.
+
+3. FONCTIONNALITES AVANCEES DE L'ORGANISEUR PDF (AJOUT) :
+   - Ajout Dynamique : L'utilisateur peut ajouter de nouveaux fichiers PDF à la volée via le bouton (+). Le processus d'extraction d'images s'exécute pour ces nouveaux fichiers et les fusionne à la liste existante.
+   - Synchronisation Drag & Drop Fichiers : Glisser-déposer un fichier dans la barre latérale réorganise automatiquement *toutes les pages* de ce fichier dans la zone principale, assurant une cohérence entre l'ordre des documents sources et l'ordre des pages.

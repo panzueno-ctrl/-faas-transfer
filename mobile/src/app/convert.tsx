@@ -134,7 +134,7 @@ export default function ConvertScreen() {
     // PdfEditor states
     const [pdfEditorPages, setPdfEditorPages] = useState<string[]>([]);
     const [organizePages, setOrganizePages] = useState<OrganizePageItem[]>([]);
-    const [organizeFiles, setOrganizeFiles] = useState<{name: string, color: string, buffer: ArrayBuffer}[]>([]);
+    const [organizeFiles, setOrganizeFiles] = useState<any[]>([]);
 
     const initSplitPDF = async (file: any) => {
         try {
@@ -358,16 +358,19 @@ export default function ConvertScreen() {
         }
     };
 
-    const initOrganizeEditor = async (files: any[]) => {
-        setStep('preparing_editor');
+    const initOrganizeEditor = async (files: any[], appendToExisting = false) => {
+        if (!appendToExisting) setStep('preparing_editor');
         try {
-            const colorsArray = ['#e74c3c', '#3498db', '#f1c40f', '#9b59b6', '#1abc9c', '#e67e22', '#34495e'];
-            const newOrganizePages: OrganizePageItem[] = [];
-            const newOrganizeFiles: {name: string, color: string, buffer: ArrayBuffer}[] = [];
+            const pastelColors = ['#ffcfcf', '#cbf2e8', '#fff0b5', '#dfd5f6', '#c2ebf9'];
+            const newOrganizePages: OrganizePageItem[] = appendToExisting ? [...organizePages] : [];
+            const newOrganizeFiles: any[] = appendToExisting ? [...organizeFiles] : [];
+
+            const startIndex = newOrganizeFiles.length;
 
             for (let i = 0; i < files.length; i++) {
+                const fileIndex = startIndex + i;
                 const file = files[i];
-                const color = colorsArray[i % colorsArray.length];
+                const color = pastelColors[fileIndex % pastelColors.length];
                 
                 let arrayBuffer: ArrayBuffer;
                 if (Platform.OS === 'web' && file.file) {
@@ -377,7 +380,7 @@ export default function ConvertScreen() {
                     arrayBuffer = await response.arrayBuffer();
                 }
                 
-                newOrganizeFiles.push({ name: file.name, color, buffer: arrayBuffer });
+                newOrganizeFiles.push({ name: file.name, color, originalIndex: fileIndex, buffer: arrayBuffer });
 
                 // Génération des miniatures via backend
                 const formData = new FormData();
@@ -414,8 +417,8 @@ export default function ConvertScreen() {
                         if (!f.dir) {
                             const imgBlob = await f.async('blob');
                             newOrganizePages.push({
-                                id: `${i}-${j}-${Date.now()}`,
-                                fileIndex: i,
+                                id: `${fileIndex}-${j}-${Date.now()}`,
+                                fileIndex: fileIndex,
                                 fileName: file.name,
                                 pageIndex: j,
                                 imageUri: URL.createObjectURL(imgBlob)
@@ -424,8 +427,8 @@ export default function ConvertScreen() {
                     }
                 } else {
                     newOrganizePages.push({
-                        id: `${i}-0-${Date.now()}`,
-                        fileIndex: i,
+                        id: `${fileIndex}-0-${Date.now()}`,
+                        fileIndex: fileIndex,
                         fileName: file.name,
                         pageIndex: 0,
                         imageUri: URL.createObjectURL(blob)
@@ -435,7 +438,7 @@ export default function ConvertScreen() {
 
             setOrganizeFiles(newOrganizeFiles);
             setOrganizePages(newOrganizePages);
-            setStep('organize_editor');
+            if (!appendToExisting) setStep('organize_editor');
         } catch (e: any) {
             console.error("Error in initOrganizeEditor:", e);
             if (Platform.OS === 'web') {
@@ -443,7 +446,7 @@ export default function ConvertScreen() {
             } else {
                 Alert.alert("Erreur", "Impossible de préparer l'éditeur PDF. Veuillez réessayer.");
             }
-            setStep('staging');
+            if (!appendToExisting) setStep('staging');
         }
     };
 
@@ -521,18 +524,17 @@ export default function ConvertScreen() {
     const handleOrganizeComplete = async (orderedPages: OrganizePageItem[]) => {
         setStep('processing');
         try {
-            // Load all original PDF documents
-            const pdfDocs = await Promise.all(organizeFiles.map(async (fileInfo) => {
-                return await PDFDocument.load(fileInfo.buffer);
-            }));
-
             // Create a new empty document
             const newPdfDoc = await PDFDocument.create();
 
             for (const pageItem of orderedPages) {
-                const sourceDoc = pdfDocs[pageItem.fileIndex];
-                const [copiedPage] = await newPdfDoc.copyPages(sourceDoc, [pageItem.pageIndex]);
-                newPdfDoc.addPage(copiedPage);
+                // Find the correct source doc buffer
+                const sourceFileInfo = organizeFiles.find(f => f.originalIndex === pageItem.fileIndex);
+                if (sourceFileInfo) {
+                    const sourceDoc = await PDFDocument.load(sourceFileInfo.buffer);
+                    const [copiedPage] = await newPdfDoc.copyPages(sourceDoc, [pageItem.pageIndex]);
+                    newPdfDoc.addPage(copiedPage);
+                }
             }
 
             const finalPdfBytes = await newPdfDoc.save();
@@ -544,6 +546,21 @@ export default function ConvertScreen() {
             console.error("Error organizing PDF:", e);
             Alert.alert("Erreur", "Échec de l'organisation du PDF.");
             setStep('staging');
+        }
+    };
+
+    const handleAddFilesToOrganize = async () => {
+        try {
+            const res = await DocumentPicker.getDocumentAsync({
+                type: 'application/pdf',
+                copyToCacheDirectory: false,
+                multiple: true
+            });
+            if (!res.canceled && res.assets && res.assets.length > 0) {
+                await initOrganizeEditor(res.assets, true);
+            }
+        } catch (e) {
+            console.error("Error picking additional files", e);
         }
     };
 
@@ -1388,6 +1405,7 @@ export default function ConvertScreen() {
                 colors={colors}
                 onComplete={handleOrganizeComplete}
                 onCancel={() => setStep('tool_intro')}
+                onAddFiles={handleAddFilesToOrganize}
             />
         );
     }

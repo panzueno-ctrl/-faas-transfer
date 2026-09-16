@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -13,65 +13,139 @@ import { Ionicons } from '@expo/vector-icons';
 
 export interface OrganizePageItem {
     id: string;
-    fileIndex: number;
+    fileIndex: number; // reference to the original file index
     fileName: string;
     pageIndex: number;
     imageUri: string;
 }
 
+export interface OrganizeFileItem {
+    name: string;
+    color: string;
+    originalIndex: number;
+}
+
 interface OrganizeEditorProps {
     pages: OrganizePageItem[];
-    files: { name: string, color: string }[];
+    files: OrganizeFileItem[];
     onComplete: (orderedPages: OrganizePageItem[]) => void;
     onCancel: () => void;
+    onAddFiles: () => void;
     colors: any;
 }
 
-export default function OrganizeEditor({ pages: initialPages, files, onComplete, onCancel, colors }: OrganizeEditorProps) {
+export default function OrganizeEditor({ 
+    pages: initialPages, 
+    files: initialFiles, 
+    onComplete, 
+    onCancel, 
+    onAddFiles,
+    colors 
+}: OrganizeEditorProps) {
     const [pages, setPages] = useState<OrganizePageItem[]>(initialPages);
-    const [draggedItem, setDraggedItem] = useState<number | null>(null);
-    const [dragOverItem, setDragOverItem] = useState<number | null>(null);
+    const [filesOrder, setFilesOrder] = useState<OrganizeFileItem[]>(initialFiles);
+    
+    const [draggedPage, setDraggedPage] = useState<number | null>(null);
+    const [dragOverPage, setDragOverPage] = useState<number | null>(null);
 
-    const onDragStart = (e: any, index: number) => {
-        setDraggedItem(index);
-        if (e.dataTransfer) {
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', index.toString());
+    const [draggedFile, setDraggedFile] = useState<number | null>(null);
+    const [dragOverFile, setDragOverFile] = useState<number | null>(null);
+
+    // --- DRAG & DROP FOR PAGES ---
+    const onPageDragStart = (e: any, index: number) => {
+        setDraggedPage(index);
+        const dataTransfer = e.nativeEvent?.dataTransfer || e.dataTransfer;
+        if (dataTransfer) {
+            dataTransfer.effectAllowed = 'move';
+            dataTransfer.setData('text/plain', index.toString());
         }
     };
 
-    const onDragOver = (e: any, index: number) => {
+    const onPageDragOver = (e: any, index: number) => {
         e.preventDefault();
-        setDragOverItem(index);
+        setDragOverPage(index);
     };
 
-    const onDrop = (e: any, targetIndex: number) => {
+    const onPageDrop = (e: any, targetIndex: number) => {
         e.preventDefault();
-        setDragOverItem(null);
-        if (draggedItem === null) return;
-        if (draggedItem === targetIndex) return;
+        setDragOverPage(null);
+        if (draggedPage === null) return;
+        if (draggedPage === targetIndex) return;
 
         setPages(prev => {
             const next = [...prev];
-            const item = next.splice(draggedItem, 1)[0];
+            const item = next.splice(draggedPage, 1)[0];
             next.splice(targetIndex, 0, item);
             return next;
         });
-        setDraggedItem(null);
+        setDraggedPage(null);
+    };
+
+    // --- DRAG & DROP FOR FILES (SIDEBAR) ---
+    const onFileDragStart = (e: any, index: number) => {
+        setDraggedFile(index);
+        const dataTransfer = e.nativeEvent?.dataTransfer || e.dataTransfer;
+        if (dataTransfer) {
+            dataTransfer.effectAllowed = 'move';
+            dataTransfer.setData('text/plain', index.toString());
+        }
+    };
+
+    const onFileDragOver = (e: any, index: number) => {
+        e.preventDefault();
+        setDragOverFile(index);
+    };
+
+    const onFileDrop = (e: any, targetIndex: number) => {
+        e.preventDefault();
+        setDragOverFile(null);
+        if (draggedFile === null) return;
+        if (draggedFile === targetIndex) return;
+
+        setFilesOrder(prev => {
+            const next = [...prev];
+            const item = next.splice(draggedFile, 1)[0];
+            next.splice(targetIndex, 0, item);
+            
+            // Reorder pages based on new file order
+            reorderPagesByFiles(next);
+            
+            return next;
+        });
+        setDraggedFile(null);
+    };
+
+    const reorderPagesByFiles = (newFilesOrder: OrganizeFileItem[]) => {
+        setPages(prev => {
+            const groupedPages = new Map<number, OrganizePageItem[]>();
+            // Group existing pages by their original fileIndex
+            prev.forEach(p => {
+                if (!groupedPages.has(p.fileIndex)) {
+                    groupedPages.set(p.fileIndex, []);
+                }
+                groupedPages.get(p.fileIndex)!.push(p);
+            });
+
+            const newPages: OrganizePageItem[] = [];
+            // Re-append pages in the new file order
+            newFilesOrder.forEach(file => {
+                const pagesForFile = groupedPages.get(file.originalIndex);
+                if (pagesForFile) {
+                    newPages.push(...pagesForFile);
+                }
+            });
+            return newPages;
+        });
     };
 
     const removePage = (id: string) => {
         setPages(prev => prev.filter(p => p.id !== id));
     };
 
-    const resetAll = () => {
-        setPages(initialPages);
-    };
-
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: '#f4f4f4' }]}>
             {/* TOOLBAR */}
-            <View style={[styles.toolbar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            <View style={[styles.toolbar, { backgroundColor: '#fff', borderBottomColor: colors.border }]}>
                 <Pressable onPress={onCancel} style={styles.backButton}>
                     <Ionicons name="close" size={28} color={colors.text} />
                 </Pressable>
@@ -79,87 +153,118 @@ export default function OrganizeEditor({ pages: initialPages, files, onComplete,
                 <View style={styles.toolsContainer}>
                     <Text style={[styles.title, { color: colors.text }]}>Organiser le PDF</Text>
                 </View>
-
-                <Pressable 
-                    style={[styles.doneButton, { backgroundColor: colors.primary }]}
-                    onPress={() => onComplete(pages)}
-                >
-                    <Text style={styles.doneButtonText}>Organiser</Text>
-                    <Ionicons name="arrow-forward" size={16} color="#fff" style={{marginLeft: 4}} />
-                </Pressable>
             </View>
 
             <View style={styles.content}>
                 {/* PREVIEW AREA */}
-                <ScrollView 
-                    style={styles.scrollArea} 
-                    contentContainerStyle={styles.scrollContent}
-                >
-                    {pages.map((page, index) => (
-                        <View 
-                            key={page.id}
-                            style={[
-                                styles.pageWrapper,
-                                draggedItem === index && styles.pageWrapperDragging,
-                                dragOverItem === index && styles.pageWrapperDragOver,
-                            ]}
-                            draggable={Platform.OS === 'web'}
-                            onDragStart={(e) => Platform.OS === 'web' && onDragStart(e, index)}
-                            onDragOver={(e) => Platform.OS === 'web' && onDragOver(e, index)}
-                            onDrop={(e) => Platform.OS === 'web' && onDrop(e, index)}
-                            onDragEnd={() => { setDraggedItem(null); setDragOverItem(null); }}
+                <View style={styles.mainArea}>
+                    <View style={styles.addFileWrapper}>
+                        <Pressable 
+                            style={styles.addFileButton}
+                            onPress={onAddFiles}
                         >
-                            <View style={[
-                                styles.pageContainer, 
-                                { borderColor: files[page.fileIndex]?.color || colors.border }
-                            ]}>
-                                <Image
-                                    source={{ uri: page.imageUri }}
-                                    style={styles.pageImage}
-                                    resizeMode="contain"
-                                    pointerEvents="none"
-                                />
-                                
-                                {/* Delete Button */}
-                                <Pressable 
-                                    style={styles.deleteButton}
-                                    onPress={() => removePage(page.id)}
-                                >
-                                    <Ionicons name="close-circle" size={24} color="#e74c3c" />
-                                </Pressable>
-                            </View>
-                            <Text style={[styles.pageNumber, { color: colors.textMuted }]}>{index + 1}</Text>
-                        </View>
-                    ))}
-                </ScrollView>
-
-                {/* SIDEBAR */}
-                <View style={[styles.sidebar, { backgroundColor: colors.card, borderLeftColor: colors.border }]}>
-                    <View style={styles.sidebarHeader}>
-                        <Text style={[styles.sidebarTitle, { color: colors.text }]}>Fichiers</Text>
-                        <Pressable onPress={resetAll}>
-                            <Text style={[styles.resetText, { color: colors.primary }]}>Réinitialiser tout</Text>
+                            <Ionicons name="add" size={32} color="#fff" />
                         </Pressable>
                     </View>
-                    
-                    <ScrollView style={styles.fileList}>
-                        {files.map((file, i) => {
-                            const count = pages.filter(p => p.fileIndex === i).length;
+
+                    <ScrollView 
+                        style={styles.scrollArea} 
+                        contentContainerStyle={styles.scrollContent}
+                    >
+                        {pages.map((page, index) => {
+                            const fileInfo = filesOrder.find(f => f.originalIndex === page.fileIndex) || filesOrder[0];
+                            const isDragged = draggedPage === index;
+                            const isDragOver = dragOverPage === index;
+
                             return (
-                                <View key={i} style={[styles.fileItem, { backgroundColor: file.color + '40', borderColor: file.color }]}>
-                                    <View style={styles.fileIcon}>
-                                        <Ionicons name="document-text" size={16} color={colors.text} />
+                                <View 
+                                    key={page.id}
+                                    style={[
+                                        styles.pageWrapper,
+                                        isDragged && styles.pageWrapperDragging,
+                                        isDragOver && styles.pageWrapperDragOver,
+                                    ]}
+                                    draggable={Platform.OS === 'web'}
+                                    onDragStart={(e) => Platform.OS === 'web' && onPageDragStart(e, index)}
+                                    onDragOver={(e) => Platform.OS === 'web' && onPageDragOver(e, index)}
+                                    onDrop={(e) => Platform.OS === 'web' && onPageDrop(e, index)}
+                                    onDragEnd={() => { setDraggedPage(null); setDragOverPage(null); }}
+                                >
+                                    <View style={[
+                                        styles.pageContainer, 
+                                        { borderColor: fileInfo.color }
+                                    ]}>
+                                        <Image
+                                            source={{ uri: page.imageUri }}
+                                            style={styles.pageImage}
+                                            resizeMode="contain"
+                                            pointerEvents="none"
+                                        />
+                                        
+                                        {/* Delete Button (iLovePDF style) */}
+                                        <Pressable 
+                                            style={styles.deleteButton}
+                                            onPress={() => removePage(page.id)}
+                                        >
+                                            <Ionicons name="close" size={12} color="#fff" />
+                                        </Pressable>
                                     </View>
-                                    <Text style={[styles.fileName, { color: colors.text }]} numberOfLines={1}>
-                                        {String.fromCharCode(65 + i)}: {file.name}
-                                    </Text>
-                                    <Text style={[styles.pageCount, { color: colors.textMuted }]}>
-                                        ({count})
-                                    </Text>
+                                    <Text style={[styles.pageNumber, { color: colors.textMuted }]}>{index + 1}</Text>
                                 </View>
                             );
                         })}
                     </ScrollView>
+                </View>
+
+                {/* SIDEBAR */}
+                <View style={[styles.sidebar, { backgroundColor: '#fff', borderLeftColor: colors.border }]}>
+                    <View style={styles.sidebarHeader}>
+                        <Text style={[styles.sidebarTitle, { color: colors.text }]}>Fichiers</Text>
+                    </View>
+                    
+                    <ScrollView style={styles.fileList}>
+                        {filesOrder.map((file, i) => {
+                            const count = pages.filter(p => p.fileIndex === file.originalIndex).length;
+                            const isDragged = draggedFile === i;
+                            const isDragOver = dragOverFile === i;
+
+                            return (
+                                <View 
+                                    key={file.originalIndex} 
+                                    style={[
+                                        styles.fileItemWrapper,
+                                        isDragged && styles.fileItemDragging,
+                                        isDragOver && styles.fileItemDragOver
+                                    ]}
+                                    draggable={Platform.OS === 'web'}
+                                    onDragStart={(e) => Platform.OS === 'web' && onFileDragStart(e, i)}
+                                    onDragOver={(e) => Platform.OS === 'web' && onFileDragOver(e, i)}
+                                    onDrop={(e) => Platform.OS === 'web' && onFileDrop(e, i)}
+                                    onDragEnd={() => { setDraggedFile(null); setDragOverFile(null); }}
+                                >
+                                    <View style={[styles.fileItem, { backgroundColor: file.color }]}>
+                                        <View style={styles.fileIcon}>
+                                            <Ionicons name="swap-vertical" size={16} color="#333" />
+                                        </View>
+                                        <Text style={[styles.fileName, { color: '#333' }]} numberOfLines={1}>
+                                            {String.fromCharCode(65 + i)}: {file.name}
+                                        </Text>
+                                        <Text style={[styles.pageCount, { color: '#555' }]}>
+                                            ({count})
+                                        </Text>
+                                    </View>
+                                </View>
+                            );
+                        })}
+                    </ScrollView>
+
+                    <Pressable 
+                        style={[styles.doneButton, { backgroundColor: '#e74c3c' }]}
+                        onPress={() => onComplete(pages)}
+                    >
+                        <Text style={styles.doneButtonText}>Organiser</Text>
+                        <Ionicons name="arrow-forward" size={16} color="#fff" style={{marginLeft: 4}} />
+                    </Pressable>
                 </View>
             </View>
         </SafeAreaView>
@@ -195,27 +300,38 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
     },
-    doneButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderRadius: 8,
-    },
-    doneButtonText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
     content: {
         flex: 1,
         flexDirection: 'row',
+    },
+    mainArea: {
+        flex: 1,
+        position: 'relative',
+    },
+    addFileWrapper: {
+        position: 'absolute',
+        top: 20,
+        right: 20,
+        zIndex: 100,
+    },
+    addFileButton: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: '#e74c3c',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 5,
     },
     scrollArea: {
         flex: 1,
     },
     scrollContent: {
-        padding: 40,
+        padding: 60,
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'center',
@@ -234,67 +350,75 @@ const styles = StyleSheet.create({
     pageContainer: {
         position: 'relative',
         backgroundColor: '#fff',
-        borderWidth: 4, // Make border more visible
-        borderRadius: 8,
+        borderWidth: 2,
+        borderRadius: 4,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowRadius: 2,
         elevation: 2,
-        overflow: 'visible', // allow delete button to pop out
+        padding: 4, // white padding inside border
     },
     pageImage: {
         width: 140,
         height: 198,
-        borderRadius: 4,
     },
     deleteButton: {
         position: 'absolute',
-        top: -12,
-        right: -12,
-        backgroundColor: '#fff',
-        borderRadius: 12,
+        top: -8,
+        right: -8,
+        backgroundColor: '#e74c3c',
+        borderRadius: 10,
+        width: 20,
+        height: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
         zIndex: 2,
     },
     pageNumber: {
         marginTop: 8,
         fontSize: 14,
-        fontWeight: '600'
+        fontWeight: '500'
     },
     sidebar: {
-        width: 300,
+        width: 320,
         borderLeftWidth: 1,
         padding: 20,
+        display: 'flex',
+        flexDirection: 'column',
     },
     sidebarHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: 24,
     },
     sidebarTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    resetText: {
-        fontSize: 14,
+        fontSize: 20,
         fontWeight: '600',
-        textDecorationLine: 'underline',
     },
     fileList: {
         flex: 1,
+    },
+    fileItemWrapper: {
+        cursor: 'move' as any,
+        marginBottom: 8,
+    },
+    fileItemDragging: {
+        opacity: 0.5,
+    },
+    fileItemDragOver: {
+        transform: [{ scale: 1.02 }],
     },
     fileItem: {
         flexDirection: 'row',
         alignItems: 'center',
         padding: 12,
-        marginBottom: 8,
         borderRadius: 4,
-        borderWidth: 2,
     },
     fileIcon: {
         marginRight: 8,
-        opacity: 0.7,
+        opacity: 0.5,
     },
     fileName: {
         flex: 1,
@@ -304,5 +428,19 @@ const styles = StyleSheet.create({
     pageCount: {
         fontSize: 12,
         marginLeft: 8,
+    },
+    doneButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderRadius: 8,
+        marginTop: 16,
+    },
+    doneButtonText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 18,
     }
 });
