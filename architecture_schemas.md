@@ -129,3 +129,35 @@ Quand tu envoies une vidéo de 157 Mo sur WhatsApp, elle s'envoie en 3 secondes.
 C'est la technologie utilisée par Apple AirDrop. Si l'expéditeur et le destinataire sont connectés en même temps, le fichier ne va plus sur Cloudflare. Il va DIRECTEMENT du téléphone A au téléphone B.
 - **Le Gain :** Si les deux sont sur le même réseau Wifi, on atteint 50 Mo/s (le fichier de 157 Mo s'enverra en 3 secondes).
 - **Le Problème :** Les deux personnes doivent avoir la page web ouverte en même temps. S'il n'y a pas de destinataire en ligne, ça ne marche pas.
+
+---
+
+## 3. Architecture des Outils PDF (Traitement Client-Side)
+
+Historiquement, les manipulations PDF (Filigrane, Rotation, Fusion, Division) étaient envoyées au backend Render via une requête POST /convert/*. 
+Cela posait un problème majeur : **Temps d'attente réseau + Saturation de la RAM du backend**.
+
+### La Nouvelle Approche (Zéro Latence)
+
+Aujourd'hui, l'architecture a basculé sur un traitement **100% Client-Side (Local)** grâce à la bibliothèque pdf-lib.
+
+`mermaid
+sequenceDiagram
+    participant Utilisateur
+    participant Navigateur as Navigateur/App (pdf-lib)
+    participant Backend as Serveur (Render)
+
+    Utilisateur->>Navigateur: 1. Ajoute un PDF (ex: 50 Mo)
+    Navigateur->>Navigateur: 2. Extrait les miniatures des pages
+    Navigateur->>Utilisateur: 3. Affiche l'éditeur visuel instantanément
+    Utilisateur->>Navigateur: 4. Fait pivoter, ajoute un filigrane, etc.
+    Navigateur->>Navigateur: 5. Recalcule le PDF en mémoire locale (1 sec)
+    Navigateur->>Utilisateur: 6. Téléchargement immédiat du PDF final
+    Note over Navigateur,Backend: Le Backend n'est JAMAIS contacté ! Zéro usage serveur.
+`
+
+### Avantages de l'approche Client-Side
+1. **Instantanéité :** L'utilisateur n'attend pas l'upload de son PDF vers le serveur.
+2. **Économie serveur :** Le backend (512 Mo RAM) ne crashera plus en essayant de manipuler des PDF de 200 Mo.
+3. **Confidentialité absolue :** Les documents confidentiels ne quittent jamais l'appareil de l'utilisateur lors de l'édition.
+4. **UX Premium :** Permet des éditeurs visuels interactifs (comme RotationEditor ou WatermarkEditor) avec prévisualisation en temps réel, à l'image des leaders comme Smallpdf.
