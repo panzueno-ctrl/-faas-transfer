@@ -972,3 +972,4 @@ Les outils PDF tels que Filigrane (Watermark), Rotation, et Organiser (multi-fic
 3. FONCTIONNALITES AVANCEES DE L'ORGANISEUR PDF (AJOUT) :
    - Ajout Dynamique : L'utilisateur peut ajouter de nouveaux fichiers PDF à la volée via le bouton (+). Le processus d'extraction d'images s'exécute pour ces nouveaux fichiers et les fusionne à la liste existante.
    - Synchronisation Drag & Drop Fichiers : Glisser-déposer un fichier dans la barre latérale réorganise automatiquement *toutes les pages* de ce fichier dans la zone principale, assurant une cohérence entre l'ordre des documents sources et l'ordre des pages.
+   - Robustesse Multi-Fichiers (Fail-Safe) : Si l'extraction d'images échoue pour l'un des fichiers (timeout Render ou erreur réseau "Failed to fetch"), le processus ne s'arrête plus. Le fichier corrompu ou bloqué est ignoré, et l'éditeur s'ouvre avec les autres fichiers fonctionnels, tout en avertissant l'utilisateur des fichiers ignorés.
