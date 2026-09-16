@@ -951,3 +951,20 @@ Afin de rendre l'interface de conversion parfaitement fluide sur le Web et répo
   3. **Vérification de la Mobilité de l'Outil :** 
      - Application des corrections `useRef` pour la mobilité de la signature. Le comportement est parfait et les signatures sauvegardées sont directement prêtes à être apposées.
 - **Résultat :** Le flux correspond exactement aux attentes (Ouverture -> Choix d'acteur -> Editeur -> Signature directe), marquant l'achèvement de la fonctionnalité.
+
+============================================================
+  NOUVELLE ARCHITECTURE OUTILS PDF (CLIENT-SIDE)
+============================================================
+
+Les outils PDF tels que Filigrane (Watermark), Rotation, et Organiser (multi-fichiers) ont été migrés d'une approche serveur vers une approche 100% Client-Side.
+
+1. PROCESSUS MULTI-FICHIERS (ex: Organiser PDF) :
+   - L'utilisateur sélectionne N fichiers.
+   - Le frontend utilise l'API /convert/pdf-to-image pour générer les miniatures des pages.
+   - Les miniatures sont affichées dans une interface de grille interactive avec Drag & Drop.
+   - Un code couleur est attribué à chaque fichier source pour la lisibilité.
+
+2. TRAITEMENT VIA PDF-LIB :
+   - Une fois les modifications validées (Rotation, Tri, Suppression), le fichier est assemblé localement dans la mémoire du navigateur.
+   - Aucun fichier n'est envoyé au backend pour modification. 
+   - Avantage : Zéro surcharge mémoire sur Render, vitesse d'exécution instantanée, confidentialité totale des documents.
