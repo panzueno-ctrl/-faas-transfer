@@ -22,6 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useKeepAwake } from 'expo-keep-awake';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import JSZip from 'jszip';
 
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -338,6 +339,132 @@ export default function SendScreen() {
         return uploadFileLegacy(file);
     };
 
+    const uploadFileMultipart = async (file: any, originalName?: string) => {
+        setProgress(0);
+        setIsPreparing(false);
+        setStep('uploading');
+
+        const finalName = originalName || file.name || 'fichier.zip';
+        const theFile = file.file || file;
+        
+        if (typeof theFile.slice !== 'function') {
+            return uploadFileLegacy(file);
+        }
+
+        const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB
+        const totalParts = Math.ceil(theFile.size / CHUNK_SIZE);
+
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            const startRes = await fetch(`${SERVER_URL}/upload/multipart/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fileName: finalName,
+                    contentType: file.mimeType || file.type || 'application/octet-stream',
+                    totalParts,
+                    userId: session?.user?.id || null
+                })
+            });
+
+            if (!startRes.ok) throw new Error('Erreur start multipart');
+            const { fileId, storageName, uploadId, presignedUrls } = await startRes.json();
+
+            const parts: { PartNumber: number, ETag: string }[] = [];
+            let uploadedBytes = 0;
+
+            const uploadChunk = async (partNumber: number) => {
+                const start = (partNumber - 1) * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, theFile.size);
+                const chunk = theFile.slice(start, end);
+                const url = presignedUrls[partNumber];
+
+                return await withRetry(async () => {
+                    return new Promise((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('PUT', url);
+                        xhr.onload = () => {
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                let etag = xhr.getResponseHeader('ETag');
+                                if (etag) etag = etag.replace(/"/g, ''); 
+                                parts.push({ PartNumber: partNumber, ETag: etag || 'mock-etag' });
+                                uploadedBytes += chunk.size;
+                                setProgress(Math.round((uploadedBytes / theFile.size) * 100));
+                                resolve(true);
+                            } else {
+                                reject(new Error('Erreur chunk ' + partNumber));
+                            }
+                        };
+                        xhr.onerror = () => reject(new Error('Erreur réseau chunk'));
+                        xhr.send(chunk);
+                    });
+                }, 3);
+            };
+
+            const CONCURRENCY = 4;
+            let currentPart = 1;
+            const workers = Array(Math.min(CONCURRENCY, totalParts)).fill(null).map(async () => {
+                while (currentPart <= totalParts) {
+                    const p = currentPart++;
+                    await uploadChunk(p);
+                }
+            });
+            await Promise.all(workers);
+
+            parts.sort((a, b) => a.PartNumber - b.PartNumber);
+            
+            const completeRes = await fetch(`${SERVER_URL}/upload/multipart/complete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ storageName, uploadId, parts })
+            });
+
+            if (!completeRes.ok) throw new Error('Erreur complete multipart');
+
+            const confirmResponse = await fetch(`${SERVER_URL}/upload/confirm`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fileId: fileId,
+                    originalName: finalName,
+                    storageName: storageName,
+                    userId: session?.user?.id || null
+                })
+            });
+
+            if (!confirmResponse.ok) throw new Error('Erreur confirmation backend');
+
+            const data = await confirmResponse.json();
+            setResult(data);
+
+            const transfer = {
+                id: data.id,
+                fileName: finalName,
+                downloadUrl: data.downloadUrl,
+                sentAt: new Date().toLocaleDateString('fr-FR', {
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                }),
+                status: 'pending',
+            };
+
+            const existing = await AsyncStorage.getItem('faas_history');
+            const history = existing ? JSON.parse(existing) : [];
+            history.unshift(transfer);
+            await AsyncStorage.setItem('faas_history', JSON.stringify(history));
+
+            setStep('done');
+
+        } catch (error: any) {
+            setIsPreparing(false);
+            console.error('Multipart Error:', error);
+            if (Platform.OS === 'web') window.alert(t('common.error') + '\nLe transfert a échoué: ' + error.message);
+            else Alert.alert(t('common.error'), 'Le transfert a échoué: ' + error.message);
+            setStep('category');
+        }
+    };
+
     const uploadMultipleFiles = async (files: any[]) => {
         setProgress(0);
         setIsPreparing(false);
@@ -576,13 +703,47 @@ export default function SendScreen() {
             setIsPreparing(true);
             
             if (pendingFiles.length === 1) {
-                setSelectedFile(pendingFiles[0]);
+                const theFile = pendingFiles[0];
+                setSelectedFile(theFile);
                 setBatchStats(null);
-                await uploadFileV2(pendingFiles[0]);
+                
+                const fileObj = theFile.file || theFile;
+                if (Platform.OS === 'web' && fileObj.size > 20 * 1024 * 1024 && typeof fileObj.slice === 'function') {
+                    await uploadFileMultipart(theFile, theFile.name);
+                } else {
+                    await uploadFileV2(theFile);
+                }
             } else {
                 setBatchStats({ count: pendingFiles.length, totalSize });
                 setSelectedFile({ name: `Lot de ${pendingFiles.length} fichiers` });
-                await uploadMultipleFiles(pendingFiles);
+                
+                if (Platform.OS === 'web') {
+                    try {
+                        const zip = new JSZip();
+                        pendingFiles.forEach(f => {
+                            zip.file(f.name, f.file || f);
+                        });
+                        
+                        const zipBlob: any = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+                            // Progression de la préparation
+                        });
+                        zipBlob.name = `projet_zippe_${Date.now()}.zip`;
+                        zipBlob.mimeType = 'application/zip';
+                        
+                        const fileObj = { file: zipBlob, name: zipBlob.name, mimeType: 'application/zip' };
+                        
+                        if (zipBlob.size > 20 * 1024 * 1024 && typeof zipBlob.slice === 'function') {
+                            await uploadFileMultipart(fileObj, zipBlob.name);
+                        } else {
+                            await uploadFileV2(fileObj);
+                        }
+                    } catch (e) {
+                        console.error("Zipping error:", e);
+                        await uploadMultipleFiles(pendingFiles);
+                    }
+                } else {
+                    await uploadMultipleFiles(pendingFiles);
+                }
             }
         };
 

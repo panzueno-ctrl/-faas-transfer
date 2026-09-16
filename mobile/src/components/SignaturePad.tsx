@@ -67,6 +67,8 @@ export default function SignaturePad({ visible, onClose, onSave, colors }: Signa
         }
     };
 
+    const currentPathRef = useRef('');
+
     const panResponder = useRef(
         PanResponder.create({
             onStartShouldSetPanResponder: () => true,
@@ -75,16 +77,19 @@ export default function SignaturePad({ visible, onClose, onSave, colors }: Signa
                 const { locationX, locationY } = e.nativeEvent;
                 const x = locationX ?? (e.nativeEvent as any).offsetX ?? 0;
                 const y = locationY ?? (e.nativeEvent as any).offsetY ?? 0;
-                setCurrentPath(`M${x},${y}`);
+                currentPathRef.current = `M${x},${y}`;
+                setCurrentPath(currentPathRef.current);
             },
             onPanResponderMove: (e) => {
                 const { locationX, locationY } = e.nativeEvent;
                 const x = locationX ?? (e.nativeEvent as any).offsetX ?? 0;
                 const y = locationY ?? (e.nativeEvent as any).offsetY ?? 0;
-                setCurrentPath(prev => `${prev} L${x},${y}`);
+                currentPathRef.current += ` L${x},${y}`;
+                setCurrentPath(currentPathRef.current);
             },
             onPanResponderRelease: () => {
-                setPaths(prev => [...prev, currentPath]);
+                setPaths(prev => [...prev, currentPathRef.current]);
+                currentPathRef.current = '';
                 setCurrentPath('');
             }
         })
@@ -92,6 +97,7 @@ export default function SignaturePad({ visible, onClose, onSave, colors }: Signa
 
     const clearDraw = () => {
         setPaths([]);
+        currentPathRef.current = '';
         setCurrentPath('');
     };
 
