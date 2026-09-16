@@ -32,6 +32,7 @@ import PasswordProtector from '../components/PasswordProtector';
 import WatermarkEditor, { WatermarkSettings } from '../components/WatermarkEditor';
 import SplitSelector, { SplitMode } from '../components/SplitSelector';
 import RotationEditor from '../components/RotationEditor';
+import OrganizeEditor, { OrganizePageItem } from '../components/OrganizeEditor';
 import ConversionOptions, { ConversionQuality } from '../components/ConversionOptions';
 import NumberingSelector, { NumberingConfig } from '../components/NumberingSelector';
 import OcrLanguageSelector, { OcrLanguage } from '../components/OcrLanguageSelector';
@@ -47,7 +48,7 @@ const FILE_TOOLS = [
     { id: 'edit-pdf', category: 'Outils PDF Essentiels', label: 'Modifier PDF', description: 'Ajoutez du texte, des formes ou des images à votre PDF.', icon: 'create-outline', endpoint: '/convert/edit-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
     { id: 'watermark-pdf', category: 'Outils PDF Essentiels', label: 'Filigrane', description: 'Ajoutez un filigrane de sécurité à votre document.', icon: 'water-outline', endpoint: '/convert/watermark-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
     { id: 'rotate-pdf', category: 'Outils PDF Essentiels', label: 'Faire pivoter', description: 'Faites pivoter vos pages PDF selon vos besoins.', icon: 'refresh-outline', endpoint: '/convert/rotate-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
-    { id: 'organize-pdf', category: 'Outils PDF Essentiels', label: 'Organiser PDF', description: 'Triez, ajoutez et supprimez des pages.', icon: 'layers-outline', endpoint: '/convert/organize-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'organize-pdf', category: 'Outils PDF Essentiels', label: 'Organiser PDF', description: 'Triez, ajoutez et supprimez des pages.', icon: 'layers-outline', endpoint: '/convert/organize-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf', multiple: true },
     { id: 'protect-pdf', category: 'Outils PDF Essentiels', label: 'Protéger PDF', description: 'Ajoutez un mot de passe pour sécuriser votre PDF.', icon: 'lock-closed-outline', endpoint: '/convert/protect-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
     { id: 'unlock-pdf', category: 'Outils PDF Essentiels', label: 'Déverrouiller', description: 'Retirez le mot de passe d\'un fichier PDF.', icon: 'lock-open-outline', endpoint: '/convert/unlock-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
     { id: 'number-pdf', category: 'Outils PDF Essentiels', label: 'Numéros pages', description: 'Insérez des numéros de page dans votre document.', icon: 'list-outline', endpoint: '/convert/number-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
@@ -102,7 +103,7 @@ export default function ConvertScreen() {
     const styles = getStyles(colors);
 
     // Ajout de l'état "tool_intro"
-    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'sign_choice' | 'pdf_editor' | 'watermark_editor' | 'rotation_editor' | 'preparing_editor' | 'processing' | 'done'>('menu');
+    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'sign_choice' | 'pdf_editor' | 'watermark_editor' | 'rotation_editor' | 'organize_editor' | 'preparing_editor' | 'processing' | 'done'>('menu');
     const [activeTab, setActiveTab] = useState<'files' | 'media'>('files');
     const [selectedService, setSelectedService] = useState<any>(null);
     const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
@@ -132,6 +133,8 @@ export default function ConvertScreen() {
     
     // PdfEditor states
     const [pdfEditorPages, setPdfEditorPages] = useState<string[]>([]);
+    const [organizePages, setOrganizePages] = useState<OrganizePageItem[]>([]);
+    const [organizeFiles, setOrganizeFiles] = useState<{name: string, color: string, buffer: ArrayBuffer}[]>([]);
 
     const initSplitPDF = async (file: any) => {
         try {
@@ -355,6 +358,95 @@ export default function ConvertScreen() {
         }
     };
 
+    const initOrganizeEditor = async (files: any[]) => {
+        setStep('preparing_editor');
+        try {
+            const colorsArray = ['#e74c3c', '#3498db', '#f1c40f', '#9b59b6', '#1abc9c', '#e67e22', '#34495e'];
+            const newOrganizePages: OrganizePageItem[] = [];
+            const newOrganizeFiles: {name: string, color: string, buffer: ArrayBuffer}[] = [];
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const color = colorsArray[i % colorsArray.length];
+                
+                let arrayBuffer: ArrayBuffer;
+                if (Platform.OS === 'web' && file.file) {
+                    arrayBuffer = await file.file.arrayBuffer();
+                } else {
+                    const response = await fetch(file.uri);
+                    arrayBuffer = await response.arrayBuffer();
+                }
+                
+                newOrganizeFiles.push({ name: file.name, color, buffer: arrayBuffer });
+
+                // Génération des miniatures via backend
+                const formData = new FormData();
+                let fileBlob;
+                if (Platform.OS === 'web' && file.file) {
+                    fileBlob = file.file;
+                } else {
+                    const response_file = await fetch(file.uri);
+                    fileBlob = await response_file.blob();
+                }
+                formData.append('file', fileBlob, file.name);
+
+                const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'Accept': 'application/zip, image/jpeg' }
+                });
+
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error("Échec de la génération des images pour " + file.name + ": " + errText);
+                }
+
+                const contentType = res.headers.get('content-type');
+                const blob = await res.blob();
+
+                if (contentType?.includes('zip')) {
+                    const zip = new JSZip();
+                    const unzipped = await zip.loadAsync(blob);
+                    const fileNames = Object.keys(unzipped.files).sort();
+                    for (let j = 0; j < fileNames.length; j++) {
+                        const filename = fileNames[j];
+                        const f = unzipped.files[filename];
+                        if (!f.dir) {
+                            const imgBlob = await f.async('blob');
+                            newOrganizePages.push({
+                                id: `${i}-${j}-${Date.now()}`,
+                                fileIndex: i,
+                                fileName: file.name,
+                                pageIndex: j,
+                                imageUri: URL.createObjectURL(imgBlob)
+                            });
+                        }
+                    }
+                } else {
+                    newOrganizePages.push({
+                        id: `${i}-0-${Date.now()}`,
+                        fileIndex: i,
+                        fileName: file.name,
+                        pageIndex: 0,
+                        imageUri: URL.createObjectURL(blob)
+                    });
+                }
+            }
+
+            setOrganizeFiles(newOrganizeFiles);
+            setOrganizePages(newOrganizePages);
+            setStep('organize_editor');
+        } catch (e: any) {
+            console.error("Error in initOrganizeEditor:", e);
+            if (Platform.OS === 'web') {
+                window.alert("Erreur: Impossible de préparer l'éditeur PDF. Détails: " + (e.message || String(e)));
+            } else {
+                Alert.alert("Erreur", "Impossible de préparer l'éditeur PDF. Veuillez réessayer.");
+            }
+            setStep('staging');
+        }
+    };
+
     const handleWatermarkComplete = async (settings: WatermarkSettings) => {
         if (!pdfOriginalBuffer) return;
         setStep('processing');
@@ -422,6 +514,35 @@ export default function ConvertScreen() {
         } catch (e: any) {
             console.error("Error applying rotation:", e);
             Alert.alert("Erreur", "Échec de l'application de la rotation.");
+            setStep('staging');
+        }
+    };
+
+    const handleOrganizeComplete = async (orderedPages: OrganizePageItem[]) => {
+        setStep('processing');
+        try {
+            // Load all original PDF documents
+            const pdfDocs = await Promise.all(organizeFiles.map(async (fileInfo) => {
+                return await PDFDocument.load(fileInfo.buffer);
+            }));
+
+            // Create a new empty document
+            const newPdfDoc = await PDFDocument.create();
+
+            for (const pageItem of orderedPages) {
+                const sourceDoc = pdfDocs[pageItem.fileIndex];
+                const [copiedPage] = await newPdfDoc.copyPages(sourceDoc, [pageItem.pageIndex]);
+                newPdfDoc.addPage(copiedPage);
+            }
+
+            const finalPdfBytes = await newPdfDoc.save();
+            const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            setResultUrl(url);
+            setStep('done');
+        } catch (e: any) {
+            console.error("Error organizing PDF:", e);
+            Alert.alert("Erreur", "Échec de l'organisation du PDF.");
             setStep('staging');
         }
     };
@@ -569,6 +690,8 @@ export default function ConvertScreen() {
                     initPdfEditor(res.assets[0], 'watermark_editor');
                 } else if (selectedService.id === 'rotate-pdf') {
                     initPdfEditor(res.assets[0], 'rotation_editor');
+                } else if (selectedService.id === 'organize-pdf') {
+                    initOrganizeEditor(res.assets);
                 } else {
                     setStep('staging');
                 }
@@ -1252,6 +1375,18 @@ export default function ConvertScreen() {
                 pages={pdfEditorPages} 
                 colors={colors}
                 onComplete={handleRotationComplete}
+                onCancel={() => setStep('tool_intro')}
+            />
+        );
+    }
+
+    if (step === 'organize_editor') {
+        return (
+            <OrganizeEditor 
+                pages={organizePages}
+                files={organizeFiles}
+                colors={colors}
+                onComplete={handleOrganizeComplete}
                 onCancel={() => setStep('tool_intro')}
             />
         );
