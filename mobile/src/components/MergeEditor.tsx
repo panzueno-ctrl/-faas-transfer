@@ -7,7 +7,8 @@ import {
     ScrollView,
     Image,
     SafeAreaView,
-    Platform
+    Platform,
+    ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { OrganizePageItem, OrganizeFileItem } from './OrganizeEditor';
@@ -239,7 +240,7 @@ export default function MergeEditor({
                                     styles.itemContainer, 
                                     { borderColor: file.color, backgroundColor: colors.card }
                                 ]}>
-                                    {firstPage ? (
+                                    {firstPage && firstPage.imageUri ? (
                                         <Image
                                             source={{ uri: firstPage.imageUri }}
                                             style={styles.itemImage}
@@ -248,7 +249,7 @@ export default function MergeEditor({
                                         />
                                     ) : (
                                         <View style={[styles.itemImage, { alignItems: 'center', justifyContent: 'center' }]}>
-                                            <Ionicons name="document-text-outline" size={32} color={colors.textMuted} />
+                                            <ActivityIndicator color={colors.primary} />
                                         </View>
                                     )}
                                     
@@ -311,12 +312,18 @@ export default function MergeEditor({
                                     styles.itemContainer, 
                                     { borderColor: fileInfo.color, backgroundColor: colors.card }
                                 ]}>
-                                    <Image
-                                        source={{ uri: page.imageUri }}
-                                        style={styles.itemImage}
-                                        resizeMode="contain"
-                                        pointerEvents="none"
-                                    />
+                                    {page.imageUri ? (
+                                        <Image
+                                            source={{ uri: page.imageUri }}
+                                            style={styles.itemImage}
+                                            resizeMode="contain"
+                                            pointerEvents="none"
+                                        />
+                                    ) : (
+                                        <View style={[styles.itemImage, { alignItems: 'center', justifyContent: 'center' }]}>
+                                            <ActivityIndicator color={colors.primary} />
+                                        </View>
+                                    )}
                                     
                                     <Pressable 
                                         style={styles.deleteButton}

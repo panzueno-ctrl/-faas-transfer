@@ -408,36 +408,51 @@ export default function ConvertScreen() {
 
                     // Génération des miniatures 100% Client-Side pour le Web (Zéro Vercel timeout)
                     if (Platform.OS === 'web') {
-                        try {
-                            const pdfjsLib = await loadPdfJs();
-                            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-                            const pdf = await loadingTask.promise;
-                            
-                            const fileObj = newOrganizeFiles.find(f => f.originalIndex === fileIndex);
-                            if (fileObj) fileObj.pageCount = pdf.numPages;
-                            
-                            if (pdf.numPages >= 1) {
-                                const page = await pdf.getPage(1);
-                                const viewport = page.getViewport({ scale: 1.0 });
-                                const canvas = document.createElement('canvas');
-                                const ctx = canvas.getContext('2d');
-                                canvas.width = viewport.width;
-                                canvas.height = viewport.height;
-                                if (ctx) {
-                                    await page.render({ canvasContext: ctx, viewport }).promise;
-                                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                                    newOrganizePages.push({
-                                        id: `${fileIndex}-0-${Date.now()}`,
-                                        fileIndex: fileIndex,
-                                        fileName: file.name,
-                                        pageIndex: 0,
-                                        imageUri: dataUrl
-                                    });
-                                }
-                            }
+                        // On pousse tout de suite un objet de chargement (null imageUri) pour que l'UI s'affiche immédiatement (Skeleton loading)
+                        newOrganizePages.push({
+                            id: `${fileIndex}-0-${Date.now()}`,
+                            fileIndex: fileIndex,
+                            fileName: file.name,
+                            pageIndex: 0,
+                            imageUri: null as any
+                        });
 
-                            if (pdf.numPages > 1) {
-                                setTimeout(async () => {
+                        // Traitement asynchrone pour ne pas bloquer le Thread Principal
+                        setTimeout(async () => {
+                            try {
+                                const pdfjsLib = await loadPdfJs();
+                                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                                const pdf = await loadingTask.promise;
+                                
+                                setOrganizeFiles(prev => {
+                                    const next = [...prev];
+                                    const target = next.find(f => f.originalIndex === fileIndex);
+                                    if (target) target.pageCount = pdf.numPages;
+                                    return next;
+                                });
+                                
+                                if (pdf.numPages >= 1) {
+                                    const page = await pdf.getPage(1);
+                                    const viewport = page.getViewport({ scale: 1.0 });
+                                    const canvas = document.createElement('canvas');
+                                    const ctx = canvas.getContext('2d');
+                                    canvas.width = viewport.width;
+                                    canvas.height = viewport.height;
+                                    if (ctx) {
+                                        await page.render({ canvasContext: ctx, viewport }).promise;
+                                        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                                        
+                                        // Mettre à jour l'image URI
+                                        setOrganizePages(prev => {
+                                            const next = [...prev];
+                                            const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === 0);
+                                            if (target) target.imageUri = dataUrl;
+                                            return next;
+                                        });
+                                    }
+                                }
+
+                                if (pdf.numPages > 1) {
                                     for (let j = 2; j <= pdf.numPages; j++) {
                                         try {
                                             const page = await pdf.getPage(j);
@@ -462,12 +477,13 @@ export default function ConvertScreen() {
                                             console.warn('Async thumbnail error', e);
                                         }
                                     }
-                                }, 100);
+                                }
+                            } catch (localError) {
+                                console.warn("Local PDF.js rendering failed", localError);
                             }
-                            continue; // On passe au fichier suivant sans appeler le backend
-                        } catch (localError) {
-                            console.warn("Local PDF.js rendering failed, falling back to backend", localError);
-                        }
+                        }, 50 * i);
+                        
+                        continue;
                     }
 
                     // Fallback: Génération des miniatures via backend (pour Mobile ou erreur Web)
