@@ -94,12 +94,12 @@ export default function PasswordProtector({ onChange }: PasswordProtectorProps) 
 const styles = StyleSheet.create({
     container: {
         width: '100%',
-        maxWidth: 400,
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        padding: 24,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
+        
+        
+        
+        
+        
+        
         marginBottom: 24,
     },
     header: {
@@ -136,8 +136,8 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0,0,0,0.3)',
         borderRadius: 12,
         paddingHorizontal: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
+        
+        
     },
     inputFocused: {
         borderColor: '#3498db',

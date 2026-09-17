@@ -32,6 +32,8 @@ import PasswordProtector from '../components/PasswordProtector';
 import WatermarkEditor, { WatermarkSettings } from '../components/WatermarkEditor';
 import SplitSelector, { SplitMode } from '../components/SplitSelector';
 import RotationEditor from '../components/RotationEditor';
+import ProtectEditor from '../components/ProtectEditor';
+import SplitEditor from '../components/SplitEditor';
 import OrganizeEditor, { OrganizePageItem } from '../components/OrganizeEditor';
 import ConversionOptions, { ConversionQuality } from '../components/ConversionOptions';
 import NumberingSelector, { NumberingConfig } from '../components/NumberingSelector';
@@ -727,6 +729,8 @@ export default function ConvertScreen() {
                     initPdfEditor(res.assets[0], 'watermark_editor');
                 } else if (selectedService.id === 'rotate-pdf') {
                     initPdfEditor(res.assets[0], 'rotation_editor');
+                } else if (selectedService.id === 'protect-pdf') {
+                    initPdfEditor(res.assets[0], 'protect_editor');
                 } else if (selectedService.id === 'organize-pdf') {
                     initOrganizeEditor(res.assets);
                 } else {
@@ -742,7 +746,7 @@ export default function ConvertScreen() {
         setSelectedFiles(prev => prev.filter((_, index) => index !== indexToRemove));
     };
 
-    const processFiles = async () => {
+    const processFiles = async (passwordOverride?: string) => {
         if (selectedFiles.length === 0) return;
         
         setStep('processing');
@@ -775,7 +779,7 @@ export default function ConvertScreen() {
             }
 
             if (selectedService.id === 'protect-pdf') {
-                formData.append('password', pdfPassword || 'faas2024');
+                formData.append('password', passwordOverride || pdfPassword || 'faas2024');
             }
             if (selectedService.id === 'compress-pdf') {
                 formData.append('compressionLevel', compressionLevel);
@@ -1329,10 +1333,7 @@ export default function ConvertScreen() {
                             />
                         )}
 
-                        {selectedService.id === 'protect-pdf' && (
-                            <PasswordProtector onChange={setPdfPassword} />
-                        )}
-
+                        {/* protect-pdf configurator has been moved to ProtectEditor */}
                         {/* watermark-pdf configurator has been moved to WatermarkEditor */}
 
                         {selectedService.id === 'split-pdf' && (
@@ -1356,9 +1357,9 @@ export default function ConvertScreen() {
 
                         <View style={{ flexDirection: 'row', gap: 16, width: '100%', maxWidth: 400 }}>
                             <Pressable 
-                                style={[styles.primaryButton, (selectedFiles.length === 0 || (selectedService.id === 'protect-pdf' && (!pdfPassword || pdfPassword.trim() === ''))) && { opacity: 0.5 }]} 
-                                onPress={processFiles}
-                                disabled={selectedFiles.length === 0 || (selectedService.id === 'protect-pdf' && (!pdfPassword || pdfPassword.trim() === ''))}
+                                style={[styles.primaryButton, selectedFiles.length === 0 && { opacity: 0.5 }]} 
+                                onPress={() => processFiles()}
+                                disabled={selectedFiles.length === 0}
                             >
                                 <Ionicons name="checkmark-outline" size={22} color="#ffffff" />
                                 <Text style={styles.primaryButtonText}>Terminer</Text>
@@ -1401,6 +1402,22 @@ export default function ConvertScreen() {
                 pages={pdfEditorPages} 
                 colors={colors}
                 onComplete={handleWatermarkComplete}
+                onCancel={() => setStep('tool_intro')}
+            />
+        );
+    }
+
+    if (step === 'protect_editor') {
+        return (
+            <ProtectEditor 
+                pages={pdfEditorPages} 
+                fileName={selectedFiles[0]?.name || ''}
+                fileSize={selectedFiles[0]?.size || 0}
+                colors={colors}
+                onComplete={(password) => {
+                    setPdfPassword(password);
+                    processFiles(password);
+                }}
                 onCancel={() => setStep('tool_intro')}
             />
         );
