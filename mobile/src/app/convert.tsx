@@ -579,8 +579,33 @@ export default function ConvertScreen() {
             // data is the new filesOrder array
             const newSelectedFiles = data.map((item: OrganizeFileItem) => selectedFiles[item.originalIndex]);
             setSelectedFiles(newSelectedFiles);
-            // Process the reordered files
-            processFiles(undefined, newSelectedFiles);
+            
+            // Fusionner côté client pour éviter les timeouts serveur
+            setStep('processing');
+            setFileName('document_fusionne');
+            
+            try {
+                const newPdfDoc = await PDFDocument.create();
+                
+                for (const fileItem of data) {
+                    const sourceFileInfo = organizeFiles.find(f => f.originalIndex === fileItem.originalIndex);
+                    if (sourceFileInfo && sourceFileInfo.buffer) {
+                        const sourceDoc = await PDFDocument.load(sourceFileInfo.buffer);
+                        const copiedPages = await newPdfDoc.copyPages(sourceDoc, sourceDoc.getPageIndices());
+                        copiedPages.forEach(page => newPdfDoc.addPage(page));
+                    }
+                }
+                
+                const finalPdfBytes = await newPdfDoc.save();
+                const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                setResultUrl(url);
+                setStep('done');
+            } catch (e: any) {
+                console.error("Error merging files locally:", e);
+                Alert.alert("Erreur", "Échec de la fusion du PDF.");
+                setStep('staging');
+            }
         }
     };
 
