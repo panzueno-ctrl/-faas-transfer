@@ -978,9 +978,12 @@ Les outils PDF tels que Filigrane (Watermark), Rotation, et Organiser (multi-fic
   PROTECTION DE FICHIER (PROTÉGER PDF)
 ============================================================
 
-1. REFONTE INTERFACE U.I. :
-   - Refonte du composant `PasswordProtector.tsx` pour s'aligner sur les standards de l'industrie (type SmallPDF).
+1. REFONTE INTERFACE U.I. ET ERGONOMIE (Type SmallPDF) :
+   - Création d'un nouvel éditeur dédié : `ProtectEditor.tsx`.
+   - Le flux ne reste plus sur l'écran d'attente (staging) après la sélection, mais effectue l'extraction de la première page du PDF via l'API pour générer un aperçu visuel (`initPdfEditor`).
+   - L'interface affiche l'aperçu du document (thumbnail géant) sur la gauche, avec le nom et le poids du fichier.
+   - Le formulaire `PasswordProtector.tsx` a été réintégré proprement dans une barre latérale droite (Sidebar).
    - Ajout de deux champs de saisie : "Définis ton mot de passe" et "Confirme ton mot de passe".
    - Ajout de la bascule d'affichage du mot de passe (icône œil).
-   - Le bouton "Terminer" (`convert.tsx`) est désormais désactivé si les mots de passe sont vides ou ne correspondent pas.
+   - Le bouton "Protéger ➔" de la sidebar est désactivé si les mots de passe sont vides ou ne correspondent pas.
    - Indication de sécurité "Protection par cryptage AES 128 bits" affichée en bas du formulaire.
