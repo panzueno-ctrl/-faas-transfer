@@ -34,7 +34,8 @@ import SplitSelector, { SplitMode } from '../components/SplitSelector';
 import RotationEditor from '../components/RotationEditor';
 import ProtectEditor from '../components/ProtectEditor';
 import SplitEditor from '../components/SplitEditor';
-import OrganizeEditor, { OrganizePageItem } from '../components/OrganizeEditor';
+import OrganizeEditor, { OrganizePageItem, OrganizeFileItem } from '../components/OrganizeEditor';
+import MergeEditor from '../components/MergeEditor';
 import ConversionOptions, { ConversionQuality } from '../components/ConversionOptions';
 import NumberingSelector, { NumberingConfig } from '../components/NumberingSelector';
 import OcrLanguageSelector, { OcrLanguage } from '../components/OcrLanguageSelector';
@@ -105,7 +106,7 @@ export default function ConvertScreen() {
     const styles = getStyles(colors);
 
     // Ajout de l'état "tool_intro"
-    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'sign_choice' | 'pdf_editor' | 'watermark_editor' | 'rotation_editor' | 'organize_editor' | 'preparing_editor' | 'processing' | 'done'>('menu');
+    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'sign_choice' | 'pdf_editor' | 'watermark_editor' | 'rotation_editor' | 'organize_editor' | 'merge_editor' | 'preparing_editor' | 'processing' | 'done'>('menu');
     const [activeTab, setActiveTab] = useState<'files' | 'media'>('files');
     const [selectedService, setSelectedService] = useState<any>(null);
     const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
@@ -360,7 +361,7 @@ export default function ConvertScreen() {
         }
     };
 
-    const initOrganizeEditor = async (files: any[], appendToExisting = false) => {
+    const initOrganizeEditor = async (files: any[], appendToExisting = false, targetStep: string = 'organize_editor') => {
         if (!appendToExisting) setStep('preparing_editor');
         try {
             const pastelColors = ['#ffcfcf', '#cbf2e8', '#fff0b5', '#dfd5f6', '#c2ebf9'];
@@ -457,7 +458,7 @@ export default function ConvertScreen() {
 
             // Enter the editor if at least one file succeeded (or if we already had files)
             if (newOrganizeFiles.length > 0) {
-                if (!appendToExisting) setStep('organize_editor');
+                if (!appendToExisting) setStep(targetStep);
             } else {
                 if (!appendToExisting) setStep('staging');
             }
@@ -568,6 +569,18 @@ export default function ConvertScreen() {
             console.error("Error organizing PDF:", e);
             Alert.alert("Erreur", "Échec de l'organisation du PDF.");
             setStep('staging');
+        }
+    };
+
+    const handleMergeComplete = async (type: 'files' | 'pages', data: any) => {
+        if (type === 'pages') {
+            handleOrganizeComplete(data);
+        } else {
+            // data is the new filesOrder array
+            const newSelectedFiles = data.map((item: OrganizeFileItem) => selectedFiles[item.originalIndex]);
+            setSelectedFiles(newSelectedFiles);
+            // Process the reordered files
+            processFiles(undefined, newSelectedFiles);
         }
     };
 
@@ -732,7 +745,9 @@ export default function ConvertScreen() {
                 } else if (selectedService.id === 'protect-pdf') {
                     initPdfEditor(res.assets[0], 'protect_editor');
                 } else if (selectedService.id === 'organize-pdf') {
-                    initOrganizeEditor(res.assets);
+                    initOrganizeEditor(res.assets, false, 'organize_editor');
+                } else if (selectedService.id === 'merge-pdf') {
+                    initOrganizeEditor(res.assets, false, 'merge_editor');
                 } else {
                     setStep('staging');
                 }
@@ -746,13 +761,14 @@ export default function ConvertScreen() {
         setSelectedFiles(prev => prev.filter((_, index) => index !== indexToRemove));
     };
 
-    const processFiles = async (passwordOverride?: string) => {
-        if (selectedFiles.length === 0) return;
+    const processFiles = async (passwordOverride?: string, filesOverride?: any[]) => {
+        const targetFiles = filesOverride || selectedFiles;
+        if (targetFiles.length === 0) return;
         
         setStep('processing');
         
-        let baseName = selectedFiles[0].name.split('.').slice(0, -1).join('.');
-        if (selectedFiles.length > 1 && selectedService.id === 'merge-pdf') {
+        let baseName = targetFiles[0].name.split('.').slice(0, -1).join('.');
+        if (targetFiles.length > 1 && selectedService.id === 'merge-pdf') {
             baseName = 'document_fusionne';
         } else {
             baseName += '_converti';
@@ -762,8 +778,8 @@ export default function ConvertScreen() {
         try {
             const formData = new FormData();
             
-            for (let i = 0; i < selectedFiles.length; i++) {
-                const file = selectedFiles[i];
+            for (let i = 0; i < targetFiles.length; i++) {
+                const file = targetFiles[i];
                 let blob;
                 if (Platform.OS === 'web' && file.file) {
                     blob = file.file;
@@ -1430,6 +1446,23 @@ export default function ConvertScreen() {
                 colors={colors}
                 onComplete={handleRotationComplete}
                 onCancel={() => setStep('tool_intro')}
+            />
+        );
+    }
+
+    if (step === 'merge_editor') {
+        return (
+            <MergeEditor 
+                pages={organizePages}
+                files={organizeFiles.map((f, i) => ({
+                    name: f.name,
+                    color: f.color,
+                    originalIndex: f.originalIndex
+                }))}
+                onComplete={handleMergeComplete}
+                onCancel={() => setStep('tool_intro')}
+                onAddFiles={handleAddFilesToOrganize}
+                colors={colors}
             />
         );
     }
