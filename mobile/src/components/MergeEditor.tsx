@@ -193,7 +193,7 @@ export default function MergeEditor({
                         const firstPage = pages.find(p => p.fileIndex === file.originalIndex);
                         const isDragged = draggedFile === index;
                         const isDragOver = dragOverFile === index;
-                        const pageCount = pages.filter(p => p.fileIndex === file.originalIndex).length;
+                        const pageCount = file.pageCount || pages.filter(p => p.fileIndex === file.originalIndex).length;
 
                         const content = (
                             <>
