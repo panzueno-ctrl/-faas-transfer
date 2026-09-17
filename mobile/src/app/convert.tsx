@@ -42,6 +42,26 @@ import OcrLanguageSelector, { OcrLanguage } from '../components/OcrLanguageSelec
 import PdfEditor, { PdfEditItem } from '../components/PdfEditor';
 import { PDFDocument, rgb, StandardFonts, degrees } from 'pdf-lib/dist/pdf-lib.esm.js';
 import JSZip from 'jszip';
+
+// Helper pour charger dynamiquement PDF.js sur le Web
+const loadPdfJs = (): Promise<any> => {
+    return new Promise((resolve, reject) => {
+        if ((window as any).pdfjsLib) {
+            resolve((window as any).pdfjsLib);
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+        script.onload = () => {
+            const pdfjsLib = (window as any).pdfjsLib;
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            resolve(pdfjsLib);
+        };
+        script.onerror = () => reject(new Error("Failed to load pdf.js"));
+        document.body.appendChild(script);
+    });
+};
+
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
 const FILE_TOOLS = [
@@ -386,7 +406,40 @@ export default function ConvertScreen() {
                     
                     newOrganizeFiles.push({ name: file.name, color, originalIndex: fileIndex, buffer: arrayBuffer });
 
-                    // Génération des miniatures via backend
+                    // Génération des miniatures 100% Client-Side pour le Web (Zéro Vercel timeout)
+                    if (Platform.OS === 'web') {
+                        try {
+                            const pdfjsLib = await loadPdfJs();
+                            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                            const pdf = await loadingTask.promise;
+                            
+                            for (let j = 1; j <= pdf.numPages; j++) {
+                                const page = await pdf.getPage(j);
+                                const viewport = page.getViewport({ scale: 1.0 }); // Résolution standard pour miniatures
+                                const canvas = document.createElement('canvas');
+                                const ctx = canvas.getContext('2d');
+                                canvas.width = viewport.width;
+                                canvas.height = viewport.height;
+                                
+                                if (ctx) {
+                                    await page.render({ canvasContext: ctx, viewport }).promise;
+                                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                                    newOrganizePages.push({
+                                        id: `${fileIndex}-${j-1}-${Date.now()}`,
+                                        fileIndex: fileIndex,
+                                        fileName: file.name,
+                                        pageIndex: j-1,
+                                        imageUri: dataUrl
+                                    });
+                                }
+                            }
+                            continue; // On passe au fichier suivant sans appeler le backend
+                        } catch (localError) {
+                            console.warn("Local PDF.js rendering failed, falling back to backend", localError);
+                        }
+                    }
+
+                    // Fallback: Génération des miniatures via backend (pour Mobile ou erreur Web)
                     const formData = new FormData();
                     let fileBlob;
                     if (Platform.OS === 'web' && file.file) {
