@@ -661,7 +661,7 @@ export default function ConvertScreen() {
             handleOrganizeComplete(data);
         } else {
             // data is the new filesOrder array
-            const newSelectedFiles = data.map((item: OrganizeFileItem) => selectedFiles[item.originalIndex]);
+            const newSelectedFiles = data.map((item: OrganizeFileItem) => selectedFiles[item.originalIndex]).filter(Boolean);
             setSelectedFiles(newSelectedFiles);
             
             // Fusionner côté client pour éviter les timeouts serveur
@@ -701,6 +701,7 @@ export default function ConvertScreen() {
                 multiple: true
             });
             if (!res.canceled && res.assets && res.assets.length > 0) {
+                setSelectedFiles(prev => [...prev, ...res.assets]);
                 await initOrganizeEditor(res.assets, true);
             }
         } catch (e) {
