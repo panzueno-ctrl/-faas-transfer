@@ -987,3 +987,15 @@ Les outils PDF tels que Filigrane (Watermark), Rotation, et Organiser (multi-fic
    - Ajout de la bascule d'affichage du mot de passe (icône œil).
    - Le bouton "Protéger ➔" de la sidebar est désactivé si les mots de passe sont vides ou ne correspondent pas.
    - Indication de sécurité "Protection par cryptage AES 128 bits" affichée en bas du formulaire.
+
+============================================================
+  FUSION DE FICHIERS (FUSIONNER PDF)
+============================================================
+
+1. REFONTE INTERFACE U.I. ET ERGONOMIE (Type SmallPDF) :
+   - Création d'un nouvel éditeur dédié hybride : `MergeEditor.tsx`.
+   - L'interface intègre un système d'onglets pour offrir deux modes de fusion :
+     a) **Mode "Fichiers"** : Affiche les miniatures de la première page de chaque document de manière horizontale. Permet de réorganiser l'ordre global des fichiers par glisser-déposer.
+     b) **Mode "Pages"** : Extrait et affiche toutes les pages de tous les documents. Permet de mélanger librement des pages individuelles provenant de fichiers différents (réutilise la logique du composant OrganizeEditor).
+   - Le routage dans `convert.tsx` déclenche désormais l'extraction de l'aperçu PDF (`initOrganizeEditor`) dès la sélection des fichiers pour alimenter l'interface visuelle.
+   - L'expérience globale est maintenant strictement visuelle et correspond à l'ergonomie SmallPDF.
