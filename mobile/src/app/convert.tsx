@@ -1566,7 +1566,8 @@ export default function ConvertScreen() {
                 files={organizeFiles.map((f, i) => ({
                     name: f.name,
                     color: f.color,
-                    originalIndex: f.originalIndex
+                    originalIndex: f.originalIndex,
+                    pageCount: f.pageCount
                 }))}
                 onComplete={handleMergeComplete}
                 onCancel={() => setStep('tool_intro')}

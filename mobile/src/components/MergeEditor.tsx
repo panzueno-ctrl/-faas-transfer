@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -33,6 +33,44 @@ export default function MergeEditor({
     
     const [pages, setPages] = useState<OrganizePageItem[]>(initialPages);
     const [filesOrder, setFilesOrder] = useState<OrganizeFileItem[]>(initialFiles);
+
+    useEffect(() => {
+        setPages(prev => {
+            const newPages = [...prev];
+            let changed = false;
+            initialPages.forEach(p => {
+                if (!newPages.find(existing => existing.id === p.id)) {
+                    newPages.push(p);
+                    changed = true;
+                }
+            });
+            if (changed) {
+                newPages.sort((a, b) => {
+                    if (a.fileIndex !== b.fileIndex) return a.fileIndex - b.fileIndex;
+                    return a.pageIndex - b.pageIndex;
+                });
+            }
+            return changed ? newPages : prev;
+        });
+    }, [initialPages]);
+
+    useEffect(() => {
+        setFilesOrder(prev => {
+            const newFiles = [...prev];
+            let changed = false;
+            initialFiles.forEach(f => {
+                const existing = newFiles.find(existing => existing.originalIndex === f.originalIndex);
+                if (!existing) {
+                    newFiles.push(f);
+                    changed = true;
+                } else if (existing.pageCount !== f.pageCount) {
+                    existing.pageCount = f.pageCount;
+                    changed = true;
+                }
+            });
+            return changed ? newFiles : prev;
+        });
+    }, [initialFiles]);
     
     const [draggedPage, setDraggedPage] = useState<number | null>(null);
     const [dragOverPage, setDragOverPage] = useState<number | null>(null);
