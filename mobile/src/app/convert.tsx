@@ -160,30 +160,7 @@ export default function ConvertScreen() {
     const [organizePages, setOrganizePages] = useState<OrganizePageItem[]>([]);
     const [organizeFiles, setOrganizeFiles] = useState<any[]>([]);
 
-    const initSplitPDF = async (file: any) => {
-        try {
-            let arrayBuffer;
-            if (Platform.OS === 'web' && file.file) {
-                arrayBuffer = await file.file.arrayBuffer();
-            } else {
-                const response = await fetch(file.uri);
-                arrayBuffer = await response.arrayBuffer();
-            }
-            const pdfDoc = await PDFDocument.load(arrayBuffer);
-            const count = pdfDoc.getPageCount();
-            setPageCount(count);
-            setPdfDocRef(pdfDoc);
-            setSplitPoints([]);
-        } catch (e: any) {
-            console.error("Error in initSplitPDF:", e);
-            if (Platform.OS === 'web') {
-                window.alert("Erreur: Impossible de charger l'outil PDF. Détails: " + (e.message || String(e)));
-            } else {
-                Alert.alert("Erreur", "Impossible de lire ce PDF. Veuillez réessayer.");
-            }
-            setStep('tool_intro');
-        }
-    };
+    // initSplitPDF removed in favor of initOrganizeEditor
 
     const initPdfEditor = async (file: any, targetStep: string = 'pdf_editor') => {
         setStep('preparing_editor');
@@ -809,11 +786,14 @@ export default function ConvertScreen() {
     };
 
     const handleSplitPDF = async () => {
-        if (!pdfDocRef) return;
+        if (!organizeFiles[0]?.buffer) return;
         setIsSplitting(true);
+        setLocalError(null);
         try {
-            
             const zip = new JSZip();
+            
+            // Re-load to avoid Detached ArrayBuffer issue in UI thread
+            const pdfDocRef = await PDFDocument.load(organizeFiles[0].buffer.slice(0));
             let currentDoc = await PDFDocument.create();
             let docIndex = 1;
 
@@ -832,6 +812,8 @@ export default function ConvertScreen() {
                         docIndex++;
                     }
                 }
+                // Yield thread to prevent UI freezing
+                await new Promise(r => setTimeout(r, 10));
             }
 
             const zipContent = await zip.generateAsync({ type: Platform.OS === 'web' ? 'blob' : 'base64' });
@@ -845,16 +827,13 @@ export default function ConvertScreen() {
                 setResultUrl(fileUri);
             }
             
-            setPdfDocRef(null);
             setStep('done');
             setFileName('documents_divises');
         } catch (e: any) {
             console.error("Split error:", e);
-            if (Platform.OS === 'web') {
-                window.alert("Erreur lors du découpage: " + (e.message || String(e)));
-            } else {
-                Alert.alert("Erreur", "Une erreur est survenue lors du découpage.");
-            }
+            setLocalError("Erreur lors du découpage: " + (e.message || String(e)));
+            setIsSplitting(false);
+            setStep('split_editor');
         } finally {
             setIsSplitting(false);
         }
@@ -894,8 +873,8 @@ export default function ConvertScreen() {
             } else {
                 setSelectedFiles(res.assets);
                 if (selectedService.id === 'split-pdf') {
-                    setStep('split_editor');
-                    initSplitPDF(res.assets[0]);
+                    initOrganizeEditor(res.assets, false, 'split_editor');
+                    setSplitPoints([]);
                 } else if (selectedService.id === 'sign-pdf') {
                     setStep('sign_choice');
                 } else if (selectedService.id === 'edit-pdf') {
@@ -1228,10 +1207,10 @@ export default function ConvertScreen() {
                         </View>
 
                         <View style={{ width: '100%', maxWidth: 900, flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginBottom: 40 }}>
-                            {Array.from({ length: pageCount }).map((_, index) => {
+                            {organizePages.map((page, index) => {
                                 const hasCutAfter = splitPoints.includes(index);
                                 return (
-                                    <View key={index} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <View key={page.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
                                         <View style={{
                                             width: 140, 
                                             height: 180, 
@@ -1239,12 +1218,18 @@ export default function ConvertScreen() {
                                             borderRadius: 12, 
                                             borderWidth: 1, 
                                             borderColor: colors.border,
-                                            overflow: 'hidden'
+                                            overflow: 'hidden',
+                                            justifyContent: 'center',
+                                            alignItems: 'center'
                                         }}>
-                                            <PdfThumbnail fileUri={selectedFiles[0].uri} pageIndex={index} />
+                                            {page.imageUri ? (
+                                                <Image source={{ uri: page.imageUri }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                                            ) : (
+                                                <ActivityIndicator size="small" color="#4F46E5" />
+                                            )}
                                         </View>
 
-                                        {index < pageCount - 1 && (
+                                        {index < organizePages.length - 1 && (
                                             <Pressable 
                                                 onPress={() => {
                                                     setSplitPoints(prev => 
