@@ -999,3 +999,24 @@ Les outils PDF tels que Filigrane (Watermark), Rotation, et Organiser (multi-fic
      b) **Mode "Pages"** : Extrait et affiche toutes les pages de tous les documents. Permet de mélanger librement des pages individuelles provenant de fichiers différents (réutilise la logique du composant OrganizeEditor).
    - Le routage dans `convert.tsx` déclenche désormais l'extraction de l'aperçu PDF (`initOrganizeEditor`) dès la sélection des fichiers pour alimenter l'interface visuelle.
    - L'expérience globale est maintenant strictement visuelle et correspond à l'ergonomie SmallPDF.
+
+============================================================
+  18. ARCHITECTURE HYBRIDE "EDGE-TO-CLOUD" (PDF-LIB)
+============================================================
+
+Afin de s'affranchir définitivement des limites de temps d'exécution (Timeouts) et de mémoire (RAM de 512 Mo) imposées par le backend gratuit (Render / Vercel Serverless Functions), l'application a migré vers une architecture hybride "Edge-to-Cloud".
+
+1. LE PRINCIPE (EDGE COMPUTING) :
+   - Au lieu d'envoyer 50 fichiers PDF au serveur pour qu'il les fusionne (ce qui sature le réseau et fait crasher le serveur), le calcul lourd est déporté directement sur l'appareil de l'utilisateur (le "Edge", c'est-à-dire le navigateur de son ordinateur ou de son smartphone).
+   - Outils concernés : Fusionner PDF, Organiser PDF, Filigrane, Protéger, Pivoter.
+   - Outils restant sur le Cloud (Serveur) : Conversion lourde (Word, Images, OCR) où l'appareil local n'a pas les exécutables nécessaires (ex: LibreOffice, Ghostscript).
+
+2. LES DÉFIS TECHNIQUES ET SOLUTIONS (LOCAL MERGE) :
+   - Défi 1 (Freezes UI) : La manipulation de 3000+ pages en JavaScript est une opération synchrone ("CPU-bound") qui bloque totalement le fil principal (Main Thread) du navigateur. L'écran figeait et l'utilisateur pensait que l'app avait planté.
+   - Solution 1 (Respiration / Yielding) : Implémentation d'un "Yield" asynchrone (`await new Promise(r => setTimeout(r, 10))`) dans les boucles for de `pdf-lib`. L'application traite 1 fichier, fait une micro-pause de 10ms pour laisser le navigateur dessiner l'animation de chargement, puis traite le suivant. Le freeze est totalement éliminé.
+
+   - Défi 2 (ArrayBuffer Detachment) : Lors de la fusion de 69 fichiers, le code récupérait le contenu du fichier (ArrayBuffer) et le transférait à un WebWorker (`pdf.js`) pour générer les images miniatures d'aperçu. Mais en Javascript, transférer un `ArrayBuffer` à un Worker détache la mémoire de ce dernier du fil principal (Detached ArrayBuffer). Lorsque la fusion finale se lançait, le fichier mémoire était introuvable, causant un crash `Cannot perform Construct on a detached ArrayBuffer`.
+   - Solution 2 (Clonage de Mémoire) : Au lieu de donner le fichier original au Worker, l'application lui passe un clone strict (`arrayBuffer.slice(0)`). Le Worker prend le clone, et le fil principal garde la copie originale intacte pour effectuer la fusion finale avec succès.
+
+3. RESULTAT :
+   - L'application FaaS Transfer peut désormais fusionner 69 fichiers (3214 pages) instantanément sur le téléphone de l'utilisateur, sans aucune requête serveur réseau, sans coût d'hébergement supplémentaire, de manière totalement privée et 100% stable.
