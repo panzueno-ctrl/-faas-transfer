@@ -437,7 +437,7 @@ export default function ConvertScreen() {
                         if (Platform.OS === 'web') {
                             try {
                                 const pdfjsLib = await loadPdfJs();
-                                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
                                 const pdf = await loadingTask.promise;
                                 
                                 setOrganizeFiles(prev => {
