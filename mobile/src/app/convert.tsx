@@ -139,6 +139,8 @@ export default function ConvertScreen() {
     const [pageCount, setPageCount] = useState<number>(0);
     const [splitPoints, setSplitPoints] = useState<number[]>([]);
     const [splitInterval, setSplitInterval] = useState<number>(1);
+    const [splitTab, setSplitTab] = useState<'split' | 'extract'>('split');
+    const [extractedPages, setExtractedPages] = useState<number[]>([]);
     
     // Compression state
     const [compressionLevel, setCompressionLevel] = useState<CompressionLevel>('recommended');
@@ -786,51 +788,75 @@ export default function ConvertScreen() {
 
     const handleSplitPDF = async () => {
         if (!organizeFiles[0]?.buffer) return;
+        
+        if (splitTab === 'extract' && extractedPages.length === 0) {
+            setLocalError("Veuillez sélectionner au moins une page à extraire.");
+            return;
+        }
+        
         setIsSplitting(true);
         setLocalError(null);
         try {
-            const zip = new JSZip();
-            
-            // Re-load to avoid Detached ArrayBuffer issue in UI thread
             const pdfDocRef = await PDFDocument.load(organizeFiles[0].buffer.slice(0));
-            let currentDoc = await PDFDocument.create();
-            let docIndex = 1;
-
-            const totalPages = pdfDocRef.getPageCount();
             
-            for (let i = 0; i < totalPages; i++) {
-                const [copiedPage] = await currentDoc.copyPages(pdfDocRef, [i]);
-                currentDoc.addPage(copiedPage);
-
-                if (splitPoints.includes(i) || i === totalPages - 1) {
-                    const pdfBytes = await currentDoc.save();
-                    zip.file(`document_partie_${docIndex}.pdf`, pdfBytes);
-                    
-                    if (i < totalPages - 1) {
-                        currentDoc = await PDFDocument.create();
-                        docIndex++;
-                    }
+            if (splitTab === 'extract') {
+                const newDoc = await PDFDocument.create();
+                const pagesToCopy = [...extractedPages].sort((a, b) => a - b);
+                
+                for (const pageIdx of pagesToCopy) {
+                    const [copiedPage] = await newDoc.copyPages(pdfDocRef, [pageIdx]);
+                    newDoc.addPage(copiedPage);
+                    await new Promise(r => setTimeout(r, 10));
                 }
-                // Yield thread to prevent UI freezing
-                await new Promise(r => setTimeout(r, 10));
-            }
-
-            const zipContent = await zip.generateAsync({ type: Platform.OS === 'web' ? 'blob' : 'base64' });
-            
-            if (Platform.OS === 'web') {
-                const url = URL.createObjectURL(zipContent as Blob);
-                setResultUrl(url);
+                
+                const pdfBytes = await newDoc.save();
+                
+                if (Platform.OS === 'web') {
+                    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                    setResultUrl(URL.createObjectURL(blob));
+                }
+                setFileName('document_extrait');
+                
             } else {
-                const fileUri = FileSystem.cacheDirectory + 'documents_divises.zip';
-                await FileSystem.writeAsStringAsync(fileUri, zipContent as string, { encoding: FileSystem.EncodingType.Base64 });
-                setResultUrl(fileUri);
+                const zip = new JSZip();
+                let currentDoc = await PDFDocument.create();
+                let docIndex = 1;
+
+                const totalPages = pdfDocRef.getPageCount();
+                
+                for (let i = 0; i < totalPages; i++) {
+                    const [copiedPage] = await currentDoc.copyPages(pdfDocRef, [i]);
+                    currentDoc.addPage(copiedPage);
+
+                    if (splitPoints.includes(i) || i === totalPages - 1) {
+                        const pdfBytes = await currentDoc.save();
+                        zip.file(`document_partie_${docIndex}.pdf`, pdfBytes);
+                        
+                        if (i < totalPages - 1) {
+                            currentDoc = await PDFDocument.create();
+                            docIndex++;
+                        }
+                    }
+                    await new Promise(r => setTimeout(r, 10));
+                }
+
+                const zipContent = await zip.generateAsync({ type: Platform.OS === 'web' ? 'blob' : 'base64' });
+                
+                if (Platform.OS === 'web') {
+                    const url = URL.createObjectURL(zipContent as Blob);
+                    setResultUrl(url);
+                } else {
+                    const fileUri = FileSystem.cacheDirectory + 'documents_divises.zip';
+                    await FileSystem.writeAsStringAsync(fileUri, zipContent as string, { encoding: FileSystem.EncodingType.Base64 });
+                    setResultUrl(fileUri);
+                }
+                setFileName('documents_divises');
             }
             
             setStep('done');
-            setFileName('documents_divises');
         } catch (e: any) {
             console.error("Split error:", e);
-            setLocalError("Erreur lors du découpage: " + (e.message || String(e)));
+            setLocalError("Erreur lors du traitement: " + (e.message || String(e)));
             setIsSplitting(false);
             setStep('split_editor');
         } finally {
@@ -1182,85 +1208,139 @@ export default function ConvertScreen() {
                             <Text style={styles.backButtonText}>Annuler</Text>
                         </Pressable>
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, paddingHorizontal: 16, borderRadius: 24, borderWidth: 1, borderColor: colors.border }}>
-                            <Text style={{ color: colors.textMuted, marginRight: 12 }}>Diviser toutes les</Text>
+                        {/* TABS: Diviser vs Extraire */}
+                        <View style={{ flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 24, padding: 4 }}>
                             <Pressable 
-                                onPress={() => {
-                                    const newInt = Math.max(1, splitInterval - 1);
-                                    setSplitInterval(newInt);
-                                    const newPoints = [];
-                                    for (let i = newInt - 1; i < organizePages.length - 1; i += newInt) newPoints.push(i);
-                                    setSplitPoints(newPoints);
-                                }}
-                                style={({hovered}: any) => [{ padding: 8 }, hovered && { opacity: 0.7 }]}
-                            >
-                                <Ionicons name="remove-circle-outline" size={24} color={colors.primary} />
+                                onPress={() => setSplitTab('split')}
+                                style={{ paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: splitTab === 'split' ? colors.primary : 'transparent' }}>
+                                <Text style={{ color: splitTab === 'split' ? '#fff' : colors.textMuted, fontWeight: '600' }}>✂️ Diviser</Text>
                             </Pressable>
-                            <Text style={{ color: colors.text, fontSize: 16, fontWeight: 'bold', marginHorizontal: 8 }}>{splitInterval}</Text>
                             <Pressable 
-                                onPress={() => {
-                                    const newInt = Math.min(organizePages.length, splitInterval + 1);
-                                    setSplitInterval(newInt);
-                                    const newPoints = [];
-                                    for (let i = newInt - 1; i < organizePages.length - 1; i += newInt) newPoints.push(i);
-                                    setSplitPoints(newPoints);
-                                }}
-                                style={({hovered}: any) => [{ padding: 8 }, hovered && { opacity: 0.7 }]}
-                            >
-                                <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
+                                onPress={() => setSplitTab('extract')}
+                                style={{ paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: splitTab === 'extract' ? colors.primary : 'transparent' }}>
+                                <Text style={{ color: splitTab === 'extract' ? '#fff' : colors.textMuted, fontWeight: '600' }}>✅ Extraire</Text>
                             </Pressable>
-                            <Text style={{ color: colors.textMuted, marginLeft: 12 }}>pages</Text>
                         </View>
+
+                        {splitTab === 'split' && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, paddingHorizontal: 16, borderRadius: 24, borderWidth: 1, borderColor: colors.border }}>
+                                <Text style={{ color: colors.textMuted, marginRight: 12 }}>Diviser toutes les</Text>
+                                <Pressable 
+                                    onPress={() => {
+                                        const newInt = Math.max(1, splitInterval - 1);
+                                        setSplitInterval(newInt);
+                                        const newPoints = [];
+                                        for (let i = newInt - 1; i < organizePages.length - 1; i += newInt) newPoints.push(i);
+                                        setSplitPoints(newPoints);
+                                    }}
+                                    style={({hovered}: any) => [{ padding: 8 }, hovered && { opacity: 0.7 }]}
+                                >
+                                    <Ionicons name="remove-circle-outline" size={24} color={colors.primary} />
+                                </Pressable>
+                                <Text style={{ color: colors.text, fontSize: 16, fontWeight: 'bold', marginHorizontal: 8 }}>{splitInterval}</Text>
+                                <Pressable 
+                                    onPress={() => {
+                                        const newInt = Math.min(organizePages.length, splitInterval + 1);
+                                        setSplitInterval(newInt);
+                                        const newPoints = [];
+                                        for (let i = newInt - 1; i < organizePages.length - 1; i += newInt) newPoints.push(i);
+                                        setSplitPoints(newPoints);
+                                    }}
+                                    style={({hovered}: any) => [{ padding: 8 }, hovered && { opacity: 0.7 }]}
+                                >
+                                    <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
+                                </Pressable>
+                                <Text style={{ color: colors.textMuted, marginLeft: 12 }}>pages</Text>
+                            </View>
+                        )}
+                        
+                        {splitTab === 'extract' && <View style={{ width: 100 }} />} {/* Spacer */}
 
                         <Pressable 
                             style={({ pressed, hovered }: any) => [
-                                { backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, flexDirection: 'row', alignItems: 'center' },
+                                { 
+                                    backgroundColor: (splitTab === 'extract' && extractedPages.length === 0) ? colors.border : colors.primary, 
+                                    paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, flexDirection: 'row', alignItems: 'center' 
+                                },
                                 (pressed || hovered) && { opacity: 0.8 }
                             ]}
+                            disabled={splitTab === 'extract' && extractedPages.length === 0}
                             onPress={handleSplitPDF}>
                             <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '600' }}>
-                                {isSplitting ? 'Création...' : `Diviser (${resultCount} PDF)`}
+                                {isSplitting ? 'Création...' : (splitTab === 'split' ? `Diviser (${splitPoints.length + 1} PDF)` : `Extraire (${extractedPages.length} pages)`)}
                             </Text>
                         </Pressable>
                     </View>
 
                     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { alignItems: 'center', paddingTop: 100 }]}>
+                        {localError && (
+                            <View style={{ backgroundColor: colors.danger + '20', padding: 16, borderRadius: 12, marginBottom: 20 }}>
+                                <Text style={{ color: colors.danger, textAlign: 'center' }}>{localError}</Text>
+                            </View>
+                        )}
+                        
                         <View style={{ alignItems: 'center', marginBottom: 40 }}>
-                            <Text style={styles.title}>Diviser le PDF</Text>
+                            <Text style={styles.title}>{splitTab === 'split' ? 'Diviser le PDF' : 'Extraire des pages'}</Text>
                             <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 8 }}>
-                                Cliquez sur les ciseaux pour séparer les pages.
+                                {splitTab === 'split' ? 'Cliquez sur les ciseaux pour séparer les pages.' : 'Cochez les pages que vous souhaitez conserver.'}
                             </Text>
                         </View>
 
-                        <View style={{ width: '100%', maxWidth: 1200, flexDirection: 'row', flexWrap: 'wrap', gap: 0, justifyContent: 'center', marginBottom: 40, paddingHorizontal: 20 }}>
+                        <View style={{ width: '100%', maxWidth: 1200, flexDirection: 'row', flexWrap: 'wrap', gap: splitTab === 'extract' ? 20 : 0, justifyContent: 'center', marginBottom: 40, paddingHorizontal: 20 }}>
                             {organizePages.map((page, index) => {
-                                const hasCutAfter = splitPoints.includes(index);
+                                const hasCutAfter = splitTab === 'split' && splitPoints.includes(index);
+                                const isExtracted = splitTab === 'extract' && extractedPages.includes(index);
+                                
                                 return (
                                     <View key={page.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
                                         <View style={{ alignItems: 'center' }}>
-                                            <View style={{
-                                                width: 180, 
-                                                height: 240, 
-                                                backgroundColor: colors.card, 
-                                                borderRadius: 12, 
-                                                borderWidth: 1, 
-                                                borderColor: colors.border,
-                                                overflow: 'hidden',
-                                                justifyContent: 'center',
-                                                alignItems: 'center'
-                                            }}>
+                                            <Pressable 
+                                                onPress={() => {
+                                                    if (splitTab === 'extract') {
+                                                        setExtractedPages(prev => prev.includes(index) ? prev.filter(p => p !== index) : [...prev, index]);
+                                                    }
+                                                }}
+                                                style={{
+                                                    width: 180, 
+                                                    height: 240, 
+                                                    backgroundColor: colors.card, 
+                                                    borderRadius: 12, 
+                                                    borderWidth: splitTab === 'extract' ? 2 : 1, 
+                                                    borderColor: isExtracted ? colors.primary : colors.border,
+                                                    overflow: 'hidden',
+                                                    justifyContent: 'center',
+                                                    alignItems: 'center',
+                                                    opacity: (splitTab === 'extract' && !isExtracted) ? 0.7 : 1
+                                                }}>
                                                 {page.imageUri ? (
                                                     <Image source={{ uri: page.imageUri }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
                                                 ) : (
                                                     <ActivityIndicator size="small" color="#4F46E5" />
                                                 )}
-                                            </View>
+                                                
+                                                {/* Checkbox Overlay for Extract Mode */}
+                                                {splitTab === 'extract' && (
+                                                    <View style={{
+                                                        position: 'absolute',
+                                                        top: 10, left: 10,
+                                                        width: 24, height: 24,
+                                                        borderRadius: 12,
+                                                        backgroundColor: isExtracted ? colors.primary : 'rgba(0,0,0,0.5)',
+                                                        borderWidth: 2,
+                                                        borderColor: isExtracted ? colors.primary : '#fff',
+                                                        justifyContent: 'center',
+                                                        alignItems: 'center'
+                                                    }}>
+                                                        {isExtracted && <Ionicons name="checkmark" size={16} color="#fff" />}
+                                                    </View>
+                                                )}
+                                            </Pressable>
                                             <View style={{ marginTop: 8, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
                                                 <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '500' }}>Page {index + 1}</Text>
                                             </View>
                                         </View>
 
-                                        {index < organizePages.length - 1 && (
+                                        {splitTab === 'split' && index < organizePages.length - 1 && (
                                             <Pressable 
                                                 onPress={() => {
                                                     setSplitPoints(prev => 
