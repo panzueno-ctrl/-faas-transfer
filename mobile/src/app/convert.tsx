@@ -127,6 +127,7 @@ export default function ConvertScreen() {
 
     // Ajout de l'état "tool_intro"
     const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'sign_choice' | 'pdf_editor' | 'watermark_editor' | 'rotation_editor' | 'organize_editor' | 'merge_editor' | 'preparing_editor' | 'processing' | 'done'>('menu');
+    const [localError, setLocalError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'files' | 'media'>('files');
     const [selectedService, setSelectedService] = useState<any>(null);
     const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
@@ -737,7 +738,7 @@ export default function ConvertScreen() {
                     setStep('done');
                 } catch (e: any) {
                     console.error("Error merging files locally:", e);
-                    Alert.alert("Erreur locale", "Échec de la fusion: " + (e.message || String(e)));
+                    setLocalError("Échec de la fusion: " + (e.message || String(e)));
                     setStep('merge_editor');
                 }
             }, 300); // Increased timeout to ensure React paints the processing screen
@@ -1613,19 +1614,32 @@ export default function ConvertScreen() {
 
     if (step === 'merge_editor') {
         return (
-            <MergeEditor 
-                pages={organizePages}
-                files={organizeFiles.map((f, i) => ({
-                    name: f.name,
-                    color: f.color,
-                    originalIndex: f.originalIndex,
-                    pageCount: f.pageCount
-                }))}
-                onComplete={handleMergeComplete}
-                onCancel={() => setStep('tool_intro')}
-                onAddFiles={handleAddFilesToOrganize}
-                colors={colors}
-            />
+            <View style={{ flex: 1, backgroundColor: colors.background }}>
+                {localError && (
+                    <View style={{ backgroundColor: '#ef4444', padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ color: 'white', fontWeight: 'bold', flex: 1 }}>{localError}</Text>
+                        <Pressable onPress={() => setLocalError(null)} style={{ padding: 8 }}>
+                            <Ionicons name="close" size={24} color="white" />
+                        </Pressable>
+                    </View>
+                )}
+                <MergeEditor 
+                    pages={organizePages}
+                    files={organizeFiles.map((f, i) => ({
+                        name: f.name,
+                        color: f.color,
+                        originalIndex: f.originalIndex,
+                        pageCount: f.pageCount
+                    }))}
+                    onComplete={(type, data) => {
+                        setLocalError(null);
+                        handleMergeComplete(type, data);
+                    }}
+                    onCancel={() => setStep('tool_intro')}
+                    onAddFiles={handleAddFilesToOrganize}
+                    colors={colors}
+                />
+            </View>
         );
     }
 
