@@ -683,7 +683,7 @@ export default function ConvertScreen() {
             } catch (e: any) {
                 console.error("Error organizing PDF:", e);
                 Alert.alert("Erreur locale", "Échec de l'organisation: " + (e.message || String(e)));
-                setStep('staging');
+                setStep('organize_editor');
             }
         }, 300); // Increased timeout to ensure React paints the processing screen
     };
@@ -738,7 +738,7 @@ export default function ConvertScreen() {
                 } catch (e: any) {
                     console.error("Error merging files locally:", e);
                     Alert.alert("Erreur locale", "Échec de la fusion: " + (e.message || String(e)));
-                    setStep('staging');
+                    setStep('merge_editor');
                 }
             }, 300); // Increased timeout to ensure React paints the processing screen
         }
