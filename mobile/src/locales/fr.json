@@ -71,5 +71,14 @@
     "empty": "Aucun historique disponible",
     "premium_title": "Historique Premium",
     "premium_desc": "Créez un compte gratuitement pour conserver la trace de tous vos transferts et gérer vos fichiers depuis n'importe quel appareil."
+  },
+  "convert": {
+    "convert": "Convertir",
+    "convert_desc": "Changez le format de vos documents",
+    "processing": "Traitement en cours",
+    "done": "Terminé",
+    "download": "Télécharger le fichier",
+    "new": "Nouveau fichier",
+    "next": "Terminer"
   }
 }

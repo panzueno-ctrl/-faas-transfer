@@ -71,5 +71,14 @@
     "empty": "No history available",
     "premium_title": "Premium History",
     "premium_desc": "Create a free account to keep track of all your transfers and manage your files from any device."
+  },
+  "convert": {
+    "convert": "Convert",
+    "convert_desc": "Change the format of your documents",
+    "processing": "Processing",
+    "done": "Done",
+    "download": "Download file",
+    "new": "New file",
+    "next": "Finish"
   }
 }

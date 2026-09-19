@@ -646,30 +646,32 @@ export default function ConvertScreen() {
 
     const handleOrganizeComplete = async (orderedPages: OrganizePageItem[]) => {
         setStep('processing');
-        try {
-            // Create a new empty document
-            const newPdfDoc = await PDFDocument.create();
+        setTimeout(async () => {
+            try {
+                // Create a new empty document
+                const newPdfDoc = await PDFDocument.create();
 
-            for (const pageItem of orderedPages) {
-                // Find the correct source doc buffer
-                const sourceFileInfo = organizeFiles.find(f => f.originalIndex === pageItem.fileIndex);
-                if (sourceFileInfo) {
-                    const sourceDoc = await PDFDocument.load(sourceFileInfo.buffer);
-                    const [copiedPage] = await newPdfDoc.copyPages(sourceDoc, [pageItem.pageIndex]);
-                    newPdfDoc.addPage(copiedPage);
+                for (const pageItem of orderedPages) {
+                    // Find the correct source doc buffer
+                    const sourceFileInfo = organizeFiles.find(f => f.originalIndex === pageItem.fileIndex);
+                    if (sourceFileInfo) {
+                        const sourceDoc = await PDFDocument.load(sourceFileInfo.buffer);
+                        const [copiedPage] = await newPdfDoc.copyPages(sourceDoc, [pageItem.pageIndex]);
+                        newPdfDoc.addPage(copiedPage);
+                    }
                 }
-            }
 
-            const finalPdfBytes = await newPdfDoc.save();
-            const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
-            const url = URL.createObjectURL(blob);
-            setResultUrl(url);
-            setStep('done');
-        } catch (e: any) {
-            console.error("Error organizing PDF:", e);
-            Alert.alert("Erreur", "Échec de l'organisation du PDF.");
-            setStep('staging');
-        }
+                const finalPdfBytes = await newPdfDoc.save();
+                const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                setResultUrl(url);
+                setStep('done');
+            } catch (e: any) {
+                console.error("Error organizing PDF:", e);
+                Alert.alert("Erreur", "Échec de l'organisation du PDF.");
+                setStep('staging');
+            }
+        }, 100);
     };
 
     const handleMergeComplete = async (type: 'files' | 'pages', data: any) => {
@@ -684,28 +686,30 @@ export default function ConvertScreen() {
             setStep('processing');
             setFileName('document_fusionne');
             
-            try {
-                const newPdfDoc = await PDFDocument.create();
-                
-                for (const fileItem of data) {
-                    const sourceFileInfo = organizeFiles.find(f => f.originalIndex === fileItem.originalIndex);
-                    if (sourceFileInfo && sourceFileInfo.buffer) {
-                        const sourceDoc = await PDFDocument.load(sourceFileInfo.buffer);
-                        const copiedPages = await newPdfDoc.copyPages(sourceDoc, sourceDoc.getPageIndices());
-                        copiedPages.forEach(page => newPdfDoc.addPage(page));
+            setTimeout(async () => {
+                try {
+                    const newPdfDoc = await PDFDocument.create();
+                    
+                    for (const fileItem of data) {
+                        const sourceFileInfo = organizeFiles.find(f => f.originalIndex === fileItem.originalIndex);
+                        if (sourceFileInfo && sourceFileInfo.buffer) {
+                            const sourceDoc = await PDFDocument.load(sourceFileInfo.buffer);
+                            const copiedPages = await newPdfDoc.copyPages(sourceDoc, sourceDoc.getPageIndices());
+                            copiedPages.forEach(page => newPdfDoc.addPage(page));
+                        }
                     }
+                    
+                    const finalPdfBytes = await newPdfDoc.save();
+                    const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
+                    const url = URL.createObjectURL(blob);
+                    setResultUrl(url);
+                    setStep('done');
+                } catch (e: any) {
+                    console.error("Error merging files locally:", e);
+                    Alert.alert("Erreur", "Échec de la fusion du PDF.");
+                    setStep('staging');
                 }
-                
-                const finalPdfBytes = await newPdfDoc.save();
-                const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
-                const url = URL.createObjectURL(blob);
-                setResultUrl(url);
-                setStep('done');
-            } catch (e: any) {
-                console.error("Error merging files locally:", e);
-                Alert.alert("Erreur", "Échec de la fusion du PDF.");
-                setStep('staging');
-            }
+            }, 100);
         }
     };
 
