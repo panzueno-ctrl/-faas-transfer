@@ -31,8 +31,6 @@ import PdfThumbnail from '../components/PdfThumbnail';
 import CompressionSelector, { CompressionLevel } from '../components/CompressionSelector';
 import PasswordProtector from '../components/PasswordProtector';
 import WatermarkEditor, { WatermarkSettings } from '../components/WatermarkEditor';
-import SplitSelector, { SplitMode } from '../components/SplitSelector';
-import RotationEditor from '../components/RotationEditor';
 import ProtectEditor from '../components/ProtectEditor';
 import SplitEditor from '../components/SplitEditor';
 import OrganizeEditor, { OrganizePageItem, OrganizeFileItem } from '../components/OrganizeEditor';
@@ -140,6 +138,7 @@ export default function ConvertScreen() {
 
     const [pageCount, setPageCount] = useState<number>(0);
     const [splitPoints, setSplitPoints] = useState<number[]>([]);
+    const [splitInterval, setSplitInterval] = useState<number>(1);
     
     // Compression state
     const [compressionLevel, setCompressionLevel] = useState<CompressionLevel>('recommended');
@@ -148,7 +147,6 @@ export default function ConvertScreen() {
     const [pdfPassword, setPdfPassword] = useState('');
     const [pdfOriginalBuffer, setPdfOriginalBuffer] = useState<ArrayBuffer | null>(null);
     const [watermarkConfig, setWatermarkConfig] = useState<WatermarkSettings | null>(null);
-    const [splitMode, setSplitMode] = useState<SplitMode>('all');
     const [conversionQuality, setConversionQuality] = useState<ConversionQuality>('standard');
     const [numberingConfig, setNumberingConfig] = useState<NumberingConfig>({ position: 'bottom-center', format: 'total' });
     const [ocrLang, setOcrLang] = useState<OcrLanguage>('fra');
@@ -942,9 +940,6 @@ export default function ConvertScreen() {
             if (selectedService.id === 'compress-pdf') {
                 formData.append('compressionLevel', compressionLevel);
             }
-            if (selectedService.id === 'split-pdf') {
-                formData.append('splitMode', splitMode);
-            }
             if (selectedService.id === 'number-pdf') {
                 formData.append('position', numberingConfig.position);
                 formData.append('format', numberingConfig.format);
@@ -1187,6 +1182,36 @@ export default function ConvertScreen() {
                             <Text style={styles.backButtonText}>Annuler</Text>
                         </Pressable>
 
+                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, paddingHorizontal: 16, borderRadius: 24, borderWidth: 1, borderColor: colors.border }}>
+                            <Text style={{ color: colors.textMuted, marginRight: 12 }}>Diviser toutes les</Text>
+                            <Pressable 
+                                onPress={() => {
+                                    const newInt = Math.max(1, splitInterval - 1);
+                                    setSplitInterval(newInt);
+                                    const newPoints = [];
+                                    for (let i = newInt - 1; i < organizePages.length - 1; i += newInt) newPoints.push(i);
+                                    setSplitPoints(newPoints);
+                                }}
+                                style={({hovered}: any) => [{ padding: 8 }, hovered && { opacity: 0.7 }]}
+                            >
+                                <Ionicons name="remove-circle-outline" size={24} color={colors.primary} />
+                            </Pressable>
+                            <Text style={{ color: colors.text, fontSize: 16, fontWeight: 'bold', marginHorizontal: 8 }}>{splitInterval}</Text>
+                            <Pressable 
+                                onPress={() => {
+                                    const newInt = Math.min(organizePages.length, splitInterval + 1);
+                                    setSplitInterval(newInt);
+                                    const newPoints = [];
+                                    for (let i = newInt - 1; i < organizePages.length - 1; i += newInt) newPoints.push(i);
+                                    setSplitPoints(newPoints);
+                                }}
+                                style={({hovered}: any) => [{ padding: 8 }, hovered && { opacity: 0.7 }]}
+                            >
+                                <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
+                            </Pressable>
+                            <Text style={{ color: colors.textMuted, marginLeft: 12 }}>pages</Text>
+                        </View>
+
                         <Pressable 
                             style={({ pressed, hovered }: any) => [
                                 { backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24, flexDirection: 'row', alignItems: 'center' },
@@ -1207,27 +1232,32 @@ export default function ConvertScreen() {
                             </Text>
                         </View>
 
-                        <View style={{ width: '100%', maxWidth: 900, flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginBottom: 40 }}>
+                        <View style={{ width: '100%', maxWidth: 1200, flexDirection: 'row', flexWrap: 'wrap', gap: 0, justifyContent: 'center', marginBottom: 40, paddingHorizontal: 20 }}>
                             {organizePages.map((page, index) => {
                                 const hasCutAfter = splitPoints.includes(index);
                                 return (
                                     <View key={page.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <View style={{
-                                            width: 140, 
-                                            height: 180, 
-                                            backgroundColor: colors.card, 
-                                            borderRadius: 12, 
-                                            borderWidth: 1, 
-                                            borderColor: colors.border,
-                                            overflow: 'hidden',
-                                            justifyContent: 'center',
-                                            alignItems: 'center'
-                                        }}>
-                                            {page.imageUri ? (
-                                                <Image source={{ uri: page.imageUri }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-                                            ) : (
-                                                <ActivityIndicator size="small" color="#4F46E5" />
-                                            )}
+                                        <View style={{ alignItems: 'center' }}>
+                                            <View style={{
+                                                width: 180, 
+                                                height: 240, 
+                                                backgroundColor: colors.card, 
+                                                borderRadius: 12, 
+                                                borderWidth: 1, 
+                                                borderColor: colors.border,
+                                                overflow: 'hidden',
+                                                justifyContent: 'center',
+                                                alignItems: 'center'
+                                            }}>
+                                                {page.imageUri ? (
+                                                    <Image source={{ uri: page.imageUri }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                                                ) : (
+                                                    <ActivityIndicator size="small" color="#4F46E5" />
+                                                )}
+                                            </View>
+                                            <View style={{ marginTop: 8, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
+                                                <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '500' }}>Page {index + 1}</Text>
+                                            </View>
                                         </View>
 
                                         {index < organizePages.length - 1 && (
@@ -1241,18 +1271,36 @@ export default function ConvertScreen() {
                                                 }}
                                                 style={({ hovered }: any) => [
                                                     { 
-                                                        padding: 8, 
-                                                        marginHorizontal: 8,
-                                                        borderRadius: 20,
-                                                        backgroundColor: hasCutAfter ? colors.danger : 'transparent',
-                                                        borderWidth: hasCutAfter ? 0 : 1,
-                                                        borderColor: colors.border,
-                                                        borderStyle: 'dashed' as any
-                                                    },
-                                                    hovered && { backgroundColor: hasCutAfter ? colors.dangerHovered : 'rgba(255,255,255,0.05)' }
+                                                        width: 40,
+                                                        height: 260,
+                                                        justifyContent: 'center',
+                                                        alignItems: 'center',
+                                                        marginHorizontal: 4,
+                                                    }
                                                 ]}
                                             >
-                                                <Ionicons name="cut-outline" size={20} color={hasCutAfter ? '#fff' : colors.textMuted} />
+                                                {/* Vertical line container */}
+                                                <View style={{
+                                                    position: 'absolute',
+                                                    width: 2,
+                                                    height: '100%',
+                                                    backgroundColor: hasCutAfter ? colors.primary : 'transparent',
+                                                    borderLeftWidth: hasCutAfter ? 0 : 2,
+                                                    borderColor: colors.border,
+                                                    borderStyle: hasCutAfter ? 'solid' : 'dashed',
+                                                }} />
+                                                
+                                                {/* Scissor icon bubble */}
+                                                <View style={{
+                                                    backgroundColor: hasCutAfter ? colors.primary : colors.card,
+                                                    borderRadius: 20,
+                                                    padding: 6,
+                                                    borderWidth: 1,
+                                                    borderColor: hasCutAfter ? colors.primary : colors.border,
+                                                    zIndex: 2,
+                                                }}>
+                                                    <Ionicons name="cut-outline" size={18} color={hasCutAfter ? '#fff' : colors.textMuted} style={{ transform: [{ rotate: '-90deg' }] }} />
+                                                </View>
                                             </Pressable>
                                         )}
                                     </View>
@@ -1499,11 +1547,8 @@ export default function ConvertScreen() {
 
                         {/* protect-pdf configurator has been moved to ProtectEditor */}
                         {/* watermark-pdf configurator has been moved to WatermarkEditor */}
+                        {/* split-pdf configurator has been moved to SplitEditor */}
 
-                        {selectedService.id === 'split-pdf' && (
-                            <SplitSelector onChange={setSplitMode} />
-                        )}
-                        
                         {selectedService.id === 'number-pdf' && (
                             <NumberingSelector onChange={setNumberingConfig} />
                         )}
