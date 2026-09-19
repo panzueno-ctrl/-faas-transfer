@@ -382,43 +382,58 @@ export default function ConvertScreen() {
     };
 
     const initOrganizeEditor = async (files: any[], appendToExisting = false, targetStep: string = 'organize_editor') => {
-        if (!appendToExisting) setStep('preparing_editor');
         try {
             const pastelColors = ['#ffcfcf', '#cbf2e8', '#fff0b5', '#dfd5f6', '#c2ebf9'];
             const newOrganizePages: OrganizePageItem[] = appendToExisting ? [...organizePages] : [];
             const newOrganizeFiles: any[] = appendToExisting ? [...organizeFiles] : [];
             const startIndex = newOrganizeFiles.length;
-            const failedFiles: string[] = [];
 
+            // 1. PUSH SKELETON UI IMMEDIATELY
             for (let i = 0; i < files.length; i++) {
                 const fileIndex = startIndex + i;
                 const file = files[i];
                 const color = pastelColors[fileIndex % pastelColors.length];
                 
-                try {
-                    let arrayBuffer: ArrayBuffer;
-                    if (Platform.OS === 'web' && file.file) {
-                        arrayBuffer = await file.file.arrayBuffer();
-                    } else {
-                        const response = await fetch(file.uri);
-                        arrayBuffer = await response.arrayBuffer();
-                    }
-                    
-                    newOrganizeFiles.push({ name: file.name, color, originalIndex: fileIndex, buffer: arrayBuffer, pageCount: undefined });
+                // Add empty file with null buffer
+                newOrganizeFiles.push({ name: file.name, color, originalIndex: fileIndex, buffer: null, pageCount: undefined });
 
-                    // Génération des miniatures 100% Client-Side pour le Web (Zéro Vercel timeout)
-                    if (Platform.OS === 'web') {
-                        // On pousse tout de suite un objet de chargement (null imageUri) pour que l'UI s'affiche immédiatement (Skeleton loading)
-                        newOrganizePages.push({
-                            id: `${fileIndex}-0-${Date.now()}`,
-                            fileIndex: fileIndex,
-                            fileName: file.name,
-                            pageIndex: 0,
-                            imageUri: null as any
+                // Add skeleton page to trigger ActivityIndicator instantly
+                newOrganizePages.push({
+                    id: `${fileIndex}-0-${Date.now()}`,
+                    fileIndex: fileIndex,
+                    fileName: file.name,
+                    pageIndex: 0,
+                    imageUri: null as any
+                });
+            }
+
+            setOrganizeFiles(newOrganizeFiles);
+            setOrganizePages(newOrganizePages);
+            if (!appendToExisting) setStep(targetStep);
+
+            // 2. PROCESS ASYNC IN BACKGROUND
+            files.forEach((file, i) => {
+                const fileIndex = startIndex + i;
+                
+                setTimeout(async () => {
+                    try {
+                        let arrayBuffer: ArrayBuffer;
+                        if (Platform.OS === 'web' && file.file) {
+                            arrayBuffer = await file.file.arrayBuffer();
+                        } else {
+                            const response = await fetch(file.uri);
+                            arrayBuffer = await response.arrayBuffer();
+                        }
+                        
+                        // Update buffer in state
+                        setOrganizeFiles(prev => {
+                            const next = [...prev];
+                            const target = next.find(f => f.originalIndex === fileIndex);
+                            if (target) target.buffer = arrayBuffer;
+                            return next;
                         });
 
-                        // Traitement asynchrone pour ne pas bloquer le Thread Principal
-                        setTimeout(async () => {
+                        if (Platform.OS === 'web') {
                             try {
                                 const pdfjsLib = await loadPdfJs();
                                 const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
@@ -442,7 +457,6 @@ export default function ConvertScreen() {
                                         await page.render({ canvasContext: ctx, viewport }).promise;
                                         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
                                         
-                                        // Mettre à jour l'image URI
                                         setOrganizePages(prev => {
                                             const next = [...prev];
                                             const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === 0);
@@ -481,93 +495,76 @@ export default function ConvertScreen() {
                             } catch (localError) {
                                 console.warn("Local PDF.js rendering failed", localError);
                             }
-                        }, 50 * i);
-                        
-                        continue;
-                    }
+                        } else {
+                            // Fallback backend for Mobile
+                            const formData = new FormData();
+                            let fileBlob;
+                            if (Platform.OS === 'web' && file.file) {
+                                fileBlob = file.file;
+                            } else {
+                                const response_file = await fetch(file.uri);
+                                fileBlob = await response_file.blob();
+                            }
+                            formData.append('file', fileBlob, file.name);
 
-                    // Fallback: Génération des miniatures via backend (pour Mobile ou erreur Web)
-                    const formData = new FormData();
-                    let fileBlob;
-                    if (Platform.OS === 'web' && file.file) {
-                        fileBlob = file.file;
-                    } else {
-                        const response_file = await fetch(file.uri);
-                        fileBlob = await response_file.blob();
-                    }
-                    formData.append('file', fileBlob, file.name);
+                            const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard`, {
+                                method: 'POST',
+                                body: formData,
+                                headers: { 'Accept': 'application/zip, image/jpeg' }
+                            });
 
-                    const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard`, {
-                        method: 'POST',
-                        body: formData,
-                        headers: { 'Accept': 'application/zip, image/jpeg' }
-                    });
+                            if (!res.ok) {
+                                throw new Error(`Erreur backend: ${res.status}`);
+                            }
 
-                    if (!res.ok) {
-                        const errText = await res.text();
-                        throw new Error(`Erreur backend: ${res.status} - ${errText}`);
-                    }
+                            const contentType = res.headers.get('content-type');
+                            const blob = await res.blob();
 
-                    const contentType = res.headers.get('content-type');
-                    const blob = await res.blob();
-
-                    if (contentType?.includes('zip')) {
-                        const zip = new JSZip();
-                        const unzipped = await zip.loadAsync(blob);
-                        const fileNames = Object.keys(unzipped.files).sort();
-                        for (let j = 0; j < fileNames.length; j++) {
-                            const filename = fileNames[j];
-                            const f = unzipped.files[filename];
-                            if (!f.dir) {
-                                const imgBlob = await f.async('blob');
-                                newOrganizePages.push({
-                                    id: `${fileIndex}-${j}-${Date.now()}`,
-                                    fileIndex: fileIndex,
-                                    fileName: file.name,
-                                    pageIndex: j,
-                                    imageUri: URL.createObjectURL(imgBlob)
+                            if (contentType?.includes('zip')) {
+                                const zip = new JSZip();
+                                const unzipped = await zip.loadAsync(blob);
+                                const fileNames = Object.keys(unzipped.files).sort();
+                                for (let j = 0; j < fileNames.length; j++) {
+                                    const filename = fileNames[j];
+                                    const f = unzipped.files[filename];
+                                    if (!f.dir) {
+                                        const imgBlob = await f.async('blob');
+                                        if (j === 0) {
+                                            setOrganizePages(prev => {
+                                                const next = [...prev];
+                                                const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === 0);
+                                                if (target) target.imageUri = URL.createObjectURL(imgBlob);
+                                                return next;
+                                            });
+                                        } else {
+                                            setOrganizePages((prev: any) => [...prev, {
+                                                id: `${fileIndex}-${j}-${Date.now()}`,
+                                                fileIndex: fileIndex,
+                                                fileName: file.name,
+                                                pageIndex: j,
+                                                imageUri: URL.createObjectURL(imgBlob)
+                                            }]);
+                                        }
+                                    }
+                                }
+                            } else {
+                                setOrganizePages(prev => {
+                                    const next = [...prev];
+                                    const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === 0);
+                                    if (target) target.imageUri = URL.createObjectURL(blob);
+                                    return next;
                                 });
                             }
                         }
-                    } else {
-                        newOrganizePages.push({
-                            id: `${fileIndex}-0-${Date.now()}`,
-                            fileIndex: fileIndex,
-                            fileName: file.name,
-                            pageIndex: 0,
-                            imageUri: URL.createObjectURL(blob)
-                        });
+                    } catch (fileError: any) {
+                        console.error(`Erreur pour le fichier ${file.name}:`, fileError);
                     }
-                } catch (fileError: any) {
-                    console.error(`Erreur pour le fichier ${file.name}:`, fileError);
-                    failedFiles.push(`${file.name} (${fileError.message})`);
-                }
-            }
-
-            setOrganizeFiles(newOrganizeFiles);
-            setOrganizePages(newOrganizePages);
-            
-            if (failedFiles.length > 0) {
-                const errorMsg = `Impossible de générer l'aperçu pour ${failedFiles.length} fichier(s):\n${failedFiles.join('\n')}`;
-                if (Platform.OS === 'web') {
-                    window.alert(errorMsg);
-                } else {
-                    Alert.alert("Erreur partielle", errorMsg);
-                }
-            }
-
-            // Enter the editor if at least one file succeeded (or if we already had files)
-            if (newOrganizeFiles.length > 0) {
-                if (!appendToExisting) setStep(targetStep);
-            } else {
-                if (!appendToExisting) setStep('staging');
-            }
+                }, 50 * i);
+            });
         } catch (e: any) {
             console.error("Error in initOrganizeEditor:", e);
             if (Platform.OS === 'web') {
                 window.alert("Erreur: Impossible de préparer l'éditeur PDF. Détails: " + (e.message || String(e)));
-            } else {
-                Alert.alert("Erreur", "Impossible de préparer l'éditeur PDF. Veuillez réessayer.");
             }
             if (!appendToExisting) setStep('staging');
         }
