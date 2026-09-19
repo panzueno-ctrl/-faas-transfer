@@ -652,9 +652,23 @@ export default function ConvertScreen() {
                     // Find the correct source doc buffer
                     const sourceFileInfo = organizeFiles.find(f => f.originalIndex === pageItem.fileIndex);
                     if (sourceFileInfo) {
-                        const sourceDoc = await PDFDocument.load(sourceFileInfo.buffer);
-                        const [copiedPage] = await newPdfDoc.copyPages(sourceDoc, [pageItem.pageIndex]);
-                        newPdfDoc.addPage(copiedPage);
+                        let buffer = sourceFileInfo.buffer;
+                        if (!buffer) {
+                            const originalFile = selectedFiles.find((_, i) => i === pageItem.fileIndex);
+                            if (originalFile) {
+                                if (Platform.OS === 'web' && originalFile.file) {
+                                    buffer = await originalFile.file.arrayBuffer();
+                                } else {
+                                    const response = await fetch(originalFile.uri);
+                                    buffer = await response.arrayBuffer();
+                                }
+                            }
+                        }
+                        if (buffer) {
+                            const sourceDoc = await PDFDocument.load(buffer);
+                            const [copiedPage] = await newPdfDoc.copyPages(sourceDoc, [pageItem.pageIndex]);
+                            newPdfDoc.addPage(copiedPage);
+                        }
                     }
                 }
 
@@ -668,7 +682,7 @@ export default function ConvertScreen() {
                 Alert.alert("Erreur", "Échec de l'organisation du PDF.");
                 setStep('staging');
             }
-        }, 100);
+        }, 300); // Increased timeout to ensure React paints the processing screen
     };
 
     const handleMergeComplete = async (type: 'files' | 'pages', data: any) => {
@@ -689,10 +703,24 @@ export default function ConvertScreen() {
                     
                     for (const fileItem of data) {
                         const sourceFileInfo = organizeFiles.find(f => f.originalIndex === fileItem.originalIndex);
-                        if (sourceFileInfo && sourceFileInfo.buffer) {
-                            const sourceDoc = await PDFDocument.load(sourceFileInfo.buffer);
-                            const copiedPages = await newPdfDoc.copyPages(sourceDoc, sourceDoc.getPageIndices());
-                            copiedPages.forEach(page => newPdfDoc.addPage(page));
+                        if (sourceFileInfo) {
+                            let buffer = sourceFileInfo.buffer;
+                            if (!buffer) {
+                                const originalFile = selectedFiles.find((_, i) => i === fileItem.originalIndex);
+                                if (originalFile) {
+                                    if (Platform.OS === 'web' && originalFile.file) {
+                                        buffer = await originalFile.file.arrayBuffer();
+                                    } else {
+                                        const response = await fetch(originalFile.uri);
+                                        buffer = await response.arrayBuffer();
+                                    }
+                                }
+                            }
+                            if (buffer) {
+                                const sourceDoc = await PDFDocument.load(buffer);
+                                const copiedPages = await newPdfDoc.copyPages(sourceDoc, sourceDoc.getPageIndices());
+                                copiedPages.forEach(page => newPdfDoc.addPage(page));
+                            }
                         }
                     }
                     
@@ -706,7 +734,7 @@ export default function ConvertScreen() {
                     Alert.alert("Erreur", "Échec de la fusion du PDF.");
                     setStep('staging');
                 }
-            }, 100);
+            }, 300); // Increased timeout to ensure React paints the processing screen
         }
     };
 
