@@ -665,11 +665,14 @@ export default function ConvertScreen() {
                             }
                         }
                         if (buffer) {
-                            const sourceDoc = await PDFDocument.load(buffer);
+                            const sourceDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
                             const [copiedPage] = await newPdfDoc.copyPages(sourceDoc, [pageItem.pageIndex]);
                             newPdfDoc.addPage(copiedPage);
                         }
                     }
+                    
+                    // Yield main thread to prevent UI freezing on large PDFs
+                    await new Promise(r => setTimeout(r, 10));
                 }
 
                 const finalPdfBytes = await newPdfDoc.save();
@@ -679,7 +682,7 @@ export default function ConvertScreen() {
                 setStep('done');
             } catch (e: any) {
                 console.error("Error organizing PDF:", e);
-                Alert.alert("Erreur", "Échec de l'organisation du PDF.");
+                Alert.alert("Erreur locale", "Échec de l'organisation: " + (e.message || String(e)));
                 setStep('staging');
             }
         }, 300); // Increased timeout to ensure React paints the processing screen
@@ -717,11 +720,14 @@ export default function ConvertScreen() {
                                 }
                             }
                             if (buffer) {
-                                const sourceDoc = await PDFDocument.load(buffer);
+                                const sourceDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
                                 const copiedPages = await newPdfDoc.copyPages(sourceDoc, sourceDoc.getPageIndices());
                                 copiedPages.forEach(page => newPdfDoc.addPage(page));
                             }
                         }
+                        
+                        // Yield main thread to prevent UI freezing on large PDFs
+                        await new Promise(r => setTimeout(r, 10));
                     }
                     
                     const finalPdfBytes = await newPdfDoc.save();
@@ -731,7 +737,7 @@ export default function ConvertScreen() {
                     setStep('done');
                 } catch (e: any) {
                     console.error("Error merging files locally:", e);
-                    Alert.alert("Erreur", "Échec de la fusion du PDF.");
+                    Alert.alert("Erreur locale", "Échec de la fusion: " + (e.message || String(e)));
                     setStep('staging');
                 }
             }, 300); // Increased timeout to ensure React paints the processing screen
