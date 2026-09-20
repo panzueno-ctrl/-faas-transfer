@@ -14,16 +14,19 @@ interface CompressionSelectorProps {
 const LEVEL_CONFIG = {
     low: {
         title: 'Simple',
+        subtitle: 'Haute qualité. Idéal pour l\'impression.',
         reduction: 40,
         pro: false
     },
     recommended: {
         title: 'Modéré',
+        subtitle: 'Le meilleur équilibre. Parfait pour le web.',
         reduction: 75,
         pro: true
     },
     extreme: {
         title: 'Fort',
+        subtitle: 'Qualité réduite. Taille minuscule.',
         reduction: 90,
         badge: 'Minimal',
         pro: true
@@ -44,8 +47,31 @@ export default function CompressionSelector({ value, onChange, fileSize = 0 }: C
     };
 
     const currentConfig = LEVEL_CONFIG[value];
-    const newSize = fileSize * (1 - currentConfig.reduction / 100);
-    const savedSize = fileSize - newSize;
+    const targetNewSize = fileSize * (1 - currentConfig.reduction / 100);
+    const targetSavedSize = fileSize - targetNewSize;
+
+    const [animNewSize, setAnimNewSize] = React.useState(targetNewSize);
+    const [animSavedSize, setAnimSavedSize] = React.useState(targetSavedSize);
+
+    React.useEffect(() => {
+        const steps = 15;
+        let currentStep = 0;
+        const diffNew = (targetNewSize - animNewSize) / steps;
+        const diffSaved = (targetSavedSize - animSavedSize) / steps;
+
+        const interval = setInterval(() => {
+            currentStep++;
+            setAnimNewSize(prev => prev + diffNew);
+            setAnimSavedSize(prev => prev + diffSaved);
+            if (currentStep >= steps) {
+                clearInterval(interval);
+                setAnimNewSize(targetNewSize);
+                setAnimSavedSize(targetSavedSize);
+            }
+        }, 20);
+
+        return () => clearInterval(interval);
+    }, [targetNewSize, targetSavedSize]);
 
     return (
         <View style={{ width: '100%', maxWidth: 400, alignSelf: 'center' }}>
@@ -82,16 +108,23 @@ export default function CompressionSelector({ value, onChange, fileSize = 0 }: C
                                 hovered && !isSelected && { borderColor: colors.textMuted }
                             ]}
                         >
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Ionicons 
-                                    name={isSelected ? "radio-button-on" : "radio-button-off"} 
-                                    size={22} 
-                                    color={isSelected ? '#2563eb' : colors.textSubtle} 
-                                    style={{ marginRight: 12 }}
-                                />
-                                <Text style={{ color: colors.text, fontSize: 15, fontWeight: isSelected ? '600' : '400' }}>
-                                    {config.title}
-                                </Text>
+                            <View style={{ flex: 1, paddingRight: 8 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons 
+                                        name={isSelected ? "radio-button-on" : "radio-button-off"} 
+                                        size={22} 
+                                        color={isSelected ? '#2563eb' : colors.textSubtle} 
+                                        style={{ marginRight: 12 }}
+                                    />
+                                    <Text style={{ color: colors.text, fontSize: 15, fontWeight: isSelected ? '600' : '500' }}>
+                                        {config.title}
+                                    </Text>
+                                </View>
+                                {isSelected && (
+                                    <Text style={{ color: colors.textMuted, fontSize: 12, marginLeft: 34, marginTop: 4 }}>
+                                        {config.subtitle}
+                                    </Text>
+                                )}
                             </View>
 
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -118,10 +151,10 @@ export default function CompressionSelector({ value, onChange, fileSize = 0 }: C
                     </Text>
                     <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12 }}>
                         <Text style={{ color: colors.success, fontSize: 18, fontWeight: 'bold' }}>
-                            -{formatSize(savedSize)}
+                            -{formatSize(animSavedSize)}
                         </Text>
                         <Text style={{ color: colors.textMuted, fontSize: 13, marginLeft: 8, paddingBottom: 2 }}>
-                            ~{formatSize(newSize)} (-{currentConfig.reduction}%)
+                            ~{formatSize(animNewSize)} (-{currentConfig.reduction}%)
                         </Text>
                     </View>
                     
