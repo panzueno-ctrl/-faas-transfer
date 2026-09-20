@@ -4,7 +4,7 @@
  * Écran de conversion et traitement de fichiers avec interface "SmallPDF" : Intro -> Staging -> Processing -> Done.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
