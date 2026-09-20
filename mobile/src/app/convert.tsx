@@ -1284,7 +1284,27 @@ export default function ConvertScreen() {
                                 >
                                     <Ionicons name="remove-circle-outline" size={24} color={colors.primary} />
                                 </Pressable>
-                                <Text style={{ color: colors.text, fontSize: 16, fontWeight: 'bold', marginHorizontal: 8 }}>{splitInterval}</Text>
+                                <TextInput 
+                                    value={splitInterval ? String(splitInterval) : ''}
+                                    onChangeText={(val) => {
+                                        const cleanVal = val.replace(/[^0-9]/g, '');
+                                        if (cleanVal === '') {
+                                            setSplitInterval('' as any);
+                                            setSplitPoints([]);
+                                            return;
+                                        }
+                                        const newInt = parseInt(cleanVal);
+                                        if (!isNaN(newInt)) {
+                                            const clampedInt = Math.min(organizePages.length, Math.max(1, newInt));
+                                            setSplitInterval(clampedInt);
+                                            const newPoints = [];
+                                            for (let i = clampedInt - 1; i < organizePages.length - 1; i += clampedInt) newPoints.push(i);
+                                            setSplitPoints(newPoints);
+                                        }
+                                    }}
+                                    keyboardType="numeric"
+                                    style={{ color: colors.text, fontSize: 16, fontWeight: 'bold', marginHorizontal: 8, minWidth: 40, textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 }}
+                                />
                                 <Pressable 
                                     onPress={() => {
                                         const newInt = Math.min(organizePages.length, splitInterval + 1);
