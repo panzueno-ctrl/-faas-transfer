@@ -97,6 +97,10 @@ app.use('/expire', expireRouter);
 const convertRouter = require('./routes/convert');
 app.use('/convert', convertRouter);
 
+// On importe le router signature et on l'assigne à la route /signature
+const signatureRouter = require('./routes/signature');
+app.use('/signature', signatureRouter);
+
 // On importe et démarre le job de nettoyage automatique
 // Ce job tourne en arrière plan et nettoie les fichiers expirés chaque jour
 require('./services/cleanup');

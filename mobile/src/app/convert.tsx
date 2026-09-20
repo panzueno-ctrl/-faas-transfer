@@ -69,6 +69,7 @@ const FILE_TOOLS = [
     { id: 'split-pdf', category: 'Outils PDF Essentiels', label: 'Diviser PDF', description: 'Séparez une ou plusieurs pages d\'un PDF.', icon: 'cut-outline', endpoint: '/convert/split-pdf', mimeTypes: ['application/pdf'], outputExt: 'zip' },
     { id: 'compress-pdf', category: 'Outils PDF Essentiels', label: 'Compresser PDF', description: 'Réduisez le poids de votre PDF sans perte de qualité.', icon: 'contract-outline', endpoint: '/convert/compress-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
     { id: 'edit-pdf', category: 'Outils PDF Essentiels', label: 'Modifier PDF', description: 'Ajoutez du texte, des formes ou des images à votre PDF.', icon: 'create-outline', endpoint: '/convert/edit-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
+    { id: 'sign-pdf', category: 'Outils PDF Essentiels', label: 'Signer PDF', description: 'Ajoutez votre signature ou demandez des signatures à d\'autres.', icon: 'pencil-outline', endpoint: '/convert/sign-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
     { id: 'watermark-pdf', category: 'Outils PDF Essentiels', label: 'Filigrane', description: 'Ajoutez un filigrane de sécurité à votre document.', icon: 'water-outline', endpoint: '/convert/watermark-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
     { id: 'rotate-pdf', category: 'Outils PDF Essentiels', label: 'Faire pivoter', description: 'Faites pivoter vos pages PDF selon vos besoins.', icon: 'refresh-outline', endpoint: '/convert/rotate-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
     { id: 'organize-pdf', category: 'Outils PDF Essentiels', label: 'Organiser PDF', description: 'Triez, ajoutez et supprimez des pages.', icon: 'layers-outline', endpoint: '/convert/organize-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf', multiple: true },
@@ -155,6 +156,10 @@ export default function ConvertScreen() {
     const [conversionQuality, setConversionQuality] = useState<ConversionQuality>('standard');
     const [numberingConfig, setNumberingConfig] = useState<NumberingConfig>({ position: 'bottom-center', format: 'total' });
     const [ocrLang, setOcrLang] = useState<OcrLanguage>('fra');
+
+    // E-signature states
+    const [signers, setSigners] = useState<{name: string, email: string}[]>([{ name: '', email: '' }]);
+    const [isSendingRequest, setIsSendingRequest] = useState(false);
     
     const [pdfDocRef, setPdfDocRef] = useState<any>(null);
     const [isSplitting, setIsSplitting] = useState(false);
@@ -1295,6 +1300,57 @@ export default function ConvertScreen() {
         cancelTool('menu');
     };
 
+    const handleSendSignatureRequest = async () => {
+        // Validate signers
+        const validSigners = signers.filter(s => s.name.trim() !== '' && s.email.trim() !== '');
+        if (validSigners.length === 0) {
+            if (Platform.OS === 'web') window.alert("Veuillez ajouter au moins un signataire valide.");
+            else Alert.alert("Erreur", "Veuillez ajouter au moins un signataire valide.");
+            return;
+        }
+
+        setIsSendingRequest(true);
+        setLocalError('');
+
+        try {
+            const formData = new FormData();
+            
+            let blob;
+            if (Platform.OS === 'web') {
+                blob = selectedFiles[0];
+            } else {
+                const response = await fetch(selectedFiles[0].uri);
+                blob = await response.blob();
+            }
+
+            formData.append('file', blob, selectedFiles[0].name || 'document.pdf');
+            formData.append('signers', JSON.stringify(validSigners));
+
+            const res = await fetch(`${SERVER_URL}/signature/send-requests`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || "Erreur lors de l'envoi");
+            }
+
+            // Success
+            if (Platform.OS === 'web') window.alert("Demandes de signature envoyées avec succès !");
+            else Alert.alert("Succès", "Demandes de signature envoyées avec succès !");
+            
+            // Go back to home
+            reset();
+
+        } catch (error: any) {
+            console.error(error);
+            setLocalError(error.message || "Une erreur s'est produite.");
+        } finally {
+            setIsSendingRequest(false);
+        }
+    };
+
     if (step === 'menu') {
         const toolsToDisplay = activeTab === 'files' ? FILE_TOOLS : MEDIA_TOOLS;
         const filteredTools = toolsToDisplay.filter(c => 
@@ -1722,8 +1778,7 @@ export default function ConvertScreen() {
                                         pressed && { opacity: 0.8 }
                                     ]}
                                     onPress={() => {
-                                        if (Platform.OS === 'web') window.alert("La demande de signature à des tiers sera bientôt disponible !");
-                                        else Alert.alert("Bientôt disponible", "La demande de signature à des tiers sera bientôt disponible !");
+                                        setStep('request_signature');
                                     }}
                                 >
                                     <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.cardHovered, alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
@@ -1917,6 +1972,111 @@ export default function ConvertScreen() {
                     <Text style={styles.processingTitle}>Préparation de l'éditeur...</Text>
                     <Text style={styles.processingFile}>Veuillez patienter pendant la génération des aperçus.</Text>
                 </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (step === 'request_signature') {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                
+                <View style={styles.header}>
+                    <Pressable 
+                        style={styles.backButton}
+                        onPress={() => setStep('sign_choice')}
+                    >
+                        <Ionicons name="arrow-back-outline" size={24} color={colors.text} />
+                    </Pressable>
+                    <Text style={styles.headerTitle}>Demande de signatures</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+
+                <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={{ alignItems: 'center', padding: 20 }}>
+                    <View style={{ backgroundColor: colors.card, padding: 30, borderRadius: 24, borderWidth: 1, borderColor: colors.border, width: '100%', maxWidth: 600 }}>
+                        
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24, padding: 16, backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: 12 }}>
+                            <Ionicons name="document-text-outline" size={24} color={colors.primary} style={{ marginRight: 12 }} />
+                            <View>
+                                <Text style={{ color: colors.text, fontWeight: '600' }}>{fileName}</Text>
+                                <Text style={{ color: colors.textMuted, fontSize: 12 }}>{selectedFiles.length > 0 ? (selectedFiles[0].size / 1024 / 1024).toFixed(2) : 0} Mo</Text>
+                            </View>
+                        </View>
+
+                        <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 16 }}>Destinataires</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 14, marginBottom: 24 }}>Ajoutez les personnes qui doivent signer ce document. Elles recevront un e-mail avec un lien unique.</Text>
+
+                        {localError ? (
+                            <View style={{ backgroundColor: colors.danger + '20', padding: 16, borderRadius: 12, marginBottom: 20 }}>
+                                <Text style={{ color: colors.danger }}>{localError}</Text>
+                            </View>
+                        ) : null}
+
+                        {signers.map((signer, index) => (
+                            <View key={index} style={{ flexDirection: 'row', gap: 12, marginBottom: 16, alignItems: 'center' }}>
+                                <TextInput
+                                    style={{ flex: 1, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, color: colors.text }}
+                                    placeholder="Nom complet"
+                                    placeholderTextColor={colors.textMuted}
+                                    value={signer.name}
+                                    onChangeText={(val) => {
+                                        const newSigners = [...signers];
+                                        newSigners[index].name = val;
+                                        setSigners(newSigners);
+                                    }}
+                                />
+                                <TextInput
+                                    style={{ flex: 1.5, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, color: colors.text }}
+                                    placeholder="Adresse e-mail"
+                                    placeholderTextColor={colors.textMuted}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    value={signer.email}
+                                    onChangeText={(val) => {
+                                        const newSigners = [...signers];
+                                        newSigners[index].email = val;
+                                        setSigners(newSigners);
+                                    }}
+                                />
+                                {signers.length > 1 && (
+                                    <Pressable 
+                                        onPress={() => setSigners(signers.filter((_, i) => i !== index))}
+                                        style={{ padding: 8 }}
+                                    >
+                                        <Ionicons name="trash-outline" size={20} color={colors.danger} />
+                                    </Pressable>
+                                )}
+                            </View>
+                        ))}
+
+                        <Pressable 
+                            style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, marginBottom: 32 }}
+                            onPress={() => setSigners([...signers, { name: '', email: '' }])}
+                        >
+                            <Ionicons name="add-circle-outline" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+                            <Text style={{ color: colors.primary, fontWeight: '600' }}>Ajouter un signataire</Text>
+                        </Pressable>
+
+                        <Pressable 
+                            style={({ pressed }) => [
+                                { backgroundColor: colors.primary, padding: 16, borderRadius: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
+                                pressed && { opacity: 0.8 },
+                                isSendingRequest && { opacity: 0.5 }
+                            ]}
+                            disabled={isSendingRequest}
+                            onPress={handleSendSignatureRequest}
+                        >
+                            {isSendingRequest ? (
+                                <ActivityIndicator color="#fff" style={{ marginRight: 12 }} />
+                            ) : (
+                                <Ionicons name="send-outline" size={20} color="#fff" style={{ marginRight: 12 }} />
+                            )}
+                            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
+                                {isSendingRequest ? "Envoi en cours..." : "Envoyer la demande"}
+                            </Text>
+                        </Pressable>
+                    </View>
+                </ScrollView>
             </SafeAreaView>
         );
     }
