@@ -132,6 +132,7 @@ export default function ConvertScreen() {
     const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
     const [fileName, setFileName] = useState('');
     const [resultUrl, setResultUrl] = useState('');
+    const [resultFiles, setResultFiles] = useState<{name: string, url: string}[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -173,6 +174,7 @@ export default function ConvertScreen() {
         setSplitPoints([]);
         setSplitTab('split');
         setSplitInterval(1);
+        setResultFiles([]);
         setLocalError(null);
         currentRenderSession.current += 1;
     };
@@ -917,6 +919,7 @@ export default function ConvertScreen() {
                 const zip = new JSZip();
                 let currentDoc = await PDFDocument.create();
                 let docIndex = 1;
+                const generatedFiles: {name: string, url: string}[] = [];
 
                 const totalPages = organizePages.length;
                 
@@ -931,7 +934,16 @@ export default function ConvertScreen() {
 
                     if (splitPoints.includes(i) || i === totalPages - 1) {
                         const pdfBytes = await currentDoc.save();
-                        zip.file(`document_partie_${docIndex}.pdf`, pdfBytes);
+                        const partFileName = `document_partie_${docIndex}.pdf`;
+                        zip.file(partFileName, pdfBytes);
+                        
+                        if (Platform.OS === 'web') {
+                            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                            generatedFiles.push({
+                                name: partFileName,
+                                url: URL.createObjectURL(blob)
+                            });
+                        }
                         
                         if (i < totalPages - 1) {
                             currentDoc = await PDFDocument.create();
@@ -944,6 +956,7 @@ export default function ConvertScreen() {
                 const zipContent = await zip.generateAsync({ type: Platform.OS === 'web' ? 'blob' : 'base64' });
                 
                 if (Platform.OS === 'web') {
+                    setResultFiles(generatedFiles);
                     const url = URL.createObjectURL(zipContent as Blob);
                     setResultUrl(url);
                 } else {
@@ -951,7 +964,7 @@ export default function ConvertScreen() {
                     await FileSystem.writeAsStringAsync(fileUri, zipContent as string, { encoding: FileSystem.EncodingType.Base64 });
                     setResultUrl(fileUri);
                 }
-                setFileName('documents_divises');
+                setFileName('documents_divises.zip');
             }
             
             setStep('done');
@@ -1143,6 +1156,8 @@ export default function ConvertScreen() {
         setSelectedFiles([]);
         setFileName('');
         setResultUrl('');
+        setResultFiles([]);
+        cancelTool('menu');
     };
 
     if (step === 'menu') {
@@ -1918,10 +1933,42 @@ export default function ConvertScreen() {
                 <Text style={styles.successTitle}>{t('convert.done')}</Text>
                 <Text style={styles.successFile}>{fileName}.{(selectedService.id === 'split-pdf' && splitTab === 'extract') ? 'pdf' : selectedService.outputExt}</Text>
 
-                <Pressable style={styles.downloadButton} onPress={downloadResult}>
-                    <Ionicons name="download-outline" size={20} color="#ffffff" />
-                    <Text style={styles.downloadButtonText}>{t('convert.download')}</Text>
-                </Pressable>
+                {resultFiles && resultFiles.length > 0 ? (
+                    <View style={{ width: '100%', maxHeight: 300, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 8, marginBottom: 16 }}>
+                        <ScrollView style={{ width: '100%' }}>
+                            {resultFiles.map((f, i) => (
+                                <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderBottomWidth: i < resultFiles.length - 1 ? 1 : 0, borderBottomColor: colors.border }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                                        <Ionicons name="document-text-outline" size={24} color={colors.primary} style={{ marginRight: 12 }} />
+                                        <Text style={{ color: colors.text, fontSize: 14, flex: 1 }} numberOfLines={1} ellipsizeMode="middle">{f.name}</Text>
+                                    </View>
+                                    <Pressable 
+                                        style={({ hovered }: any) => [{ backgroundColor: colors.cardHovered, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: colors.border }, hovered && { backgroundColor: 'rgba(255,255,255,0.1)' }]}
+                                        onPress={() => {
+                                            const a = document.createElement('a');
+                                            a.href = f.url;
+                                            a.download = f.name;
+                                            document.body.appendChild(a);
+                                            a.click();
+                                            document.body.removeChild(a);
+                                        }}>
+                                        <Ionicons name="download-outline" size={16} color={colors.text} />
+                                    </Pressable>
+                                </View>
+                            ))}
+                        </ScrollView>
+                        
+                        <Pressable style={[styles.downloadButton, { marginTop: 16 }]} onPress={downloadResult}>
+                            <Ionicons name="archive-outline" size={20} color="#ffffff" />
+                            <Text style={styles.downloadButtonText}>Télécharger tout (ZIP)</Text>
+                        </Pressable>
+                    </View>
+                ) : (
+                    <Pressable style={styles.downloadButton} onPress={downloadResult}>
+                        <Ionicons name="download-outline" size={20} color="#ffffff" />
+                        <Text style={styles.downloadButtonText}>{t('convert.download')}</Text>
+                    </Pressable>
+                )}
 
                 <Pressable style={styles.resetButton} onPress={reset}>
                     <Ionicons name="arrow-back-outline" size={20} color={colors.textMuted} />
