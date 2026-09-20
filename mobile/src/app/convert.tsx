@@ -39,6 +39,7 @@ import ConversionOptions, { ConversionQuality } from '../components/ConversionOp
 import NumberingSelector, { NumberingConfig } from '../components/NumberingSelector';
 import OcrLanguageSelector, { OcrLanguage } from '../components/OcrLanguageSelector';
 import PdfEditor, { PdfEditItem } from '../components/PdfEditor';
+import CompressEditor from '../components/CompressEditor';
 import { PDFDocument, rgb, StandardFonts, degrees } from 'pdf-lib/dist/pdf-lib.esm.js';
 import JSZip from 'jszip';
 
@@ -1074,6 +1075,8 @@ export default function ConvertScreen() {
                     initPdfEditor(res.assets[0], 'rotation_editor');
                 } else if (selectedService.id === 'protect-pdf') {
                     initPdfEditor(res.assets[0], 'protect_editor');
+                } else if (selectedService.id === 'compress-pdf') {
+                    initPdfEditor(res.assets[0], 'compress_editor');
                 } else if (selectedService.id === 'organize-pdf') {
                     initOrganizeEditor(res.assets, false, 'organize_editor');
                 } else if (selectedService.id === 'merge-pdf') {
@@ -1091,7 +1094,7 @@ export default function ConvertScreen() {
         setSelectedFiles(prev => prev.filter((_, index) => index !== indexToRemove));
     };
 
-    const processFiles = async (passwordOverride?: string, filesOverride?: any[]) => {
+    const processFiles = async (passwordOverride?: string, filesOverride?: any[], compressionLevelOverride?: CompressionLevel) => {
         const targetFiles = filesOverride || selectedFiles;
         if (targetFiles.length === 0) return;
         
@@ -1128,7 +1131,7 @@ export default function ConvertScreen() {
                 formData.append('password', passwordOverride || pdfPassword || 'faas2024');
             }
             if (selectedService.id === 'compress-pdf') {
-                formData.append('compressionLevel', compressionLevel);
+                formData.append('compressionLevel', compressionLevelOverride || compressionLevel);
             }
             if (selectedService.id === 'number-pdf') {
                 formData.append('position', numberingConfig.position);
@@ -1784,40 +1787,11 @@ export default function ConvertScreen() {
                                 );
                             })}
                             
-                            {selectedService.multiple && (
-                                <Pressable 
-                                    style={({ hovered }) => [{ 
-                                        width: 160, 
-                                        height: 200, 
-                                        backgroundColor: hovered ? colors.cardHovered : 'transparent', 
-                                        borderRadius: 16, 
-                                        borderWidth: 2, 
-                                        borderColor: colors.border,
-                                        borderStyle: 'dashed' as any,
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        padding: 16,
-                                        cursor: 'pointer' as any
-                                    }]}
-                                    onPress={() => handleSelectFiles(true)}
-                                >
-                                    <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                                        <Ionicons name="add-outline" size={32} color={colors.text} />
-                                    </View>
-                                    <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600', textAlign: 'center' }}>Ajouter un fichier</Text>
-                                </Pressable>
                             )}
                         </View>
 
-                        {selectedService.id === 'compress-pdf' && (
-                            <CompressionSelector 
-                                value={compressionLevel}
-                                onChange={setCompressionLevel}
-                                fileSize={selectedFiles[0]?.size || 0}
-                            />
-                        )}
-
                         {/* protect-pdf configurator has been moved to ProtectEditor */}
+                        {/* compress-pdf configurator has been moved to CompressEditor */}
                         {/* watermark-pdf configurator has been moved to WatermarkEditor */}
                         {/* split-pdf configurator has been moved to SplitEditor */}
 
@@ -1879,11 +1853,29 @@ export default function ConvertScreen() {
 
     if (step === 'watermark_editor') {
         return (
-            <WatermarkEditor 
-                pages={pdfEditorPages} 
-                colors={colors}
+            <WatermarkEditor
+                pages={pdfEditorPages}
+                fileName={selectedFiles[0]?.name || ''}
                 onComplete={handleWatermarkComplete}
-                onCancel={() => cancelTool()}
+                onCancel={cancelTool}
+                colors={colors}
+            />
+        );
+    }
+
+    if (step === 'compress_editor') {
+        return (
+            <CompressEditor
+                pages={pdfEditorPages}
+                fileName={selectedFiles[0]?.name || ''}
+                fileSize={selectedFiles[0]?.size || 0}
+                initialLevel={compressionLevel}
+                onComplete={(level) => {
+                    setCompressionLevel(level);
+                    processFiles(undefined, undefined, level);
+                }}
+                onCancel={cancelTool}
+                colors={colors}
             />
         );
     }
