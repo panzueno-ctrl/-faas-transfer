@@ -149,6 +149,7 @@ export default function ConvertScreen() {
     
     // Premium UI states
     const [pdfPassword, setPdfPassword] = useState('');
+    const [processingTime, setProcessingTime] = useState(0);
     const [pdfOriginalBuffer, setPdfOriginalBuffer] = useState<ArrayBuffer | null>(null);
     const [watermarkConfig, setWatermarkConfig] = useState<WatermarkSettings | null>(null);
     const [conversionQuality, setConversionQuality] = useState<ConversionQuality>('standard');
@@ -1137,6 +1138,14 @@ export default function ConvertScreen() {
         try {
             const formData = new FormData();
             
+            if (selectedService.id === 'compress-pdf') {
+                setProcessingTime(0);
+                const timerId = setInterval(() => {
+                    setProcessingTime(prev => prev + 1);
+                }, 1000);
+                (window as any)._processingTimer = timerId;
+            }
+
             for (let i = 0; i < targetFiles.length; i++) {
                 const file = targetFiles[i];
                 let blob;
@@ -1225,8 +1234,14 @@ export default function ConvertScreen() {
             const url = URL.createObjectURL(resultBlob);
             setResultUrl(url);
             setStep('done');
+            if ((window as any)._processingTimer) {
+                clearInterval((window as any)._processingTimer);
+            }
 
         } catch (error: any) {
+            if ((window as any)._processingTimer) {
+                clearInterval((window as any)._processingTimer);
+            }
             console.error('CONVERT_ERROR:', error);
             let errorMsg = error.message && error.message !== 'Erreur serveur' && error.message !== 'Failed to fetch' ? error.message : 'Le traitement a échoué. Vérifiez vos fichiers et réessayez.';
             if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
@@ -2012,6 +2027,8 @@ export default function ConvertScreen() {
     }
 
     if (step === 'processing') {
+        const minutes = Math.floor(processingTime / 60);
+        const seconds = processingTime % 60;
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.backgroundGlow} pointerEvents="none" />
@@ -2022,6 +2039,16 @@ export default function ConvertScreen() {
                     <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={styles.processingTitle}>{t('convert.processing')}</Text>
                     <Text style={styles.processingFile}>{selectedFiles.length > 1 ? `${selectedFiles.length} fichiers en cours...` : fileName}</Text>
+                    {processingTime > 0 && (
+                        <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 16 }}>
+                            Temps écoulé : {minutes > 0 ? `${minutes}m ` : ''}{seconds}s
+                        </Text>
+                    )}
+                    {processingTime > 30 && (
+                        <Text style={{ color: colors.warning, fontSize: 13, marginTop: 8, textAlign: 'center', maxWidth: 300 }}>
+                            Les très gros fichiers peuvent prendre plusieurs minutes sur ce serveur gratuit. Ne fermez pas la page.
+                        </Text>
+                    )}
                 </View>
             </SafeAreaView>
         );
