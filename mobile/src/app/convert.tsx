@@ -1021,7 +1021,8 @@ export default function ConvertScreen() {
         if (Platform.OS === 'web') {
             const a = document.createElement('a');
             a.href = resultUrl;
-            a.download = `${fileName}.${selectedService?.outputExt || 'zip'}`;
+            const ext = (selectedService?.id === 'split-pdf' && splitTab === 'extract') ? 'pdf' : (selectedService?.outputExt || 'zip');
+            a.download = `${fileName}.${ext}`;
             a.click();
             URL.revokeObjectURL(resultUrl);
         } else {
@@ -1789,7 +1790,7 @@ export default function ConvertScreen() {
             <View style={styles.centerContent}>
                 <Ionicons name="checkmark-circle" size={80} color={colors.success} />
                 <Text style={styles.successTitle}>{t('convert.done')}</Text>
-                <Text style={styles.successFile}>{fileName}.{selectedService.outputExt}</Text>
+                <Text style={styles.successFile}>{fileName}.{(selectedService.id === 'split-pdf' && splitTab === 'extract') ? 'pdf' : selectedService.outputExt}</Text>
 
                 <Pressable style={styles.downloadButton} onPress={downloadResult}>
                     <Ionicons name="download-outline" size={20} color="#ffffff" />
