@@ -787,7 +787,7 @@ export default function ConvertScreen() {
     };
 
     const handleSplitPDF = async () => {
-        if (!organizeFiles[0]?.buffer) return;
+        if (organizeFiles.length === 0) return;
         
         if (splitTab === 'extract' && extractedPages.length === 0) {
             setLocalError("Veuillez sélectionner au moins une page à extraire.");
@@ -797,15 +797,27 @@ export default function ConvertScreen() {
         setIsSplitting(true);
         setLocalError(null);
         try {
-            const pdfDocRef = await PDFDocument.load(organizeFiles[0].buffer.slice(0));
+            // Pre-load all source documents to handle multiple files in the visual editor
+            const sourceDocs = new Map<number, PDFDocument>();
+            for (const fileItem of organizeFiles) {
+                if (fileItem.buffer) {
+                    const doc = await PDFDocument.load(fileItem.buffer.slice(0));
+                    sourceDocs.set(fileItem.originalIndex, doc);
+                }
+            }
             
             if (splitTab === 'extract') {
                 const newDoc = await PDFDocument.create();
                 const pagesToCopy = [...extractedPages].sort((a, b) => a - b);
                 
                 for (const pageIdx of pagesToCopy) {
-                    const [copiedPage] = await newDoc.copyPages(pdfDocRef, [pageIdx]);
-                    newDoc.addPage(copiedPage);
+                    const pageItem = organizePages[pageIdx];
+                    const sourceDoc = sourceDocs.get(pageItem.fileIndex);
+                    
+                    if (sourceDoc) {
+                        const [copiedPage] = await newDoc.copyPages(sourceDoc, [pageItem.pageIndex]);
+                        newDoc.addPage(copiedPage);
+                    }
                     await new Promise(r => setTimeout(r, 10));
                 }
                 
@@ -822,11 +834,16 @@ export default function ConvertScreen() {
                 let currentDoc = await PDFDocument.create();
                 let docIndex = 1;
 
-                const totalPages = pdfDocRef.getPageCount();
+                const totalPages = organizePages.length;
                 
                 for (let i = 0; i < totalPages; i++) {
-                    const [copiedPage] = await currentDoc.copyPages(pdfDocRef, [i]);
-                    currentDoc.addPage(copiedPage);
+                    const pageItem = organizePages[i];
+                    const sourceDoc = sourceDocs.get(pageItem.fileIndex);
+                    
+                    if (sourceDoc) {
+                        const [copiedPage] = await currentDoc.copyPages(sourceDoc, [pageItem.pageIndex]);
+                        currentDoc.addPage(copiedPage);
+                    }
 
                     if (splitPoints.includes(i) || i === totalPages - 1) {
                         const pdfBytes = await currentDoc.save();
