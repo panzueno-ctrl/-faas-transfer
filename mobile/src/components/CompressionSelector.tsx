@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, Pressable, Animated, Platform, ScrollView } from 'react-native';
+import React from 'react';
+import { View, Text, Pressable, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
@@ -13,72 +13,28 @@ interface CompressionSelectorProps {
 
 const LEVEL_CONFIG = {
     low: {
-        title: 'Basse Compression',
-        desc: 'Haute qualité, taille légèrement réduite.',
-        badge: 'Idéal Impression',
-        icon: 'image-outline',
-        quality: 90, // percentage for visual gauge
-        reduction: 30, // percentage for visual gauge
+        title: 'Simple',
+        reduction: 40,
+        pro: false
     },
     recommended: {
-        title: 'Recommandée',
-        desc: 'Équilibre parfait entre qualité et taille.',
-        badge: 'Idéal Web/Email',
-        icon: 'star',
-        quality: 75,
-        reduction: 60,
+        title: 'Modéré',
+        reduction: 75,
+        pro: true
     },
     extreme: {
-        title: 'Extrême',
-        desc: 'Qualité visiblement réduite, taille minimale.',
-        badge: 'Idéal Archivage',
-        icon: 'archive-outline',
-        quality: 40,
+        title: 'Fort',
         reduction: 90,
+        badge: 'Minimal',
+        pro: true
     }
 };
-
-const Gauge = ({ label, value, color, delay = 0 }: { label: string, value: number, color: string, delay?: number }) => {
-    const { colors } = useTheme();
-    const widthAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-        Animated.timing(widthAnim, {
-            toValue: value,
-            duration: 800,
-            delay,
-            useNativeDriver: false,
-        }).start();
-    }, [value, delay]);
-
-    return (
-        <View style={{ marginBottom: 8, width: '100%' }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ color: colors.textMuted, fontSize: 11 }}>{label}</Text>
-                <Text style={{ color: color, fontSize: 11, fontWeight: 'bold' }}>{value}%</Text>
-            </View>
-            <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
-                <Animated.View 
-                    style={{
-                        height: '100%',
-                        backgroundColor: color,
-                        borderRadius: 3,
-                        width: widthAnim.interpolate({
-                            inputRange: [0, 100],
-                            outputRange: ['0%', '100%']
-                        })
-                    }}
-                />
-            </View>
-        </View>
-    );
-}
 
 export default function CompressionSelector({ value, onChange, fileSize = 0 }: CompressionSelectorProps) {
     const { colors } = useTheme();
 
     const formatSize = (bytes: number) => {
-        if (!bytes || bytes === 0) return '';
+        if (!bytes || bytes === 0) return '0 Ko';
         const mb = bytes / (1024 * 1024);
         if (mb < 1) {
             const kb = bytes / 1024;
@@ -87,22 +43,23 @@ export default function CompressionSelector({ value, onChange, fileSize = 0 }: C
         return `${mb.toFixed(1)} Mo`;
     };
 
+    const currentConfig = LEVEL_CONFIG[value];
+    const newSize = fileSize * (1 - currentConfig.reduction / 100);
+    const savedSize = fileSize - newSize;
+
     return (
-        <View style={{ width: '100%', maxWidth: 900, alignSelf: 'center', marginBottom: 24 }}>
-            <Text style={{ color: colors.text, fontSize: 18, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' }}>
-                Sélectionnez le niveau de compression
-            </Text>
+        <View style={{ width: '100%', maxWidth: 400, alignSelf: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(239, 68, 68, 0.1)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                    <Ionicons name="contract" size={18} color="#ef4444" />
+                </View>
+                <Text style={{ color: colors.text, fontSize: 20, fontWeight: 'bold' }}>Compresser</Text>
+            </View>
             
-            <View style={{ 
-                flexDirection: Platform.OS === 'web' ? 'row' : 'column',
-                gap: 16,
-                justifyContent: 'center',
-                alignItems: 'stretch'
-            }}>
-                {(Object.keys(LEVEL_CONFIG) as CompressionLevel[]).map((levelKey, index) => {
+            <View style={{ gap: 12, marginBottom: 24 }}>
+                {(Object.keys(LEVEL_CONFIG) as CompressionLevel[]).map((levelKey) => {
                     const isSelected = value === levelKey;
                     const config = LEVEL_CONFIG[levelKey];
-                    const isRecommended = levelKey === 'recommended';
 
                     return (
                         <Pressable
@@ -110,66 +67,70 @@ export default function CompressionSelector({ value, onChange, fileSize = 0 }: C
                             onPress={() => onChange(levelKey)}
                             style={({ pressed, hovered }: any) => [
                                 {
-                                    flex: 1,
-                                    backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.05)' : colors.card,
-                                    borderWidth: 2,
-                                    borderColor: isSelected ? colors.primary : (hovered ? colors.border : 'transparent'),
-                                    borderRadius: 16,
-                                    padding: 20,
-                                    position: 'relative',
-                                    transform: [{ scale: pressed ? 0.98 : (hovered && !isSelected ? 1.02 : 1) }],
-                                    transition: 'all 0.2s ease-in-out',
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    backgroundColor: isSelected ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+                                    borderWidth: 1,
+                                    borderColor: isSelected ? '#2563eb' : colors.border,
+                                    borderRadius: 8,
+                                    paddingVertical: 14,
+                                    paddingHorizontal: 16,
+                                    transform: [{ scale: pressed ? 0.98 : 1 }],
+                                    transition: 'all 0.15s ease'
                                 },
-                                isRecommended && !isSelected && { borderColor: 'rgba(59, 130, 246, 0.3)' }
+                                hovered && !isSelected && { borderColor: colors.textMuted }
                             ]}
                         >
-                            {isRecommended && (
-                                <View style={{ position: 'absolute', top: -12, alignSelf: 'center', backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, zIndex: 10 }}>
-                                    <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' }}>Recommandé</Text>
-                                </View>
-                            )}
-
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isSelected ? colors.primary : colors.border, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                                    <Ionicons name={config.icon as any} size={20} color={isSelected ? '#fff' : colors.textMuted} />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={{ color: isSelected ? colors.primary : colors.text, fontSize: 16, fontWeight: 'bold' }}>{config.title}</Text>
-                                </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Ionicons 
+                                    name={isSelected ? "radio-button-on" : "radio-button-off"} 
+                                    size={22} 
+                                    color={isSelected ? '#2563eb' : colors.textSubtle} 
+                                    style={{ marginRight: 12 }}
+                                />
+                                <Text style={{ color: colors.text, fontSize: 15, fontWeight: isSelected ? '600' : '400' }}>
+                                    {config.title}
+                                </Text>
                             </View>
 
-                            <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 16, minHeight: 36 }}>
-                                {config.desc}
-                            </Text>
-
-                            <View style={{ backgroundColor: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 12, marginBottom: 16 }}>
-                                <Gauge label="Qualité Préservée" value={config.quality} color={config.quality > 70 ? colors.success : (config.quality > 40 ? '#F59E0B' : colors.danger)} delay={index * 100} />
-                                
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <View style={{ flex: 1 }}>
-                                        <Gauge label="Réduction de Taille" value={config.reduction} color={config.reduction > 70 ? colors.success : (config.reduction > 40 ? '#F59E0B' : colors.textMuted)} delay={index * 100 + 200} />
-                                    </View>
-                                </View>
-                                
-                                {fileSize > 0 && (
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                                        <Text style={{ color: colors.textSubtle, fontSize: 10 }}>Taille estimée :</Text>
-                                        <Text style={{ color: colors.success, fontSize: 11, fontWeight: 'bold' }}>
-                                            ~ {formatSize(fileSize * (1 - config.reduction / 100))}
-                                        </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                {config.badge && (
+                                    <Text style={{ color: colors.success, fontSize: 11, fontWeight: 'bold', backgroundColor: 'rgba(16, 185, 129, 0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                        {config.badge}
+                                    </Text>
+                                )}
+                                {config.pro && (
+                                    <View style={{ backgroundColor: '#f59e0b', borderRadius: 10, width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>
+                                        <Ionicons name="star" size={12} color="#fff" />
                                     </View>
                                 )}
-                            </View>
-
-                            <View style={{ backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.1)' : 'rgba(255,255,255,0.03)', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, alignSelf: 'flex-start' }}>
-                                <Text style={{ color: isSelected ? colors.primary : colors.textSubtle, fontSize: 11, fontWeight: '600' }}>
-                                    {config.badge}
-                                </Text>
                             </View>
                         </Pressable>
                     );
                 })}
             </View>
+
+            {fileSize > 0 && (
+                <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.08)', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+                    <Text style={{ color: colors.text, fontSize: 13, fontWeight: '500', marginBottom: 8 }}>
+                        Nouvelle taille de fichier estimée
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12 }}>
+                        <Text style={{ color: colors.success, fontSize: 18, fontWeight: 'bold' }}>
+                            -{formatSize(savedSize)}
+                        </Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 13, marginLeft: 8, paddingBottom: 2 }}>
+                            ~{formatSize(newSize)} (-{currentConfig.reduction}%)
+                        </Text>
+                    </View>
+                    
+                    {/* Progress Bar Visual */}
+                    <View style={{ height: 4, backgroundColor: 'rgba(16, 185, 129, 0.2)', borderRadius: 2, overflow: 'hidden' }}>
+                        <View style={{ height: '100%', width: `${100 - currentConfig.reduction}%`, backgroundColor: colors.success, borderRadius: 2 }} />
+                    </View>
+                </View>
+            )}
         </View>
     );
 }
