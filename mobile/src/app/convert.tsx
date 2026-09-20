@@ -161,6 +161,22 @@ export default function ConvertScreen() {
     const [organizePages, setOrganizePages] = useState<OrganizePageItem[]>([]);
     const [organizeFiles, setOrganizeFiles] = useState<any[]>([]);
 
+    const currentRenderSession = useRef<number>(0);
+
+    const cancelTool = (targetStep: string = 'tool_intro') => {
+        setStep(targetStep as any);
+        setPdfDocRef(null);
+        setOrganizePages([]);
+        setOrganizeFiles([]);
+        setSelectedFiles([]);
+        setExtractedPages([]);
+        setSplitPoints([]);
+        setSplitTab('split');
+        setSplitInterval(1);
+        setLocalError(null);
+        currentRenderSession.current += 1;
+    };
+
     // initSplitPDF removed in favor of initOrganizeEditor
 
     const initPdfEditor = async (file: any, targetStep: string = 'pdf_editor') => {
@@ -367,6 +383,11 @@ export default function ConvertScreen() {
             const newOrganizeFiles: any[] = appendToExisting ? [...organizeFiles] : [];
             const startIndex = newOrganizeFiles.length;
 
+            if (!appendToExisting) {
+                currentRenderSession.current += 1;
+            }
+            const sessionId = currentRenderSession.current;
+            
             // 1. PUSH SKELETON UI IMMEDIATELY
             for (let i = 0; i < files.length; i++) {
                 const fileIndex = startIndex + i;
@@ -388,7 +409,7 @@ export default function ConvertScreen() {
 
             setOrganizeFiles(newOrganizeFiles);
             setOrganizePages(newOrganizePages);
-            if (!appendToExisting) setStep(targetStep);
+            if (!appendToExisting) setStep(targetStep as any);
 
             // 2. PROCESS ASYNC IN BACKGROUND
             files.forEach((file, i) => {
@@ -426,6 +447,7 @@ export default function ConvertScreen() {
                                 });
                                 
                                 if (pdf.numPages >= 1) {
+                                    if (sessionId !== currentRenderSession.current) return;
                                     const page = await pdf.getPage(1);
                                     const viewport = page.getViewport({ scale: 1.0 });
                                     const canvas = document.createElement('canvas');
@@ -436,17 +458,20 @@ export default function ConvertScreen() {
                                         await page.render({ canvasContext: ctx, viewport }).promise;
                                         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
                                         
-                                        setOrganizePages(prev => {
-                                            const next = [...prev];
-                                            const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === 0);
-                                            if (target) target.imageUri = dataUrl;
-                                            return next;
-                                        });
+                                        if (sessionId === currentRenderSession.current) {
+                                            setOrganizePages(prev => {
+                                                const next = [...prev];
+                                                const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === 0);
+                                                if (target) target.imageUri = dataUrl;
+                                                return next;
+                                            });
+                                        }
                                     }
                                 }
 
                                 if (pdf.numPages > 1) {
                                     for (let j = 2; j <= pdf.numPages; j++) {
+                                        if (sessionId !== currentRenderSession.current) break;
                                         try {
                                             const page = await pdf.getPage(j);
                                             const viewport = page.getViewport({ scale: 1.0 });
@@ -1047,6 +1072,10 @@ export default function ConvertScreen() {
                 await shareAsync(resultUrl);
             }
         }
+    };
+
+    const goBackToMenu = () => {
+        cancelTool('tool_intro');
     };
 
     const reset = () => {
@@ -1697,7 +1726,7 @@ export default function ConvertScreen() {
                 pages={pdfEditorPages} 
                 colors={colors}
                 onComplete={handlePdfEditorComplete}
-                onCancel={() => setStep('tool_intro')}
+                onCancel={() => cancelTool()}
                 autoOpenSignTool={selectedService?.id === 'sign-pdf'}
             />
         );
@@ -1709,7 +1738,7 @@ export default function ConvertScreen() {
                 pages={pdfEditorPages} 
                 colors={colors}
                 onComplete={handleWatermarkComplete}
-                onCancel={() => setStep('tool_intro')}
+                onCancel={() => cancelTool()}
             />
         );
     }
@@ -1725,7 +1754,7 @@ export default function ConvertScreen() {
                     setPdfPassword(password);
                     processFiles(password);
                 }}
-                onCancel={() => setStep('tool_intro')}
+                onCancel={() => cancelTool()}
             />
         );
     }
@@ -1736,7 +1765,7 @@ export default function ConvertScreen() {
                 pages={pdfEditorPages} 
                 colors={colors}
                 onComplete={handleRotationComplete}
-                onCancel={() => setStep('tool_intro')}
+                onCancel={() => cancelTool()}
             />
         );
     }
@@ -1764,7 +1793,7 @@ export default function ConvertScreen() {
                         setLocalError(null);
                         handleMergeComplete(type, data);
                     }}
-                    onCancel={() => setStep('tool_intro')}
+                    onCancel={() => cancelTool()}
                     onAddFiles={handleAddFilesToOrganize}
                     colors={colors}
                 />
@@ -1779,7 +1808,7 @@ export default function ConvertScreen() {
                 files={organizeFiles}
                 colors={colors}
                 onComplete={handleOrganizeComplete}
-                onCancel={() => setStep('tool_intro')}
+                onCancel={() => cancelTool()}
                 onAddFiles={handleAddFilesToOrganize}
             />
         );
