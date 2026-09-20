@@ -1316,8 +1316,8 @@ export default function ConvertScreen() {
             const formData = new FormData();
             
             let blob;
-            if (Platform.OS === 'web') {
-                blob = selectedFiles[0];
+            if (Platform.OS === 'web' && selectedFiles[0].file) {
+                blob = selectedFiles[0].file;
             } else {
                 const response = await fetch(selectedFiles[0].uri);
                 blob = await response.blob();
