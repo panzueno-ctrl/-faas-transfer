@@ -1189,7 +1189,38 @@ export default function ConvertScreen() {
                 throw new Error('Erreur serveur');
             }
 
-            const resultBlob = await response.blob();
+            let resultBlob;
+            
+            if (selectedService.id === 'compress-pdf') {
+                const data = await response.json();
+                if (!data.jobId) throw new Error('Erreur serveur (pas de jobId)');
+                
+                const jobId = data.jobId;
+                
+                // Boucle de polling (ticket)
+                while (true) {
+                    await new Promise(r => setTimeout(r, 3000));
+                    
+                    const statusRes = await fetch(`${SERVER_URL}/convert/status/${jobId}`);
+                    if (!statusRes.ok) throw new Error('Erreur serveur');
+                    
+                    const statusData = await statusRes.json();
+                    
+                    if (statusData.status === 'done') {
+                        const blobRes = await fetch(`${SERVER_URL}/convert/download/${jobId}`);
+                        if (!blobRes.ok) throw new Error('Erreur serveur au téléchargement');
+                        resultBlob = await blobRes.blob();
+                        break;
+                    } else if (statusData.status === 'error') {
+                        throw new Error(statusData.error || 'La compression a échoué.');
+                    }
+                    // Si status === 'processing', on attend le prochain tour de boucle
+                }
+            } else {
+                // Fonctionnement normal synchrone pour les autres outils
+                resultBlob = await response.blob();
+            }
+
             const url = URL.createObjectURL(resultBlob);
             setResultUrl(url);
             setStep('done');

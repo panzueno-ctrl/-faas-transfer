@@ -872,7 +872,9 @@ router.post('/mp4-to-gif', upload.single('file'), (req, res) => {
     });
 });
 
-// --- NOUVEAU : COMPRESSION PDF ---
+// --- SYSTÈME DE TICKETS (ASYNC POLLING) ---
+const jobs = new Map();
+
 router.post('/compress-pdf', upload.single('file'), (req, res) => {
     if (!req.file) {
         return res.status(400).send('Aucun fichier fourni.');
@@ -887,23 +889,73 @@ router.post('/compress-pdf', upload.single('file'), (req, res) => {
         pdfSettings = '/printer';
     }
 
-    const inputPath = req.file.path;
-    const outputPath = `/tmp/${Date.now()}-compressed.pdf`;
+    const jobId = Date.now().toString() + '-' + Math.round(Math.random() * 1000);
+    const safeInputPath = `/tmp/job-input-${jobId}.pdf`;
+    const outputPath = `/tmp/job-output-${jobId}.pdf`;
 
-    // Commande Ghostscript pour compresser (avec limitation mémoire explicite)
-    const gsCommand = `gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=${pdfSettings} -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${outputPath}" "${inputPath}"`;
+    // 1. Déplacer le fichier pour éviter sa suppression par le middleware global
+    fs.renameSync(req.file.path, safeInputPath);
 
-    exec(gsCommand, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
-        if (error) {
-            console.error('Erreur Ghostscript compression:', error);
-            return res.status(500).send('Erreur lors de la compression du PDF.');
+    // 2. Enregistrer le job
+    jobs.set(jobId, { status: 'processing', progress: 0 });
+
+    // 3. Répondre immédiatement avec le jobId
+    res.json({ jobId });
+
+    // 4. Lancer Ghostscript en arrière-plan
+    const gsCommand = `gs -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=${pdfSettings} -dNOPAUSE -dQUIET -dBATCH -sOutputFile="${outputPath}" "${safeInputPath}"`;
+
+    exec(gsCommand, { maxBuffer: 1024 * 1024 * 10 }, (error) => {
+        // Nettoyer le fichier d'entrée
+        if (fs.existsSync(safeInputPath)) {
+            try { fs.unlinkSync(safeInputPath); } catch (e) {}
         }
 
-        res.download(outputPath, 'document_compresse.pdf', (err) => {
-            if (fs.existsSync(outputPath)) {
-                try { fs.unlinkSync(outputPath); } catch (e) {}
+        if (error) {
+            console.error('Erreur Ghostscript compression:', error);
+            jobs.set(jobId, { status: 'error', error: 'Erreur lors de la compression du PDF.' });
+            return;
+        }
+
+        jobs.set(jobId, { status: 'done', outputPath });
+        
+        // Optionnel : nettoyer le job et le fichier de sortie au bout de 10 minutes s'il n'a pas été téléchargé
+        setTimeout(() => {
+            if (jobs.has(jobId)) {
+                jobs.delete(jobId);
+                if (fs.existsSync(outputPath)) {
+                    try { fs.unlinkSync(outputPath); } catch (e) {}
+                }
             }
-        });
+        }, 10 * 60 * 1000);
+    });
+});
+
+router.get('/status/:jobId', (req, res) => {
+    const jobId = req.params.jobId;
+    const job = jobs.get(jobId);
+    
+    if (!job) {
+        return res.status(404).json({ error: 'Job non trouvé' });
+    }
+    
+    res.json(job);
+});
+
+router.get('/download/:jobId', (req, res) => {
+    const jobId = req.params.jobId;
+    const job = jobs.get(jobId);
+    
+    if (!job || job.status !== 'done') {
+        return res.status(400).send('Fichier non disponible ou en cours de traitement.');
+    }
+    
+    res.download(job.outputPath, 'document_compresse.pdf', (err) => {
+        // Nettoyage après téléchargement
+        jobs.delete(jobId);
+        if (fs.existsSync(job.outputPath)) {
+            try { fs.unlinkSync(job.outputPath); } catch(e) {}
+        }
     });
 });
 
