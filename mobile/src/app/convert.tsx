@@ -1208,9 +1208,16 @@ export default function ConvertScreen() {
                 const jobId = data.jobId;
                 
                 // Boucle de polling (ticket)
+                let pollingSeconds = 0;
                 while (true) {
                     await new Promise(r => setTimeout(r, 3000));
+                    pollingSeconds += 3;
                     
+                    // Abort after 30 seconds as requested by the user
+                    if (pollingSeconds >= 30) {
+                        throw new Error("Délai dépassé (30s) : Fichier trop lourd pour notre serveur gratuit. Veuillez utiliser un fichier de moins de 10 Mo.");
+                    }
+
                     const statusRes = await fetch(`${SERVER_URL}/convert/status/${jobId}`);
                     if (!statusRes.ok) throw new Error('Erreur serveur');
                     
@@ -2041,12 +2048,7 @@ export default function ConvertScreen() {
                     <Text style={styles.processingFile}>{selectedFiles.length > 1 ? `${selectedFiles.length} fichiers en cours...` : fileName}</Text>
                     {processingTime > 0 && (
                         <Text style={{ color: colors.textMuted, fontSize: 14, marginTop: 16 }}>
-                            Temps écoulé : {minutes > 0 ? `${minutes}m ` : ''}{seconds}s
-                        </Text>
-                    )}
-                    {processingTime > 30 && (
-                        <Text style={{ color: colors.warning, fontSize: 13, marginTop: 8, textAlign: 'center', maxWidth: 300 }}>
-                            Les très gros fichiers peuvent prendre plusieurs minutes sur ce serveur gratuit. Ne fermez pas la page.
+                            Temps écoulé : {minutes > 0 ? `${minutes}m ` : ''}{seconds}s / 30s
                         </Text>
                     )}
                 </View>
