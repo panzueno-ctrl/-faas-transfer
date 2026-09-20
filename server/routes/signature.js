@@ -4,6 +4,8 @@ const multer = require('multer');
 const { createClient } = require('@supabase/supabase-js');
 const nodemailer = require('nodemailer');
 const { v4: uuidv4 } = require('uuid');
+const { PDFDocument } = require('pdf-lib');
+const fetch = require('node-fetch');
 require('dotenv').config();
 
 // Initialisation de Supabase
@@ -138,6 +140,190 @@ router.post('/send-requests', upload.single('file'), async (req, res) => {
         }
 
         return res.json({ success: true, documentId, message: "Demandes envoyées avec succès." });
+
+    } catch (error) {
+        console.error('SIGNATURE_ERROR:', error);
+        return res.status(500).json({ error: "Erreur interne du serveur." });
+    }
+});
+
+/**
+ * GET /signature/request/:token
+ * Récupère les informations d'une demande de signature via le token
+ */
+router.get('/request/:token', async (req, res) => {
+    try {
+        const { token } = req.params;
+
+        const { data: requestData, error: reqError } = await supabase
+            .from('signature_requests')
+            .select(`
+                id,
+                signer_name,
+                signer_email,
+                status,
+                signature_documents (
+                    id,
+                    original_file_url,
+                    status
+                )
+            `)
+            .eq('token', token)
+            .single();
+
+        if (reqError || !requestData) {
+            return res.status(404).json({ error: "Demande introuvable ou invalide." });
+        }
+
+        return res.json({
+            request: requestData
+        });
+
+    } catch (error) {
+        console.error('SIGNATURE_ERROR:', error);
+        return res.status(500).json({ error: "Erreur interne du serveur." });
+    }
+});
+
+/**
+ * POST /signature/complete-request
+ * Reçoit la signature finale d'un signataire (image base64 + coordonnées)
+ */
+router.post('/complete-request', async (req, res) => {
+    try {
+        const { token, signatureBase64, x, y, pageIndex } = req.body;
+
+        if (!token || !signatureBase64) {
+            return res.status(400).json({ error: "Token et signature requis." });
+        }
+
+        // 1. Vérifier la validité du token
+        const { data: requestData, error: reqError } = await supabase
+            .from('signature_requests')
+            .select('*, signature_documents(*)')
+            .eq('token', token)
+            .single();
+
+        if (reqError || !requestData) {
+            return res.status(404).json({ error: "Demande de signature invalide ou introuvable." });
+        }
+
+        if (requestData.status === 'signed') {
+            return res.status(400).json({ error: "Ce document a déjà été signé par vous." });
+        }
+
+        // 2. Enregistrer les données de signature
+        const { error: dataError } = await supabase
+            .from('signatures_data')
+            .insert([{
+                request_id: requestData.id,
+                page_index: pageIndex || 0,
+                x: x || 0,
+                y: y || 0,
+                image_base64: signatureBase64
+            }]);
+
+        if (dataError) {
+            console.error("Erreur DB:", dataError);
+            return res.status(500).json({ error: "Erreur lors de la sauvegarde de la signature." });
+        }
+
+        // 3. Mettre à jour le statut de la requête
+        await supabase
+            .from('signature_requests')
+            .update({ status: 'signed' })
+            .eq('id', requestData.id);
+
+        // 4. (Optionnel) Vérifier si tous les signataires ont signé pour marquer le document complet
+        const { data: allRequests } = await supabase
+            .from('signature_requests')
+            .select('status')
+            .eq('document_id', requestData.document_id);
+
+        const allSigned = allRequests && allRequests.every(r => r.status === 'signed');
+        
+        if (allSigned) {
+            // 1. Download original PDF
+            const origRes = await fetch(requestData.signature_documents.original_file_url);
+            const origBuffer = await origRes.arrayBuffer();
+            const pdfDoc = await PDFDocument.load(origBuffer);
+            const pages = pdfDoc.getPages();
+
+            // 2. Fetch all signatures_data for this document
+            const { data: allSigsData } = await supabase
+                .from('signatures_data')
+                .select('*, signature_requests!inner(document_id)')
+                .eq('signature_requests.document_id', requestData.document_id);
+
+            if (allSigsData) {
+                for (const sig of allSigsData) {
+                    const page = pages[sig.page_index || 0];
+                    if (!page) continue;
+
+                    // Convert base64 to Uint8Array
+                    const imgBuffer = Buffer.from(sig.image_base64, 'base64');
+                    let pdfImage;
+                    // Try embedding as PNG (most common for canvas exports)
+                    try {
+                        pdfImage = await pdfDoc.embedPng(imgBuffer);
+                    } catch (e) {
+                        try {
+                            pdfImage = await pdfDoc.embedJpg(imgBuffer);
+                        } catch (err) {
+                            console.error("Could not embed image", err);
+                            continue;
+                        }
+                    }
+
+                    const { width, height } = page.getSize();
+                    // Frontend coordinates are usually percentages (0 to 100)
+                    // Scale them back to points. Assume standard signature size:
+                    const sigWidth = 150;
+                    const sigHeight = (pdfImage.height / pdfImage.width) * sigWidth;
+                    
+                    const xPos = (sig.x / 100) * width;
+                    // Y is inverted in pdf-lib (bottom-left origin)
+                    const yPos = height - ((sig.y / 100) * height) - sigHeight;
+
+                    page.drawImage(pdfImage, {
+                        x: xPos,
+                        y: yPos,
+                        width: sigWidth,
+                        height: sigHeight
+                    });
+                }
+            }
+
+            // 3. Save final PDF
+            const finalPdfBytes = await pdfDoc.save();
+            const finalFileName = `final_${Date.now()}_${uuidv4()}.pdf`;
+
+            await supabase.storage
+                .from('signatures')
+                .upload(finalFileName, finalPdfBytes, {
+                    contentType: 'application/pdf',
+                    upsert: false
+                });
+
+            const { data: finalPublicUrlData } = supabase.storage
+                .from('signatures')
+                .getPublicUrl(finalFileName);
+
+            const finalFileUrl = finalPublicUrlData.publicUrl;
+
+            // 4. Update document status
+            await supabase
+                .from('signature_documents')
+                .update({ status: 'completed', final_file_url: finalFileUrl })
+                .eq('id', requestData.document_id);
+                
+            // (Optionnel) Envoyer l'email final avec la pièce jointe
+            if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+                // ... logic to send email to all signers with final link
+            }
+        }
+
+        return res.json({ success: true, message: "Signature enregistrée avec succès." });
 
     } catch (error) {
         console.error('SIGNATURE_ERROR:', error);

@@ -88,9 +88,10 @@ interface PdfEditorProps {
     onCancel: () => void;
     colors: any;
     autoOpenSignTool?: boolean;
+    restrictedMode?: boolean; // If true, only allow signatures
 }
 
-export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpenSignTool }: PdfEditorProps) {
+export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpenSignTool, restrictedMode }: PdfEditorProps) {
     const { t } = useTranslation();
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const [edits, setEdits] = useState<PdfEditItem[]>([]);
@@ -266,21 +267,25 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
 
                 <View style={[styles.toolbarCenter, { flex: 1, paddingHorizontal: 16 }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.03)', padding: 4, borderRadius: 8 }}>
-                        <Pressable 
-                            style={[styles.toolBtn, activeTool === 'text' && styles.toolBtnActive]} 
-                            onPress={() => setActiveTool(activeTool === 'text' ? null : 'text')}
-                        >
-                            <Ionicons name="text" size={20} color={activeTool === 'text' ? '#3498db' : colors.text} />
-                            <Text style={[styles.toolBtnText, { color: activeTool === 'text' ? '#3498db' : colors.text }]}>Texte</Text>
-                        </Pressable>
+                        {!restrictedMode && (
+                            <Pressable 
+                                style={[styles.toolBtn, activeTool === 'text' && styles.toolBtnActive]} 
+                                onPress={() => setActiveTool(activeTool === 'text' ? null : 'text')}
+                            >
+                                <Ionicons name="text" size={20} color={activeTool === 'text' ? '#3498db' : colors.text} />
+                                <Text style={[styles.toolBtnText, { color: activeTool === 'text' ? '#3498db' : colors.text }]}>Texte</Text>
+                            </Pressable>
+                        )}
 
-                        <Pressable 
-                            style={[styles.toolBtn, activeTool === 'replace' && styles.toolBtnActive, { marginLeft: 8 }]} 
-                            onPress={() => setActiveTool(activeTool === 'replace' ? null : 'replace')}
-                        >
-                            <Ionicons name="create" size={20} color={activeTool === 'replace' ? '#e74c3c' : colors.text} />
-                            <Text style={[styles.toolBtnText, { color: activeTool === 'replace' ? '#e74c3c' : colors.text }]}>Remplacer texte</Text>
-                        </Pressable>
+                        {!restrictedMode && (
+                            <Pressable 
+                                style={[styles.toolBtn, activeTool === 'replace' && styles.toolBtnActive, { marginLeft: 8 }]} 
+                                onPress={() => setActiveTool(activeTool === 'replace' ? null : 'replace')}
+                            >
+                                <Ionicons name="create" size={20} color={activeTool === 'replace' ? '#e74c3c' : colors.text} />
+                                <Text style={[styles.toolBtnText, { color: activeTool === 'replace' ? '#e74c3c' : colors.text }]}>Remplacer texte</Text>
+                            </Pressable>
+                        )}
 
                         <Pressable 
                             style={[styles.toolBtn, { marginLeft: 8 }]} 
