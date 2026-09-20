@@ -195,48 +195,74 @@ export default function ConvertScreen() {
             }
             setPdfOriginalBuffer(arrayBuffer);
 
-            // 2. Envoyer au backend pour générer les images des pages
-            const formData = new FormData();
-            let fileBlob;
-            if (Platform.OS === 'web' && file.file) {
-                fileBlob = file.file;
-            } else {
-                const response_file = await fetch(file.uri);
-                fileBlob = await response_file.blob();
-            }
-            formData.append('file', fileBlob, file.name);
+            let pages: string[] = [];
 
-            const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard`, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'Accept': 'application/zip, image/jpeg'
-                }
-            });
-
-            if (!res.ok) {
-                const errText = await res.text();
-                throw new Error("Échec de la génération des images: " + errText);
-            }
-
-            const contentType = res.headers.get('content-type');
-            const blob = await res.blob();
-            const pages: string[] = [];
-
-            if (contentType?.includes('zip')) {
-                const zip = new JSZip();
-                const unzipped = await zip.loadAsync(blob);
-                const fileNames = Object.keys(unzipped.files).sort(); // Sort by name to keep page order
-                for (const filename of fileNames) {
-                    const f = unzipped.files[filename];
-                    if (!f.dir) {
-                        const imgBlob = await f.async('blob');
-                        pages.push(URL.createObjectURL(imgBlob));
+            if (Platform.OS === 'web') {
+                try {
+                    const pdfjsLib = await loadPdfJs();
+                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
+                    const pdf = await loadingTask.promise;
+                    
+                    // Only need first page for protect and compress, need all for watermark/rotate
+                    const maxPages = (targetStep === 'protect_editor' || targetStep === 'compress_editor') ? 1 : Math.min(pdf.numPages, 50); // Cap at 50 to prevent freezing for watermark
+                    
+                    for (let j = 1; j <= maxPages; j++) {
+                        const page = await pdf.getPage(j);
+                        const viewport = page.getViewport({ scale: 1.0 });
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            canvas.width = viewport.width;
+                            canvas.height = viewport.height;
+                            await page.render({ canvasContext: ctx, viewport }).promise;
+                            pages.push(canvas.toDataURL('image/jpeg', 0.8));
+                        }
                     }
+                } catch (e) {
+                    console.warn("Local PDF rendering failed, falling back to backend", e);
                 }
-            } else {
-                // Single page
-                pages.push(URL.createObjectURL(blob));
+            }
+            
+            // Si Web a échoué ou si on est sur Mobile, on utilise le backend
+            if (pages.length === 0) {
+                const formData = new FormData();
+                let fileBlob;
+                if (Platform.OS === 'web' && file.file) {
+                    fileBlob = file.file;
+                } else {
+                    const response_file = await fetch(file.uri);
+                    fileBlob = await response_file.blob();
+                }
+                formData.append('file', fileBlob, file.name);
+
+                const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'Accept': 'application/zip, image/jpeg' }
+                });
+
+                if (!res.ok) throw new Error("Échec de la génération des images: " + await res.text());
+
+                const contentType = res.headers.get('content-type');
+                const blob = await res.blob();
+
+                if (contentType?.includes('zip')) {
+                    const zip = new JSZip();
+                    const unzipped = await zip.loadAsync(blob);
+                    const fileNames = Object.keys(unzipped.files).sort(); 
+                    // Limiter aussi pour le backend si ce n'est que protect/compress
+                    const limit = (targetStep === 'protect_editor' || targetStep === 'compress_editor') ? 1 : fileNames.length;
+                    for (let j = 0; j < Math.min(limit, fileNames.length); j++) {
+                        const filename = fileNames[j];
+                        const f = unzipped.files[filename];
+                        if (!f.dir) {
+                            const imgBlob = await f.async('blob');
+                            pages.push(URL.createObjectURL(imgBlob));
+                        }
+                    }
+                } else {
+                    pages.push(URL.createObjectURL(blob));
+                }
             }
 
             setPdfEditorPages(pages);
