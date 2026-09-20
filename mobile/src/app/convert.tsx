@@ -1186,7 +1186,8 @@ export default function ConvertScreen() {
                 if (response.status === 404) {
                     throw new Error('NotImplemented');
                 }
-                throw new Error('Erreur serveur');
+                const errorText = await response.text();
+                throw new Error(errorText || 'Erreur serveur');
             }
 
             let resultBlob;
@@ -1226,7 +1227,8 @@ export default function ConvertScreen() {
             setStep('done');
 
         } catch (error: any) {
-            let errorMsg = 'Le traitement a échoué. Vérifiez vos fichiers et réessayez.';
+            console.error('CONVERT_ERROR:', error);
+            let errorMsg = error.message && error.message !== 'Erreur serveur' && error.message !== 'Failed to fetch' ? error.message : 'Le traitement a échoué. Vérifiez vos fichiers et réessayez.';
             if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
                 errorMsg = 'Le serveur (hébergement gratuit) met trop de temps à répondre pour ce fichier lourd. Le délai a expiré.';
             } else if (error.message === 'NotImplemented') {
