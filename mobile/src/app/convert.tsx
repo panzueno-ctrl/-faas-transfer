@@ -1171,7 +1171,8 @@ export default function ConvertScreen() {
             }
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 secondes de timeout (pour Render)
+            // Augmentation du timeout à 5 minutes pour laisser les gros fichiers se traiter
+            const timeoutId = setTimeout(() => controller.abort(), 300000); 
 
             const response = await fetch(`${SERVER_URL}${selectedService.endpoint}`, {
                 method: 'POST',
