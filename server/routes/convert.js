@@ -67,7 +67,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
     storage, 
-    limits: { fileSize: 100 * 1024 * 1024 } // 100 Mo max pour la conversion (évite la saturation RAM/Disque)
+    limits: { fileSize: 500 * 1024 * 1024 } // 500 Mo max pour la conversion (évite la saturation RAM/Disque)
 });
 
 // ─────────────────────────────────────────────
@@ -894,7 +894,14 @@ router.post('/compress-pdf', upload.single('file'), (req, res) => {
     const outputPath = `/tmp/job-output-${jobId}.pdf`;
 
     // 1. Déplacer le fichier pour éviter sa suppression par le middleware global
-    fs.renameSync(req.file.path, safeInputPath);
+    // Utiliser copyFileSync + unlinkSync au lieu de renameSync pour éviter les erreurs EXDEV (fichiers sur partitions différentes)
+    try {
+        fs.copyFileSync(req.file.path, safeInputPath);
+        fs.unlinkSync(req.file.path);
+    } catch (err) {
+        console.error("Erreur copie fichier :", err);
+        return res.status(500).json({ error: "Erreur serveur lors de la copie du fichier." });
+    }
 
     // 2. Enregistrer le job
     jobs.set(jobId, { status: 'processing', progress: 0 });
