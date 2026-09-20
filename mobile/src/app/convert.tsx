@@ -901,70 +901,25 @@ export default function ConvertScreen() {
         
         setIsSplitting(true);
         setLocalError(null);
-        try {
-            // Pre-load all source documents to handle multiple files in the visual editor
-            const sourceDocs = new Map<number, PDFDocument>();
-            for (const fileItem of organizeFiles) {
-                if (fileItem.buffer) {
-                    const doc = await PDFDocument.load(fileItem.buffer.slice(0));
-                    sourceDocs.set(fileItem.originalIndex, doc);
-                }
-            }
-            
-            if (splitTab === 'extract') {
-                const newDoc = await PDFDocument.create();
-                const pagesToCopy = [...extractedPages].sort((a, b) => a - b).map(idx => organizePages[idx]);
-                
-                const fileGroups: { fileIndex: number, pageIndices: number[] }[] = [];
-                for (const pageItem of pagesToCopy) {
-                    const lastGroup = fileGroups[fileGroups.length - 1];
-                    if (lastGroup && lastGroup.fileIndex === pageItem.fileIndex) {
-                        lastGroup.pageIndices.push(pageItem.pageIndex);
-                    } else {
-                        fileGroups.push({ fileIndex: pageItem.fileIndex, pageIndices: [pageItem.pageIndex] });
+        setStep('processing'); // Go to spinner screen
+        
+        setTimeout(async () => {
+            try {
+                // Pre-load all source documents to handle multiple files in the visual editor
+                const sourceDocs = new Map<number, PDFDocument>();
+                for (const fileItem of organizeFiles) {
+                    if (fileItem.buffer) {
+                        const doc = await PDFDocument.load(fileItem.buffer.slice(0));
+                        sourceDocs.set(fileItem.originalIndex, doc);
                     }
                 }
                 
-                for (const group of fileGroups) {
-                    const sourceDoc = sourceDocs.get(group.fileIndex);
-                    if (sourceDoc) {
-                        const copiedPages = await newDoc.copyPages(sourceDoc, group.pageIndices);
-                        for (const copiedPage of copiedPages) {
-                            newDoc.addPage(copiedPage);
-                        }
-                    }
-                }
-                
-                const pdfBytes = await newDoc.save();
-                
-                if (Platform.OS === 'web') {
-                    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-                    setResultUrl(URL.createObjectURL(blob));
-                }
-                setFileName('document_extrait');
-                
-            } else {
-                const zip = new JSZip();
-                let docIndex = 1;
-                const generatedFiles: {name: string, url: string}[] = [];
-
-                const totalPages = organizePages.length;
-                const chunks: OrganizePageItem[][] = [];
-                let currentChunk: OrganizePageItem[] = [];
-                
-                for (let i = 0; i < totalPages; i++) {
-                    currentChunk.push(organizePages[i]);
-                    if (splitPoints.includes(i) || i === totalPages - 1) {
-                        chunks.push(currentChunk);
-                        currentChunk = [];
-                    }
-                }
-                
-                for (const chunk of chunks) {
-                    const currentDoc = await PDFDocument.create();
+                if (splitTab === 'extract') {
+                    const newDoc = await PDFDocument.create();
+                    const pagesToCopy = [...extractedPages].sort((a, b) => a - b).map(idx => organizePages[idx]);
                     
                     const fileGroups: { fileIndex: number, pageIndices: number[] }[] = [];
-                    for (const pageItem of chunk) {
+                    for (const pageItem of pagesToCopy) {
                         const lastGroup = fileGroups[fileGroups.length - 1];
                         if (lastGroup && lastGroup.fileIndex === pageItem.fileIndex) {
                             lastGroup.pageIndices.push(pageItem.pageIndex);
@@ -976,52 +931,101 @@ export default function ConvertScreen() {
                     for (const group of fileGroups) {
                         const sourceDoc = sourceDocs.get(group.fileIndex);
                         if (sourceDoc) {
-                            const copiedPages = await currentDoc.copyPages(sourceDoc, group.pageIndices);
+                            const copiedPages = await newDoc.copyPages(sourceDoc, group.pageIndices);
                             for (const copiedPage of copiedPages) {
-                                currentDoc.addPage(copiedPage);
+                                newDoc.addPage(copiedPage);
                             }
                         }
                     }
-
-                    const pdfBytes = await currentDoc.save();
-                    const partFileName = `document_partie_${docIndex}.pdf`;
-                    zip.file(partFileName, pdfBytes);
+                    
+                    const pdfBytes = await newDoc.save();
                     
                     if (Platform.OS === 'web') {
                         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-                        generatedFiles.push({
-                            name: partFileName,
-                            url: URL.createObjectURL(blob)
-                        });
+                        setResultUrl(URL.createObjectURL(blob));
+                    }
+                    setFileName('document_extrait');
+                    
+                } else {
+                    const zip = new JSZip();
+                    let docIndex = 1;
+                    const generatedFiles: {name: string, url: string}[] = [];
+
+                    const totalPages = organizePages.length;
+                    const chunks: OrganizePageItem[][] = [];
+                    let currentChunk: OrganizePageItem[] = [];
+                    
+                    for (let i = 0; i < totalPages; i++) {
+                        currentChunk.push(organizePages[i]);
+                        if (splitPoints.includes(i) || i === totalPages - 1) {
+                            chunks.push(currentChunk);
+                            currentChunk = [];
+                        }
                     }
                     
-                    docIndex++;
-                    await new Promise(r => setTimeout(r, 10)); // Yield thread between chunks
-                }
+                    for (const chunk of chunks) {
+                        const currentDoc = await PDFDocument.create();
+                        
+                        const fileGroups: { fileIndex: number, pageIndices: number[] }[] = [];
+                        for (const pageItem of chunk) {
+                            const lastGroup = fileGroups[fileGroups.length - 1];
+                            if (lastGroup && lastGroup.fileIndex === pageItem.fileIndex) {
+                                lastGroup.pageIndices.push(pageItem.pageIndex);
+                            } else {
+                                fileGroups.push({ fileIndex: pageItem.fileIndex, pageIndices: [pageItem.pageIndex] });
+                            }
+                        }
+                        
+                        for (const group of fileGroups) {
+                            const sourceDoc = sourceDocs.get(group.fileIndex);
+                            if (sourceDoc) {
+                                const copiedPages = await currentDoc.copyPages(sourceDoc, group.pageIndices);
+                                for (const copiedPage of copiedPages) {
+                                    currentDoc.addPage(copiedPage);
+                                }
+                            }
+                        }
 
-                const zipContent = await zip.generateAsync({ type: Platform.OS === 'web' ? 'blob' : 'base64' });
-                
-                if (Platform.OS === 'web') {
-                    setResultFiles(generatedFiles);
-                    const url = URL.createObjectURL(zipContent as Blob);
-                    setResultUrl(url);
-                } else {
-                    const fileUri = FileSystem.cacheDirectory + 'documents_divises.zip';
-                    await FileSystem.writeAsStringAsync(fileUri, zipContent as string, { encoding: FileSystem.EncodingType.Base64 });
-                    setResultUrl(fileUri);
+                        const pdfBytes = await currentDoc.save();
+                        const partFileName = `document_partie_${docIndex}.pdf`;
+                        zip.file(partFileName, pdfBytes);
+                        
+                        if (Platform.OS === 'web') {
+                            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                            generatedFiles.push({
+                                name: partFileName,
+                                url: URL.createObjectURL(blob)
+                            });
+                        }
+                        
+                        docIndex++;
+                        await new Promise(r => setTimeout(r, 10)); // Yield thread between chunks
+                    }
+
+                    const zipContent = await zip.generateAsync({ type: Platform.OS === 'web' ? 'blob' : 'base64' });
+                    
+                    if (Platform.OS === 'web') {
+                        setResultFiles(generatedFiles);
+                        const url = URL.createObjectURL(zipContent as Blob);
+                        setResultUrl(url);
+                    } else {
+                        const fileUri = FileSystem.cacheDirectory + 'documents_divises.zip';
+                        await FileSystem.writeAsStringAsync(fileUri, zipContent as string, { encoding: FileSystem.EncodingType.Base64 });
+                        setResultUrl(fileUri);
+                    }
+                    setFileName('documents_divises.zip');
                 }
-                setFileName('documents_divises.zip');
+                
+                setStep('done');
+            } catch (e: any) {
+                console.error("Split error:", e);
+                setLocalError("Erreur lors du traitement: " + (e.message || String(e)));
+                setIsSplitting(false);
+                setStep('split_editor');
+            } finally {
+                setIsSplitting(false);
             }
-            
-            setStep('done');
-        } catch (e: any) {
-            console.error("Split error:", e);
-            setLocalError("Erreur lors du traitement: " + (e.message || String(e)));
-            setIsSplitting(false);
-            setStep('split_editor');
-        } finally {
-            setIsSplitting(false);
-        }
+        }, 100);
     };
 
     const [session, setSession] = useState<Session | null>(null);
