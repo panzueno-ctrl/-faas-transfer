@@ -712,32 +712,51 @@ export default function ConvertScreen() {
             try {
                 // Create a new empty document
                 const newPdfDoc = await PDFDocument.create();
-
-                for (const pageItem of orderedPages) {
-                    // Find the correct source doc buffer
-                    const sourceFileInfo = organizeFiles.find(f => f.originalIndex === pageItem.fileIndex);
-                    if (sourceFileInfo) {
-                        let buffer = sourceFileInfo.buffer;
-                        if (!buffer) {
-                            const originalFile = selectedFiles.find((_, i) => i === pageItem.fileIndex);
-                            if (originalFile) {
-                                if (Platform.OS === 'web' && originalFile.file) {
-                                    buffer = await originalFile.file.arrayBuffer();
-                                } else {
-                                    const response = await fetch(originalFile.uri);
-                                    buffer = await response.arrayBuffer();
-                                }
+                
+                // Pre-load all required source documents ONCE
+                const sourceDocs = new Map<number, PDFDocument>();
+                const uniqueFileIndices = [...new Set(orderedPages.map(p => p.fileIndex))];
+                for (const fileIndex of uniqueFileIndices) {
+                    const sourceFileInfo = organizeFiles.find(f => f.originalIndex === fileIndex);
+                    let buffer = sourceFileInfo?.buffer;
+                    if (!buffer) {
+                        const originalFile = selectedFiles.find((_, i) => i === fileIndex);
+                        if (originalFile) {
+                            if (Platform.OS === 'web' && originalFile.file) {
+                                buffer = await originalFile.file.arrayBuffer();
+                            } else {
+                                const response = await fetch(originalFile.uri);
+                                buffer = await response.arrayBuffer();
                             }
                         }
-                        if (buffer) {
-                            const sourceDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
-                            const [copiedPage] = await newPdfDoc.copyPages(sourceDoc, [pageItem.pageIndex]);
+                    }
+                    if (buffer) {
+                        const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+                        sourceDocs.set(fileIndex, doc);
+                    }
+                }
+
+                // Group pages to copy by fileIndex sequentially to minimize copyPages calls
+                const fileGroups: { fileIndex: number, pageIndices: number[] }[] = [];
+                for (const pageItem of orderedPages) {
+                    const lastGroup = fileGroups[fileGroups.length - 1];
+                    if (lastGroup && lastGroup.fileIndex === pageItem.fileIndex) {
+                        lastGroup.pageIndices.push(pageItem.pageIndex);
+                    } else {
+                        fileGroups.push({ fileIndex: pageItem.fileIndex, pageIndices: [pageItem.pageIndex] });
+                    }
+                }
+
+                // Execute the bulk copies
+                for (const group of fileGroups) {
+                    const sourceDoc = sourceDocs.get(group.fileIndex);
+                    if (sourceDoc) {
+                        const copiedPages = await newPdfDoc.copyPages(sourceDoc, group.pageIndices);
+                        for (const copiedPage of copiedPages) {
                             newPdfDoc.addPage(copiedPage);
                         }
                     }
-                    
-                    // Yield main thread to prevent UI freezing on large PDFs
-                    await new Promise(r => setTimeout(r, 10));
+                    await new Promise(r => setTimeout(r, 10)); // Yield thread
                 }
 
                 const finalPdfBytes = await newPdfDoc.save();
@@ -894,17 +913,26 @@ export default function ConvertScreen() {
             
             if (splitTab === 'extract') {
                 const newDoc = await PDFDocument.create();
-                const pagesToCopy = [...extractedPages].sort((a, b) => a - b);
+                const pagesToCopy = [...extractedPages].sort((a, b) => a - b).map(idx => organizePages[idx]);
                 
-                for (const pageIdx of pagesToCopy) {
-                    const pageItem = organizePages[pageIdx];
-                    const sourceDoc = sourceDocs.get(pageItem.fileIndex);
-                    
-                    if (sourceDoc) {
-                        const [copiedPage] = await newDoc.copyPages(sourceDoc, [pageItem.pageIndex]);
-                        newDoc.addPage(copiedPage);
+                const fileGroups: { fileIndex: number, pageIndices: number[] }[] = [];
+                for (const pageItem of pagesToCopy) {
+                    const lastGroup = fileGroups[fileGroups.length - 1];
+                    if (lastGroup && lastGroup.fileIndex === pageItem.fileIndex) {
+                        lastGroup.pageIndices.push(pageItem.pageIndex);
+                    } else {
+                        fileGroups.push({ fileIndex: pageItem.fileIndex, pageIndices: [pageItem.pageIndex] });
                     }
-                    await new Promise(r => setTimeout(r, 10));
+                }
+                
+                for (const group of fileGroups) {
+                    const sourceDoc = sourceDocs.get(group.fileIndex);
+                    if (sourceDoc) {
+                        const copiedPages = await newDoc.copyPages(sourceDoc, group.pageIndices);
+                        for (const copiedPage of copiedPages) {
+                            newDoc.addPage(copiedPage);
+                        }
+                    }
                 }
                 
                 const pdfBytes = await newDoc.save();
@@ -917,40 +945,58 @@ export default function ConvertScreen() {
                 
             } else {
                 const zip = new JSZip();
-                let currentDoc = await PDFDocument.create();
                 let docIndex = 1;
                 const generatedFiles: {name: string, url: string}[] = [];
 
                 const totalPages = organizePages.length;
+                const chunks: OrganizePageItem[][] = [];
+                let currentChunk: OrganizePageItem[] = [];
                 
                 for (let i = 0; i < totalPages; i++) {
-                    const pageItem = organizePages[i];
-                    const sourceDoc = sourceDocs.get(pageItem.fileIndex);
+                    currentChunk.push(organizePages[i]);
+                    if (splitPoints.includes(i) || i === totalPages - 1) {
+                        chunks.push(currentChunk);
+                        currentChunk = [];
+                    }
+                }
+                
+                for (const chunk of chunks) {
+                    const currentDoc = await PDFDocument.create();
                     
-                    if (sourceDoc) {
-                        const [copiedPage] = await currentDoc.copyPages(sourceDoc, [pageItem.pageIndex]);
-                        currentDoc.addPage(copiedPage);
+                    const fileGroups: { fileIndex: number, pageIndices: number[] }[] = [];
+                    for (const pageItem of chunk) {
+                        const lastGroup = fileGroups[fileGroups.length - 1];
+                        if (lastGroup && lastGroup.fileIndex === pageItem.fileIndex) {
+                            lastGroup.pageIndices.push(pageItem.pageIndex);
+                        } else {
+                            fileGroups.push({ fileIndex: pageItem.fileIndex, pageIndices: [pageItem.pageIndex] });
+                        }
+                    }
+                    
+                    for (const group of fileGroups) {
+                        const sourceDoc = sourceDocs.get(group.fileIndex);
+                        if (sourceDoc) {
+                            const copiedPages = await currentDoc.copyPages(sourceDoc, group.pageIndices);
+                            for (const copiedPage of copiedPages) {
+                                currentDoc.addPage(copiedPage);
+                            }
+                        }
                     }
 
-                    if (splitPoints.includes(i) || i === totalPages - 1) {
-                        const pdfBytes = await currentDoc.save();
-                        const partFileName = `document_partie_${docIndex}.pdf`;
-                        zip.file(partFileName, pdfBytes);
-                        
-                        if (Platform.OS === 'web') {
-                            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-                            generatedFiles.push({
-                                name: partFileName,
-                                url: URL.createObjectURL(blob)
-                            });
-                        }
-                        
-                        if (i < totalPages - 1) {
-                            currentDoc = await PDFDocument.create();
-                            docIndex++;
-                        }
+                    const pdfBytes = await currentDoc.save();
+                    const partFileName = `document_partie_${docIndex}.pdf`;
+                    zip.file(partFileName, pdfBytes);
+                    
+                    if (Platform.OS === 'web') {
+                        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                        generatedFiles.push({
+                            name: partFileName,
+                            url: URL.createObjectURL(blob)
+                        });
                     }
-                    await new Promise(r => setTimeout(r, 10));
+                    
+                    docIndex++;
+                    await new Promise(r => setTimeout(r, 10)); // Yield thread between chunks
                 }
 
                 const zipContent = await zip.generateAsync({ type: Platform.OS === 'web' ? 'blob' : 'base64' });
