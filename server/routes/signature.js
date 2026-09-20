@@ -17,8 +17,10 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // On utilise les variables d'environnement que l'utilisateur devra rajouter
 const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '465'),
-    secure: true,
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: false,
+    connectionTimeout: 10000,
+    socketTimeout: 15000,
     auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS, // Mot de passe d'application Gmail
