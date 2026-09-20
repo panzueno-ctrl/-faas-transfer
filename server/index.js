@@ -24,7 +24,9 @@ const express = require('express');
 // de communiquer avec le serveur sans être bloquées par le navigateur
 const cors = require('cors');
 
-// On importe le port depuis notre fichier de configuration
+// On importe le port depuis notre fichier
+// Force IPv4 pour éviter les timeouts et erreurs ENETUNREACH sur Render
+require('dns').setDefaultResultOrder('ipv4first');
 const { port } = require('./config/env');
 
 // On crée l'application Express
