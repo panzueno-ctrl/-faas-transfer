@@ -448,6 +448,30 @@ export default function ConvertScreen() {
                                 
                                 if (pdf.numPages >= 1) {
                                     if (sessionId !== currentRenderSession.current) return;
+                                    
+                                    setOrganizePages(prev => {
+                                        const next = [...prev];
+                                        const newSkeletons = [];
+                                        for (let j = 0; j < pdf.numPages; j++) {
+                                            newSkeletons.push({
+                                                id: `${fileIndex}-${j}-${Date.now()}`,
+                                                fileIndex: fileIndex,
+                                                fileName: file.name,
+                                                pageIndex: j,
+                                                imageUri: null as any
+                                            });
+                                        }
+                                        const targetIndex = next.findIndex(p => p.fileIndex === fileIndex);
+                                        if (targetIndex !== -1) {
+                                            let count = 0;
+                                            while (next[targetIndex + count]?.fileIndex === fileIndex) count++;
+                                            next.splice(targetIndex, count, ...newSkeletons);
+                                        } else {
+                                            next.push(...newSkeletons);
+                                        }
+                                        return next;
+                                    });
+
                                     const page = await pdf.getPage(1);
                                     const viewport = page.getViewport({ scale: 1.0 });
                                     const canvas = document.createElement('canvas');
@@ -483,13 +507,14 @@ export default function ConvertScreen() {
                                                 await page.render({ canvasContext: ctx, viewport }).promise;
                                                 const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
                                                 
-                                                setOrganizePages((prev: any) => [...prev, {
-                                                    id: `${fileIndex}-${j-1}-${Date.now()}`,
-                                                    fileIndex: fileIndex,
-                                                    fileName: file.name,
-                                                    pageIndex: j-1,
-                                                    imageUri: dataUrl
-                                                }]);
+                                                if (sessionId === currentRenderSession.current) {
+                                                    setOrganizePages(prev => {
+                                                        const next = [...prev];
+                                                        const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === j - 1);
+                                                        if (target) target.imageUri = dataUrl;
+                                                        return next;
+                                                    });
+                                                }
                                             }
                                         } catch (e) {
                                             console.warn('Async thumbnail error', e);
@@ -501,6 +526,36 @@ export default function ConvertScreen() {
                             }
                         } else {
                             // Fallback backend for Mobile
+                            try {
+                                const tempDoc = await PDFDocument.load(arrayBuffer.slice(0), { ignoreEncryption: true });
+                                const numPages = tempDoc.getPageCount();
+                                
+                                setOrganizePages(prev => {
+                                    const next = [...prev];
+                                    const newSkeletons = [];
+                                    for (let j = 0; j < numPages; j++) {
+                                        newSkeletons.push({
+                                            id: `${fileIndex}-${j}-${Date.now()}`,
+                                            fileIndex: fileIndex,
+                                            fileName: file.name,
+                                            pageIndex: j,
+                                            imageUri: null as any
+                                        });
+                                    }
+                                    const targetIndex = next.findIndex(p => p.fileIndex === fileIndex);
+                                    if (targetIndex !== -1) {
+                                        let count = 0;
+                                        while (next[targetIndex + count]?.fileIndex === fileIndex) count++;
+                                        next.splice(targetIndex, count, ...newSkeletons);
+                                    } else {
+                                        next.push(...newSkeletons);
+                                    }
+                                    return next;
+                                });
+                            } catch (e) {
+                                console.warn("Failed to read page count locally for mobile", e);
+                            }
+
                             const formData = new FormData();
                             let fileBlob;
                             if (Platform.OS === 'web' && file.file) {
@@ -533,31 +588,35 @@ export default function ConvertScreen() {
                                     const f = unzipped.files[filename];
                                     if (!f.dir) {
                                         const imgBlob = await f.async('blob');
-                                        if (j === 0) {
+                                        if (sessionId === currentRenderSession.current) {
                                             setOrganizePages(prev => {
                                                 const next = [...prev];
-                                                const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === 0);
-                                                if (target) target.imageUri = URL.createObjectURL(imgBlob);
+                                                const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === j);
+                                                if (target) {
+                                                    target.imageUri = URL.createObjectURL(imgBlob);
+                                                } else {
+                                                    next.push({
+                                                        id: `${fileIndex}-${j}-${Date.now()}`,
+                                                        fileIndex: fileIndex,
+                                                        fileName: file.name,
+                                                        pageIndex: j,
+                                                        imageUri: URL.createObjectURL(imgBlob)
+                                                    });
+                                                }
                                                 return next;
                                             });
-                                        } else {
-                                            setOrganizePages((prev: any) => [...prev, {
-                                                id: `${fileIndex}-${j}-${Date.now()}`,
-                                                fileIndex: fileIndex,
-                                                fileName: file.name,
-                                                pageIndex: j,
-                                                imageUri: URL.createObjectURL(imgBlob)
-                                            }]);
                                         }
                                     }
                                 }
                             } else {
-                                setOrganizePages(prev => {
-                                    const next = [...prev];
-                                    const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === 0);
-                                    if (target) target.imageUri = URL.createObjectURL(blob);
-                                    return next;
-                                });
+                                if (sessionId === currentRenderSession.current) {
+                                    setOrganizePages(prev => {
+                                        const next = [...prev];
+                                        const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === 0);
+                                        if (target) target.imageUri = URL.createObjectURL(blob);
+                                        return next;
+                                    });
+                                }
                             }
                         }
                     } catch (fileError: any) {
@@ -1295,10 +1354,11 @@ export default function ConvertScreen() {
                                         }
                                         const newInt = parseInt(cleanVal);
                                         if (!isNaN(newInt)) {
-                                            const clampedInt = Math.min(organizePages.length, Math.max(1, newInt));
-                                            setSplitInterval(clampedInt);
+                                            // Allow free typing, only prevent 0 or negative
+                                            const validInt = Math.max(1, newInt);
+                                            setSplitInterval(validInt);
                                             const newPoints = [];
-                                            for (let i = clampedInt - 1; i < organizePages.length - 1; i += clampedInt) newPoints.push(i);
+                                            for (let i = validInt - 1; i < organizePages.length - 1; i += validInt) newPoints.push(i);
                                             setSplitPoints(newPoints);
                                         }
                                     }}
