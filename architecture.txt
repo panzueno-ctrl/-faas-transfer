@@ -1020,3 +1020,25 @@ Afin de s'affranchir définitivement des limites de temps d'exécution (Timeouts
 
 3. RESULTAT :
    - L'application FaaS Transfer peut désormais fusionner 69 fichiers (3214 pages) instantanément sur le téléphone de l'utilisateur, sans aucune requête serveur réseau, sans coût d'hébergement supplémentaire, de manière totalement privée et 100% stable.
+
+============================================================
+  19. ARCHITECTURE "ASYNCHRONOUS POLLING" (SYSTEME TICKET)
+============================================================
+
+1. CONTEXTE ET PROBLÉMATIQUE :
+   - Bien que la majorité des outils (Fusionner, Organiser, Protéger) tournent maintenant en local ("Edge") grâce à `pdf-lib`, certains outils nécessitent des bibliothèques C++ massives (comme Ghostscript pour la compression PDF).
+   - Ces outils doivent impérativement tourner sur le serveur backend (Cloud).
+   - Problème : L'hébergeur gratuit du backend (Render) possède une limite "Timeout" stricte fixée à 100 secondes. Si l'upload du fichier massif (ex: 150 Mo) couplé à la compression lourde dépasse 100 secondes, le routeur Render coupe la connexion HTTP (Erreur 502 Bad Gateway), même si le serveur fonctionnait encore.
+
+2. LA SOLUTION (POLLING ASYNCHRONE) :
+   - Pour contourner cette limitation réseau, l'application implémente un système de "Ticket" (Job Polling) sur l'outil Compresser PDF.
+   
+   - ETAPE 1 (Lancement) : Le frontend upload le fichier sur `POST /convert/compress-pdf`. Le backend déplace le fichier vers un emplacement sécurisé, enregistre un nouveau "Job" dans une `Map` en mémoire, lance la compression Ghostscript en tâche de fond (asynchrone), et répond IMMÉDIATEMENT au client avec `{ jobId: "123" }`. (La requête réseau se termine en 5s, contournant la limite de 100s).
+   
+   - ETAPE 2 (Polling) : Le frontend, ayant reçu son ticket, boucle toutes les 3 secondes en appelant `GET /convert/status/123`. Cette requête est quasi-instantanée et demande au serveur si le statut du Job est passé à `done`.
+
+   - ETAPE 3 (Récupération) : Une fois Ghostscript terminé, le backend met à jour le statut du Job en `done`. Au prochain appel du frontend, celui-ci détecte la fin, et déclenche `GET /convert/download/123` pour rapatrier le fichier compressé. Le backend nettoie ensuite la mémoire et les fichiers temporaires.
+
+3. RÉSULTAT :
+   - Les requêtes HTTP ne durent jamais plus de quelques secondes.
+   - Les traitements lourds (fichiers de 500+ Mo) peuvent s'exécuter sur des serveurs gratuits pendant 5 ou 10 minutes sans aucune coupure, offrant une expérience "Pro" aux utilisateurs finaux.
