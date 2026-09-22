@@ -13,19 +13,7 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY; // Anon key is fine if RLS allows inserts
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Configuration de Nodemailer (SMTP)
-// On utilise les variables d'environnement que l'utilisateur devra rajouter
-const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: false,
-    connectionTimeout: 10000,
-    socketTimeout: 15000,
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS, // Mot de passe d'application Gmail
-    },
-});
+
 
 // Middleware Multer pour l'upload temporaire en mémoire
 const upload = multer({
@@ -42,7 +30,7 @@ router.post('/send-requests', upload.single('file'), async (req, res) => {
     try {
         const file = req.file;
         let signers;
-        
+
         try {
             signers = JSON.parse(req.body.signers); // [{ name: "Alice", email: "alice@test.com" }]
         } catch (e) {
@@ -71,7 +59,7 @@ router.post('/send-requests', upload.single('file'), async (req, res) => {
         const { data: publicUrlData } = supabase.storage
             .from('signatures')
             .getPublicUrl(fileName);
-        
+
         const originalFileUrl = publicUrlData.publicUrl;
 
         // 2. Créer l'entrée dans signature_documents
@@ -109,7 +97,7 @@ router.post('/send-requests', upload.single('file'), async (req, res) => {
 
         // 4. Envoyer les e-mails
         const frontUrl = process.env.FRONTEND_URL || 'http://localhost:8081'; // URL de l'app mobile/web
-        
+
         for (const reqData of requestsData) {
             const signLink = `${frontUrl}/sign/${reqData.token}`;
             const mailOptions = {
@@ -129,16 +117,40 @@ router.post('/send-requests', upload.single('file'), async (req, res) => {
                 `
             };
 
-            // On essaie d'envoyer, mais on ne bloque pas si le SMTP n'est pas configuré
-            if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+            // Envoi de l'email via EmailJS REST API
+            if (process.env.EMAILJS_SERVICE_ID && process.env.EMAILJS_TEMPLATE_ID) {
                 try {
-                    await transporter.sendMail(mailOptions);
+                    const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            service_id: process.env.EMAILJS_SERVICE_ID,
+                            template_id: process.env.EMAILJS_TEMPLATE_ID,
+                            user_id: process.env.EMAILJS_PUBLIC_KEY,
+                            accessToken: process.env.EMAILJS_PRIVATE_KEY,
+                            template_params: {
+                                to_email: reqData.signer_email,
+                                subject: "Demande de signature de document",
+                                htmlContent: mailOptions.html
+                            }
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errText = await response.text();
+                        console.error("Erreur envoi EmailJS à", reqData.signer_email, errText);
+                    } else {
+                        console.log("Email envoyé avec succès à", reqData.signer_email);
+                    }
                 } catch (err) {
-                    console.error("Erreur envoi email à", reqData.signer_email, err);
+                    console.error("Erreur réseau envoi EmailJS à", reqData.signer_email, err);
                 }
             } else {
-                console.log(`[SMTP non configuré] Simulation d'envoi à ${reqData.signer_email} : ${signLink}`);
+                console.log(`[EmailJS non configuré] Simulation d'envoi à ${reqData.signer_email} : ${signLink}`);
             }
+
         }
 
         return res.json({ success: true, documentId, message: "Demandes envoyées avec succès." });
@@ -243,7 +255,7 @@ router.post('/complete-request', async (req, res) => {
             .eq('document_id', requestData.document_id);
 
         const allSigned = allRequests && allRequests.every(r => r.status === 'signed');
-        
+
         if (allSigned) {
             // 1. Download original PDF
             const origRes = await fetch(requestData.signature_documents.original_file_url);
@@ -282,7 +294,7 @@ router.post('/complete-request', async (req, res) => {
                     // Scale them back to points. Assume standard signature size:
                     const sigWidth = 150;
                     const sigHeight = (pdfImage.height / pdfImage.width) * sigWidth;
-                    
+
                     const xPos = (sig.x / 100) * width;
                     // Y is inverted in pdf-lib (bottom-left origin)
                     const yPos = height - ((sig.y / 100) * height) - sigHeight;
@@ -318,7 +330,7 @@ router.post('/complete-request', async (req, res) => {
                 .from('signature_documents')
                 .update({ status: 'completed', final_file_url: finalFileUrl })
                 .eq('id', requestData.document_id);
-                
+
             // (Optionnel) Envoyer l'email final avec la pièce jointe
             if (process.env.SMTP_USER && process.env.SMTP_PASS) {
                 // ... logic to send email to all signers with final link
