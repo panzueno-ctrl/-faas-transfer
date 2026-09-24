@@ -6,7 +6,7 @@ import PdfEditor from '../../components/PdfEditor';
 import { Ionicons } from '@expo/vector-icons';
 import JSZip from 'jszip';
 
-const SERVER_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/convert';
+const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
 export default function SignTokenScreen() {
     const { token } = useLocalSearchParams();
