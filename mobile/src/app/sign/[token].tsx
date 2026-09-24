@@ -100,7 +100,7 @@ export default function SignTokenScreen() {
 
     const handleComplete = async (edits: any[]) => {
         // We only care about signatures
-        const signatures = edits.filter(e => e.type === 'signature' && e.image);
+        const signatures = edits.filter(e => e.type === 'signature' && e.signatureData);
         if (signatures.length === 0) {
             const msg = "Veuillez ajouter votre signature avant de valider.";
             if (Platform.OS === 'web') window.alert(msg);
@@ -114,14 +114,14 @@ export default function SignTokenScreen() {
             const sig = signatures[0];
             
             // Remove data:image/png;base64, prefix if present
-            const base64Data = sig.image.split(',')[1] || sig.image;
+            const signatureStr = JSON.stringify(sig.signatureData);
 
             const res = await fetch(`${SERVER_URL}/signature/complete-request`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     token,
-                    signatureBase64: base64Data,
+                    signatureBase64: signatureStr,
                     x: sig.x || 0,
                     y: sig.y || 0,
                     pageIndex: sig.pageIndex || 0
