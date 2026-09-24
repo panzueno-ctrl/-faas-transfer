@@ -18,7 +18,8 @@ export default function SignTokenScreen() {
     const [pdfPages, setPdfPages] = useState<string[]>([]);
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
-    const [done, setDone] = useState(false);
+        const [done, setDone] = useState(false);
+    const [finalFileUrl, setFinalFileUrl] = useState<string | null>(null);
 
     useEffect(() => {
         if (!token) return;
@@ -36,6 +37,9 @@ export default function SignTokenScreen() {
             const { request } = await res.json();
             
             if (request.status === 'signed') {
+                if (request.signature_documents && request.signature_documents.final_file_url) {
+                    setFinalFileUrl(request.signature_documents.final_file_url);
+                }
                 setDone(true);
                 setLoading(false);
                 return;
@@ -133,6 +137,14 @@ export default function SignTokenScreen() {
                 throw new Error(errData.error || "Erreur de validation");
             }
             
+            const resData = await res.json();
+            if (resData.finalFileUrl) {
+                setFinalFileUrl(resData.finalFileUrl);
+                // Open automatically
+                if (Platform.OS === 'web') {
+                    window.open(resData.finalFileUrl, '_blank');
+                }
+            }
             setDone(true);
         } catch (err: any) {
             console.error(err);
@@ -170,9 +182,30 @@ export default function SignTokenScreen() {
                     <Ionicons name="checkmark-circle" size={48} color={colors.success} />
                 </View>
                 <Text style={{ color: colors.text, fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>C'est tout bon !</Text>
-                <Text style={{ color: colors.textMuted, fontSize: 16, textAlign: 'center', maxWidth: 400 }}>
-                    Votre signature a été enregistrée avec succès. Vous pouvez maintenant fermer cette page.
+                <Text style={{ color: colors.textMuted, fontSize: 16, textAlign: 'center', maxWidth: 400, marginBottom: 24 }}>
+                    Votre signature a été enregistrée avec succès.
                 </Text>
+                {finalFileUrl && (
+                    <a 
+                        href={finalFileUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{
+                            backgroundColor: colors.primary,
+                            padding: '12px 24px',
+                            borderRadius: '12px',
+                            color: 'white',
+                            textDecoration: 'none',
+                            fontWeight: 'bold',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                        }}
+                    >
+                        <Ionicons name="download-outline" size={20} color="white" />
+                        Télécharger le document final
+                    </a>
+                )}
             </SafeAreaView>
         );
     }

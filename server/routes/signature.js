@@ -357,6 +357,8 @@ router.post('/complete-request', async (req, res) => {
             if (process.env.SMTP_USER && process.env.SMTP_PASS) {
                 // ... logic to send email to all signers with final link
             }
+
+            return res.json({ success: true, message: "Signature enregistrée avec succès.", finalFileUrl });
         }
 
         return res.json({ success: true, message: "Signature enregistrée avec succès." });
