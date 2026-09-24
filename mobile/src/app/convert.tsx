@@ -127,7 +127,7 @@ export default function ConvertScreen() {
     const styles = getStyles(colors);
 
     // Ajout de l'état "tool_intro"
-    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'sign_choice' | 'pdf_editor' | 'watermark_editor' | 'rotation_editor' | 'organize_editor' | 'merge_editor' | 'preparing_editor' | 'processing' | 'done'>('menu');
+    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'sign_choice' | 'request_signature' | 'signature_request_done' | 'pdf_editor' | 'watermark_editor' | 'rotation_editor' | 'organize_editor' | 'merge_editor' | 'preparing_editor' | 'processing' | 'done'>('menu');
     const [localError, setLocalError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'files' | 'media'>('files');
     const [selectedService, setSelectedService] = useState<any>(null);
@@ -1339,11 +1339,7 @@ export default function ConvertScreen() {
             }
 
             // Success
-            if (Platform.OS === 'web') window.alert("Demandes de signature envoyées avec succès !");
-            else Alert.alert("Succès", "Demandes de signature envoyées avec succès !");
-            
-            // Go back to home
-            reset();
+            setStep('signature_request_done');
 
         } catch (error: any) {
             console.error(error);
