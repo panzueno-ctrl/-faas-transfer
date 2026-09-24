@@ -83,6 +83,7 @@ const FILE_TOOLS = [
     { id: 'annotate-pdf', category: 'Outils PDF Essentiels', label: 'Annoter PDF', description: 'Surlignez et annotez le contenu de vos PDF.', icon: 'brush-outline', endpoint: '/convert/annotate-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
     { id: 'pdfa-pdf', category: 'Outils PDF Essentiels', label: 'PDF en PDF/A', description: 'Convertissez en PDF/A pour l\'archivage à long terme.', icon: 'archive-outline', endpoint: '/convert/pdf-to-pdfa', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
     { id: 'ocr-pdf', category: 'Outils PDF Essentiels', label: 'OCR PDF', description: 'Rendez le texte de vos PDF scannés sélectionnable.', icon: 'scan-outline', endpoint: '/convert/ocr-pdf', mimeTypes: ['application/pdf'], outputExt: 'txt' },
+    { id: 'ai-summarize', category: 'Outils PDF Essentiels', label: 'Résumé IA', description: 'Résumez votre PDF avec l\'IA Claude.', icon: 'sparkles-outline', endpoint: '/convert/ai-summarize', mimeTypes: ['application/pdf'], outputExt: 'txt' },
     { id: 'compare-pdf', category: 'Outils PDF Essentiels', label: 'Comparer PDF', description: 'Analysez les différences entre deux documents.', icon: 'git-compare-outline', endpoint: '/convert/compare-pdf', mimeTypes: ['application/pdf'], outputExt: 'pdf' },
 
     { id: 'word-to-pdf', category: 'Convertir vers PDF', label: 'Word → PDF', description: 'Convertissez vos documents DOCX en PDF parfait.', icon: 'document-text-outline', endpoint: '/convert/word-to-pdf', mimeTypes: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'], outputExt: 'pdf' },
@@ -1062,6 +1063,30 @@ export default function ConvertScreen() {
     };
 
     const [session, setSession] = useState<Session | null>(null);
+
+    useEffect(() => {
+        if (step === 'done' && Platform.OS === 'web') {
+            if (resultUrl) {
+                try {
+                    const ext = (selectedService?.id === 'split-pdf' && splitTab === 'extract') ? 'pdf' : (selectedService?.outputExt || 'zip');
+                    // Auto-download
+                    const a = document.createElement('a');
+                    a.href = resultUrl;
+                    a.download = `${fileName}.${ext}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    
+                    // Auto-open in new tab for PDFs
+                    if (ext === 'pdf') {
+                        window.open(resultUrl, '_blank');
+                    }
+                } catch (e) {
+                    console.log('Auto-download blocked', e);
+                }
+            }
+        }
+    }, [step, resultUrl]);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -2218,9 +2243,27 @@ export default function ConvertScreen() {
         <SafeAreaView style={styles.container}>
             <View style={styles.backgroundGlow} pointerEvents="none" />
             <View style={styles.centerContent}>
-                <Ionicons name="checkmark-circle" size={80} color={colors.success} />
+                
+                {resultUrl && ((selectedService?.id === 'split-pdf' && splitTab === 'extract') || selectedService?.outputExt === 'pdf') ? (
+                    <View style={{ marginBottom: 24, position: 'relative', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: '#fff' }}>
+                        <PdfThumbnail fileUri={resultUrl} pageIndex={0} style={{ width: 150, height: 212 }} />
+                        <View style={{ position: 'absolute', bottom: -10, right: -10, backgroundColor: colors.success, borderRadius: 20, padding: 4 }}>
+                            <Ionicons name="checkmark-circle" size={32} color="#fff" />
+                        </View>
+                    </View>
+                ) : resultUrl && ['jpg', 'png', 'gif'].includes(selectedService?.outputExt || '') ? (
+                    <View style={{ marginBottom: 24, position: 'relative', borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}>
+                        <Image source={{ uri: resultUrl }} style={{ width: 150, height: 150 }} resizeMode="cover" />
+                        <View style={{ position: 'absolute', bottom: -10, right: -10, backgroundColor: colors.success, borderRadius: 20, padding: 4 }}>
+                            <Ionicons name="checkmark-circle" size={32} color="#fff" />
+                        </View>
+                    </View>
+                ) : (
+                    <Ionicons name="checkmark-circle" size={80} color={colors.success} />
+                )}
+
                 <Text style={styles.successTitle}>{t('convert.done')}</Text>
-                <Text style={styles.successFile}>{fileName}.{(selectedService.id === 'split-pdf' && splitTab === 'extract') ? 'pdf' : selectedService.outputExt}</Text>
+                <Text style={styles.successFile}>{fileName}.{(selectedService?.id === 'split-pdf' && splitTab === 'extract') ? 'pdf' : selectedService?.outputExt}</Text>
 
                 {resultFiles && resultFiles.length > 0 ? (
                     <View style={{ width: '100%', maxHeight: 300, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 8, marginBottom: 16 }}>

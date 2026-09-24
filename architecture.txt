@@ -206,21 +206,21 @@ Tab bar (barre en bas)
   ✅ PDF → Image       (poppler-utils)
   ✅ Image → PDF       (ImageMagick)
   ✅ PDF → PowerPoint  (pptx→pdf fait)
-  ⬜ PDF ↔ Excel       (LibreOffice)
-  ⬜ .pages → PDF      (Apple - V2)
-  ⬜ .key → PDF        (Apple Keynote - V2)
+  ✅ PDF ↔ Excel       (LibreOffice)
+  ✅ .pages → PDF      (Apple - V2)
+  ✅ .key → PDF        (Apple Keynote - V2)
 
   MANIPULATION PDF (V2)
   ──────────────────────────────────────────────
-  ⬜ Fusionner/Diviser/Extraire (pdf-lib)
-  ⬜ Compresser/Aplatir         (Ghostscript)
-  ⬜ Protéger/Déverrouiller     (pdf-lib)
-  ⬜ Signer/Biffer              (pdf-lib)
+  ✅ Fusionner/Diviser/Extraire (pdf-lib)
+  ✅ Compresser/Aplatir         (Ghostscript)
+  ✅ Protéger/Déverrouiller     (pdf-lib)
+  ✅ Signer/Biffer              (pdf-lib)
 
   AVANCÉ (V2)
   ──────────────────────────────────────────────
-  ⬜ PDF OCR                    (Tesseract)
-  ⬜ Résumer/Traduire/Discuter  (IA - Claude API)
+  ✅ PDF OCR                    (Tesseract)
+  ✅ Résumer/Traduire/Discuter  (IA - Claude API)
 
 
 ============================================================
@@ -1051,3 +1051,11 @@ Afin de s'affranchir définitivement des limites de temps d'exécution (Timeouts
 - [x] Résolution du blocage Gmail (anti-spam)
 - [x] Calibrage des signatures (taille et position)
 - [x] Vérification globale (End-to-End)
+
+### Mardi, 24 Septembre 2026 - Amélioration de l'UX de Fin de Conversion
+- **Contexte :** Lors du test End-to-End, l'utilisateur a remarqué que la page finale de conversion (étape 'done') n'affichait qu'une simple coche verte, et obligeait à télécharger manuellement le fichier.
+- **Action Réalisée :**
+  1. **Téléchargement automatique :** Ajout d'un useEffect dans convert.tsx pour déclencher automatiquement le téléchargement du fichier dès que l'étape passe à 'done', en créant un lien <a> invisible.
+  2. **Ouverture automatique :** Pour les PDF, ajout d'un comportement d'ouverture automatique dans un nouvel onglet (window.open).
+  3. **Aperçu Visuel (Thumbnail) :** Remplacement de la simple coche verte par un aperçu réel du document traité en utilisant PdfThumbnail pour les fichiers PDF, et une balise Image standard pour les fichiers images. L'utilisateur voit immédiatement le résultat de son travail.
+- **Statut Final :** Le flux utilisateur est maintenant complet, automatisé, et visuellement premium.

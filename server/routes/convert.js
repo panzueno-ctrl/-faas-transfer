@@ -583,6 +583,45 @@ router.post('/ocr-pdf', upload.single('file'), async (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+// POST /convert/ai-summarize
+// Résume le contenu d'un PDF en utilisant l'IA Anthropic (Claude)
+// ─────────────────────────────────────────────
+router.post('/ai-summarize', upload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    try {
+        const text = await extractTextFromPDF(req.file.path, 'fra');
+        
+        let summaryText = "";
+        
+        if (!process.env.ANTHROPIC_API_KEY) {
+            summaryText = "Résumé (MOCK - Pas de clé API Anthropic configurée) :\n\n" + text.substring(0, 1000) + "\n\n[Fin du résumé mocké]";
+        } else {
+            const Anthropic = require('@anthropic-ai/sdk');
+            const anthropic = new Anthropic({
+                apiKey: process.env.ANTHROPIC_API_KEY,
+            });
+            const response = await anthropic.messages.create({
+                model: "claude-3-haiku-20240307",
+                max_tokens: 1024,
+                messages: [
+                    { role: "user", content: "Fais un résumé détaillé du texte suivant :\n\n" + text }
+                ]
+            });
+            summaryText = response.content[0].text;
+        }
+
+        res.setHeader('Content-Disposition', 'attachment; filename="resume.txt"');
+        res.setHeader('Content-Type', 'text/plain');
+        res.send(summaryText);
+
+        try { fs.unlinkSync(req.file.path); } catch(e) {}
+    } catch (error) {
+        res.status(500).json({ message: 'L\'IA a échoué. ' + error.message });
+    }
+});
+
+// ─────────────────────────────────────────────
 // POST /convert/pages-to-pdf
 // Convertit un fichier Apple Pages (.pages) en PDF via LibreOffice
 // ─────────────────────────────────────────────
