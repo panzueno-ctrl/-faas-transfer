@@ -90,7 +90,7 @@ router.get('/:id', async (req, res) => {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Télécharger le lot - FaaS Transfer</title>
+                <title>Télécharger le lot - Fast Transfer</title>
                 <style>
                     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #F8FAFC; color: #0F172A; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; margin: 0; }
                     .container { background: #fff; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); max-width: 600px; width: 100%; box-sizing: border-box; }

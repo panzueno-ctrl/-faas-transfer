@@ -1,6 +1,6 @@
 {
   "home": {
-    "title": "FaaS Transfer",
+    "title": "Fast Transfer",
     "subtitle": "Partage de fichiers simple et rapide.",
     "send": "Envoyer",
     "receive": "Recevoir",
@@ -9,7 +9,7 @@
     "settings": "Paramètres",
     "convert": "Convertir",
     "convert_desc": "Changez le format de vos documents",
-    "welcome_title": "Bienvenue sur FaaS Transfer !",
+    "welcome_title": "Bienvenue sur Fast Transfer !",
     "welcome_subtitle": "Vous n'avez pas encore de fichiers récents.",
     "welcome_cta": "Commencer votre premier transfert"
   },

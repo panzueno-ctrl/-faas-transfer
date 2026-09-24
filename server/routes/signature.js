@@ -101,7 +101,7 @@ router.post('/send-requests', upload.single('file'), async (req, res) => {
         for (const reqData of requestsData) {
             const signLink = `${frontUrl}/sign/${reqData.token}`;
             const mailOptions = {
-                from: `"FaaS Transfer Signature" <${process.env.SMTP_USER}>`,
+                from: `"Fast Transfer Signature" <${process.env.SMTP_USER}>`,
                 to: reqData.signer_email,
                 subject: "Demande de signature de document",
                 html: `

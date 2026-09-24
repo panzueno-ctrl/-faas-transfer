@@ -78,9 +78,9 @@ app.use((req, res, next) => {
 // ----------------------------------------------
 
 // Route de test pour vérifier que le serveur tourne
-// Quand tu vas sur http://localhost:3000 tu vois "Serveur FaaS actif"
+// Quand tu vas sur http://localhost:3000 tu vois "Serveur Fast actif"
 app.get('/', (req, res) => {
-    res.send('Serveur FaaS actif ✅');
+    res.send('Serveur Fast actif ✅');
 });
 
 // On importe le router upload et on l'assigne à la route /upload

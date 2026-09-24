@@ -616,13 +616,13 @@ export default function SendScreen() {
         try {
             if (Platform.OS === 'web' && navigator.share) {
                 await navigator.share({
-                    title: 'FaaS Transfer',
-                    text: "Je t'ai envoyé des fichiers via FaaS Transfer. Télécharge-les ici :",
+                    title: 'Fast Transfer',
+                    text: "Je t'ai envoyé des fichiers via Fast Transfer. Télécharge-les ici :",
                     url: result?.downloadUrl
                 });
             } else {
                 await Share.share({
-                    message: `Je t'ai envoyé des fichiers via FaaS Transfer. Télécharge-les ici : ${result?.downloadUrl}`,
+                    message: `Je t'ai envoyé des fichiers via Fast Transfer. Télécharge-les ici : ${result?.downloadUrl}`,
                 });
             }
         } catch (error) {

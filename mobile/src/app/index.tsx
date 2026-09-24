@@ -1,7 +1,7 @@
 /**
  * app/index.tsx
  *
- * Écran d'accueil de l'application FaaS Transfer.
+ * Écran d'accueil de l'application Fast Transfer.
  * Design sobre et élégant — menu gauche, titre centré,
  * actions rapides en cards et section bienvenue avec CTA.
  */
