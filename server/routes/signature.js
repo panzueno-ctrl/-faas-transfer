@@ -117,38 +117,29 @@ router.post('/send-requests', upload.single('file'), async (req, res) => {
                 `
             };
 
-            // Envoi de l'email via EmailJS REST API
-            if (process.env.EMAILJS_SERVICE_ID && process.env.EMAILJS_TEMPLATE_ID) {
+            // Envoi de l'email via Nodemailer (SMTP)
+            if (process.env.SMTP_USER && process.env.SMTP_PASS) {
                 try {
-                    const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            service_id: process.env.EMAILJS_SERVICE_ID,
-                            template_id: process.env.EMAILJS_TEMPLATE_ID,
-                            user_id: process.env.EMAILJS_PUBLIC_KEY,
-                            accessToken: process.env.EMAILJS_PRIVATE_KEY,
-                            template_params: {
-                                to_email: reqData.signer_email,
-                                subject: "Demande de signature de document",
-                                htmlContent: mailOptions.html
-                            }
-                        })
+                    const transporter = nodemailer.createTransport({
+                        service: 'gmail',
+                        auth: {
+                            user: process.env.SMTP_USER,
+                            pass: process.env.SMTP_PASS
+                        }
                     });
-
-                    if (!response.ok) {
-                        const errText = await response.text();
-                        console.error("Erreur envoi EmailJS à", reqData.signer_email, errText);
-                    } else {
-                        console.log("Email envoyé avec succès à", reqData.signer_email);
-                    }
+                    
+                    await transporter.sendMail({
+                        from: `"Fast Transfer" <${process.env.SMTP_USER}>`,
+                        to: reqData.signer_email,
+                        subject: "Demande de signature de document",
+                        html: mailOptions.html
+                    });
+                    console.log("Email envoyé avec succès à", reqData.signer_email);
                 } catch (err) {
-                    console.error("Erreur réseau envoi EmailJS à", reqData.signer_email, err);
+                    console.error("Erreur envoi SMTP à", reqData.signer_email, err);
                 }
             } else {
-                console.log(`[EmailJS non configuré] Simulation d'envoi à ${reqData.signer_email} : ${signLink}`);
+                console.log(`[SMTP non configuré] Simulation d'envoi à ${reqData.signer_email} : ${signLink}`);
             }
 
         }
@@ -251,7 +242,7 @@ router.post('/complete-request', async (req, res) => {
         // 4. (Optionnel) Vérifier si tous les signataires ont signé pour marquer le document complet
         const { data: allRequests } = await supabase
             .from('signature_requests')
-            .select('status')
+            .select('status, signer_email')
             .eq('document_id', requestData.document_id);
 
         const allSigned = allRequests && allRequests.every(r => r.status === 'signed');
@@ -277,10 +268,13 @@ router.post('/complete-request', async (req, res) => {
                     const { width, height } = page.getSize();
                     const xPos = (sig.x / 100) * width;
                     const yPos = height - ((sig.y / 100) * height);
-                    const sigWidth = 150;
-
+                    
                     let sigObj;
                     try { sigObj = JSON.parse(sig.image_base64); } catch(e) {}
+                    
+                    // Use dynamic width from frontend, fallback to 20%
+                    const boxWidthPct = (sigObj && sigObj.boxWidth) ? sigObj.boxWidth : 20;
+                    const sigWidth = (boxWidthPct / 100) * width;
                     
                     if (sigObj && sigObj.type === 'path') {
                         const canvasW = sigObj.width || 460;
@@ -291,7 +285,8 @@ router.post('/complete-request', async (req, res) => {
                             x: xPos, 
                             y: yPos, // Y is top-left for drawSvgPath
                             scale: scale, 
-                            color: require('pdf-lib').rgb(0, 0, 0) 
+                            borderColor: require('pdf-lib').rgb(0, 0, 0),
+                            borderWidth: 2
                         });
                     } else if (sigObj && sigObj.type === 'text') {
                         page.drawText(sigObj.data, { 
@@ -353,9 +348,41 @@ router.post('/complete-request', async (req, res) => {
                 .update({ status: 'completed', final_file_url: finalFileUrl })
                 .eq('id', requestData.document_id);
 
-            // (Optionnel) Envoyer l'email final avec la pièce jointe
+            // Envoyer l'email final avec le lien vers le document signé
             if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-                // ... logic to send email to all signers with final link
+                try {
+                    const transporter = nodemailer.createTransport({
+                        service: 'gmail',
+                        auth: {
+                            user: process.env.SMTP_USER,
+                            pass: process.env.SMTP_PASS
+                        }
+                    });
+                    
+                    const allEmails = allRequests.map(r => r.signer_email);
+                    
+                    const htmlContent = `
+                        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
+                            <h2 style="color: #333; text-align: center;">Document signé avec succès !</h2>
+                            <p>Bonjour,</p>
+                            <p>Tous les signataires ont terminé de signer le document. Vous pouvez télécharger le document final signé en cliquant sur le lien ci-dessous :</p>
+                            <div style="text-align: center; margin: 30px 0;">
+                                <a href="${finalFileUrl}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Télécharger le document</a>
+                            </div>
+                            <p style="color: #666; font-size: 12px;">Merci d'utiliser Fast Transfer.</p>
+                        </div>
+                    `;
+                    
+                    await transporter.sendMail({
+                        from: `"Fast Transfer" <${process.env.SMTP_USER}>`,
+                        to: allEmails.join(','),
+                        subject: "Votre document a été entièrement signé",
+                        html: htmlContent
+                    });
+                    console.log("Email final envoyé à tous les signataires :", allEmails);
+                } catch (err) {
+                    console.error("Erreur envoi de l'email final SMTP :", err);
+                }
             }
 
             return res.json({ success: true, message: "Signature enregistrée avec succès.", finalFileUrl });

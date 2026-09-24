@@ -1042,3 +1042,12 @@ Afin de s'affranchir définitivement des limites de temps d'exécution (Timeouts
 3. RÉSULTAT :
    - Les requêtes HTTP ne durent jamais plus de quelques secondes.
    - Les traitements lourds (fichiers de 500+ Mo) peuvent s'exécuter sur des serveurs gratuits pendant 5 ou 10 minutes sans aucune coupure, offrant une expérience "Pro" aux utilisateurs finaux.
+
+============================================================
+  18. ROADMAP DU GOAL EN COURS (SIGNATURE END-TO-END)
+============================================================
+- [x] Bug de l'encre noire sur les signatures (drawSvgPath)
+- [x] Envoi de l'e-mail final avec le document
+- [x] Résolution du blocage Gmail (anti-spam)
+- [x] Calibrage des signatures (taille et position)
+- [x] Vérification globale (End-to-End)

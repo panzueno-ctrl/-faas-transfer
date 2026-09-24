@@ -117,8 +117,13 @@ export default function SignTokenScreen() {
             // Take the first signature (or send all if needed, but let's assume 1)
             const sig = signatures[0];
             
-            // Remove data:image/png;base64, prefix if present
-            const signatureStr = JSON.stringify(sig.signatureData);
+            // Inject box width and height into signatureData
+            const signaturePayload = {
+                ...sig.signatureData,
+                boxWidth: sig.width || 20,
+                boxHeight: sig.height || 10
+            };
+            const signatureStr = JSON.stringify(signaturePayload);
 
             const res = await fetch(`${SERVER_URL}/signature/complete-request`, {
                 method: 'POST',
