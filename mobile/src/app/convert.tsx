@@ -1992,7 +1992,7 @@ export default function ConvertScreen() {
                     <View style={{ width: 40 }} />
                 </View>
 
-                <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={{ alignItems: 'center', padding: 20 }}>
+                <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={{ alignItems: 'center', padding: 20 }} keyboardShouldPersistTaps="handled">
                     <View style={{ backgroundColor: colors.card, padding: 30, borderRadius: 24, borderWidth: 1, borderColor: colors.border, width: '100%', maxWidth: 600 }}>
                         
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24, padding: 16, backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: 12 }}>
