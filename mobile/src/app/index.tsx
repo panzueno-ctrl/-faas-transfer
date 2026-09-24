@@ -96,7 +96,7 @@ export default function HomeScreen() {
                 <View style={styles.logoContainer}>
                   <LogoFaaS size={44} showBackground={true} />
                   <Text style={styles.logoText}>
-                    FaaS <Text style={styles.logoTextHighlight}>Transfer</Text>
+                    Fast <Text style={styles.logoTextHighlight}>Transfer</Text>
                   </Text>
                 </View>
 
@@ -158,7 +158,7 @@ export default function HomeScreen() {
           {/* ── Titre de l'app ── */}
           <View style={styles.hero}>
             <View style={styles.titleRow}>
-              <Text style={styles.appName}>FaaS</Text>
+              <Text style={styles.appName}>Fast</Text>
               <Text style={styles.appNameAccent}>Transfer</Text>
             </View>
             <Text style={styles.appTagline}>
