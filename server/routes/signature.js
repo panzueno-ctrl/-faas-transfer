@@ -274,37 +274,59 @@ router.post('/complete-request', async (req, res) => {
                     const page = pages[sig.page_index || 0];
                     if (!page) continue;
 
-                    // Convert base64 to Uint8Array
-                    const imgBuffer = Buffer.from(sig.image_base64, 'base64');
-                    let pdfImage;
-                    // Try embedding as PNG (most common for canvas exports)
-                    try {
-                        pdfImage = await pdfDoc.embedPng(imgBuffer);
-                    } catch (e) {
-                        try {
-                            pdfImage = await pdfDoc.embedJpg(imgBuffer);
-                        } catch (err) {
-                            console.error("Could not embed image", err);
-                            continue;
-                        }
-                    }
-
                     const { width, height } = page.getSize();
-                    // Frontend coordinates are usually percentages (0 to 100)
-                    // Scale them back to points. Assume standard signature size:
-                    const sigWidth = 150;
-                    const sigHeight = (pdfImage.height / pdfImage.width) * sigWidth;
-
                     const xPos = (sig.x / 100) * width;
-                    // Y is inverted in pdf-lib (bottom-left origin)
-                    const yPos = height - ((sig.y / 100) * height) - sigHeight;
+                    const yPos = height - ((sig.y / 100) * height);
+                    const sigWidth = 150;
 
-                    page.drawImage(pdfImage, {
-                        x: xPos,
-                        y: yPos,
-                        width: sigWidth,
-                        height: sigHeight
-                    });
+                    let sigObj;
+                    try { sigObj = JSON.parse(sig.image_base64); } catch(e) {}
+                    
+                    if (sigObj && sigObj.type === 'path') {
+                        const canvasW = sigObj.width || 460;
+                        const scale = sigWidth / canvasW;
+                        
+                        // drawSvgPath uses top-left origin just like SVG
+                        page.drawSvgPath(sigObj.data, { 
+                            x: xPos, 
+                            y: yPos, // Y is top-left for drawSvgPath
+                            scale: scale, 
+                            color: require('pdf-lib').rgb(0, 0, 0) 
+                        });
+                    } else if (sigObj && sigObj.type === 'text') {
+                        page.drawText(sigObj.data, { 
+                            x: xPos, 
+                            y: yPos - 20, 
+                            size: 24, 
+                            color: require('pdf-lib').rgb(0, 0, 0) 
+                        });
+                    } else {
+                        // Legacy base64 or image object
+                        let base64Data = sig.image_base64;
+                        if (sigObj && sigObj.type === 'image') {
+                            base64Data = sigObj.data;
+                        }
+                        base64Data = base64Data.split(',')[1] || base64Data;
+                        const imgBuffer = Buffer.from(base64Data, 'base64');
+                        let pdfImage;
+                        try {
+                            pdfImage = await pdfDoc.embedPng(imgBuffer);
+                        } catch (e) {
+                            try {
+                                pdfImage = await pdfDoc.embedJpg(imgBuffer);
+                            } catch (err) {
+                                console.error("Could not embed image", err);
+                                continue;
+                            }
+                        }
+                        const sigHeight = (pdfImage.height / pdfImage.width) * sigWidth;
+                        page.drawImage(pdfImage, {
+                            x: xPos,
+                            y: yPos - sigHeight,
+                            width: sigWidth,
+                            height: sigHeight
+                        });
+                    }
                 }
             }
 
