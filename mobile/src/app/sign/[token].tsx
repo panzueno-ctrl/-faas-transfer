@@ -65,7 +65,7 @@ export default function SignTokenScreen() {
             const formData = new FormData();
             formData.append('file', pdfBlob, 'document.pdf');
             
-            const convRes = await fetch(`${SERVER_URL}/pdf-to-images`, {
+            const convRes = await fetch(`${SERVER_URL}/convert/pdf-to-image`, {
                 method: 'POST',
                 body: formData
             });
