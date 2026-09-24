@@ -1077,6 +1077,7 @@ export default function ConvertScreen() {
 
     const handleServicePress = (service: any) => {
         setSelectedService(service);
+        setSigners([{ name: '', email: '' }]);
         setStep('tool_intro');
     };
 
@@ -1297,6 +1298,7 @@ export default function ConvertScreen() {
         setFileName('');
         setResultUrl('');
         setResultFiles([]);
+        setSigners([{ name: '', email: '' }]);
         cancelTool('menu');
     };
 
