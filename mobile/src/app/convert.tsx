@@ -43,13 +43,15 @@ import CompressEditor from '../components/CompressEditor';
 import { PDFDocument, rgb, StandardFonts, degrees } from 'pdf-lib/dist/pdf-lib.esm.js';
 import JSZip from 'jszip';
 
-// Helper pour charger dynamiquement PDF.js sur le Web
+let pdfJsLoadingPromise: Promise<any> | null = null;
 const loadPdfJs = (): Promise<any> => {
-    return new Promise((resolve, reject) => {
-        if ((window as any).pdfjsLib) {
-            resolve((window as any).pdfjsLib);
-            return;
-        }
+    if ((window as any).pdfjsLib) {
+        return Promise.resolve((window as any).pdfjsLib);
+    }
+    if (pdfJsLoadingPromise) {
+        return pdfJsLoadingPromise;
+    }
+    pdfJsLoadingPromise = new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
         script.onload = () => {
@@ -57,9 +59,13 @@ const loadPdfJs = (): Promise<any> => {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
             resolve(pdfjsLib);
         };
-        script.onerror = () => reject(new Error("Failed to load pdf.js"));
+        script.onerror = () => {
+            pdfJsLoadingPromise = null;
+            reject(new Error("Failed to load pdf.js"));
+        };
         document.body.appendChild(script);
     });
+    return pdfJsLoadingPromise;
 };
 
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
