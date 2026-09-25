@@ -40,8 +40,12 @@ export default function MergeEditor({
             const newPages = [...prev];
             let changed = false;
             initialPages.forEach(p => {
-                if (!newPages.find(existing => existing.id === p.id)) {
+                const existingIdx = newPages.findIndex(existing => existing.id === p.id);
+                if (existingIdx === -1) {
                     newPages.push(p);
+                    changed = true;
+                } else if (newPages[existingIdx].imageUri !== p.imageUri) {
+                    newPages[existingIdx] = { ...newPages[existingIdx], imageUri: p.imageUri };
                     changed = true;
                 }
             });
@@ -60,12 +64,12 @@ export default function MergeEditor({
             const newFiles = [...prev];
             let changed = false;
             initialFiles.forEach(f => {
-                const existing = newFiles.find(existing => existing.originalIndex === f.originalIndex);
-                if (!existing) {
+                const existingIdx = newFiles.findIndex(existing => existing.originalIndex === f.originalIndex);
+                if (existingIdx === -1) {
                     newFiles.push(f);
                     changed = true;
-                } else if (existing.pageCount !== f.pageCount) {
-                    existing.pageCount = f.pageCount;
+                } else if (newFiles[existingIdx].pageCount !== f.pageCount) {
+                    newFiles[existingIdx] = { ...newFiles[existingIdx], pageCount: f.pageCount };
                     changed = true;
                 }
             });

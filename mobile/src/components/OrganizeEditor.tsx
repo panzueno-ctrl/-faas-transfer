@@ -46,6 +46,48 @@ export default function OrganizeEditor({
 }: OrganizeEditorProps) {
     const [pages, setPages] = useState<OrganizePageItem[]>(initialPages);
     const [filesOrder, setFilesOrder] = useState<OrganizeFileItem[]>(initialFiles);
+
+    React.useEffect(() => {
+        setPages(prev => {
+            const newPages = [...prev];
+            let changed = false;
+            initialPages.forEach(p => {
+                const existingIdx = newPages.findIndex(existing => existing.id === p.id);
+                if (existingIdx === -1) {
+                    newPages.push(p);
+                    changed = true;
+                } else if (newPages[existingIdx].imageUri !== p.imageUri) {
+                    newPages[existingIdx] = { ...newPages[existingIdx], imageUri: p.imageUri };
+                    changed = true;
+                }
+            });
+            if (changed) {
+                newPages.sort((a, b) => {
+                    if (a.fileIndex !== b.fileIndex) return a.fileIndex - b.fileIndex;
+                    return a.pageIndex - b.pageIndex;
+                });
+            }
+            return changed ? newPages : prev;
+        });
+    }, [initialPages]);
+
+    React.useEffect(() => {
+        setFilesOrder(prev => {
+            const newFiles = [...prev];
+            let changed = false;
+            initialFiles.forEach(f => {
+                const existingIdx = newFiles.findIndex(existing => existing.originalIndex === f.originalIndex);
+                if (existingIdx === -1) {
+                    newFiles.push(f);
+                    changed = true;
+                } else if (newFiles[existingIdx].pageCount !== f.pageCount) {
+                    newFiles[existingIdx] = { ...newFiles[existingIdx], pageCount: f.pageCount };
+                    changed = true;
+                }
+            });
+            return changed ? newFiles : prev;
+        });
+    }, [initialFiles]);
     
     const [draggedPage, setDraggedPage] = useState<number | null>(null);
     const [dragOverPage, setDragOverPage] = useState<number | null>(null);
