@@ -454,11 +454,14 @@ export default function ConvertScreen() {
             setOrganizePages(newOrganizePages);
             if (!appendToExisting) setStep(targetStep as any);
 
-            // 2. PROCESS ASYNC IN BACKGROUND
-            files.forEach((file, i) => {
-                const fileIndex = startIndex + i;
-                
-                setTimeout(async () => {
+            // 2. PROCESS ASYNC IN BACKGROUND (SEQUENTIAL TO AVOID OOM)
+            setTimeout(async () => {
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const fileIndex = startIndex + i;
+                    
+                    if (sessionId !== currentRenderSession.current) break;
+
                     try {
                         let arrayBuffer: ArrayBuffer;
                         if (Platform.OS === 'web' && file.file) {
@@ -476,6 +479,7 @@ export default function ConvertScreen() {
                             return next;
                         });
 
+                        let pdfJsSuccess = false;
                         if (Platform.OS === 'web') {
                             try {
                                 const pdfjsLib = await loadPdfJs();
@@ -490,7 +494,7 @@ export default function ConvertScreen() {
                                 });
                                 
                                 if (pdf.numPages >= 1) {
-                                    if (sessionId !== currentRenderSession.current) return;
+                                    if (sessionId !== currentRenderSession.current) break;
                                     
                                     setOrganizePages(prev => {
                                         const next = [...prev];
@@ -565,15 +569,25 @@ export default function ConvertScreen() {
                                         }
                                     }
                                 }
+                                pdfJsSuccess = true;
                             } catch (localError) {
                                 console.warn("Local PDF.js rendering failed", localError);
                             }
-                        } else {
-                            // Fallback backend for Mobile
+                        }
+                        
+                        if (!pdfJsSuccess) {
+                            // Fallback backend for Mobile OR failed Web worker
                             try {
                                 const tempDoc = await PDFDocument.load(arrayBuffer.slice(0), { ignoreEncryption: true });
                                 const numPages = tempDoc.getPageCount();
                                 
+                                setOrganizeFiles(prev => {
+                                    const next = [...prev];
+                                    const target = next.find(f => f.originalIndex === fileIndex);
+                                    if (target) target.pageCount = numPages;
+                                    return next;
+                                });
+
                                 setOrganizePages(prev => {
                                     const next = [...prev];
                                     const newSkeletons = [];
@@ -598,7 +612,7 @@ export default function ConvertScreen() {
                                     return next;
                                 });
                             } catch (e) {
-                                console.warn("Failed to read page count locally for mobile", e);
+                                console.warn("Failed to read page count locally for fallback", e);
                             }
 
                             const formData = new FormData();
@@ -630,6 +644,7 @@ export default function ConvertScreen() {
                                 const unzipped = await zip.loadAsync(blob);
                                 const fileNames = Object.keys(unzipped.files).sort();
                                 for (let j = 0; j < fileNames.length; j++) {
+                                    if (sessionId !== currentRenderSession.current) break;
                                     const filename = fileNames[j];
                                     const f = unzipped.files[filename];
                                     if (!f.dir) {
@@ -668,8 +683,8 @@ export default function ConvertScreen() {
                     } catch (fileError: any) {
                         console.error(`Erreur pour le fichier ${file.name}:`, fileError);
                     }
-                }, 50 * i);
-            });
+                }
+            }, 0);
         } catch (e: any) {
             console.error("Error in initOrganizeEditor:", e);
             if (Platform.OS === 'web') {
