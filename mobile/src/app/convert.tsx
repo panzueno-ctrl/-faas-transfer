@@ -54,9 +54,18 @@ const loadPdfJs = (): Promise<any> => {
     pdfJsLoadingPromise = new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-        script.onload = () => {
+        script.onload = async () => {
             const pdfjsLib = (window as any).pdfjsLib;
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            try {
+                // Preload the worker as a Blob URL to avoid Cross-Origin Worker restrictions in some browsers
+                const res = await fetch('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js');
+                const text = await res.text();
+                const blob = new Blob([text], { type: 'text/javascript' });
+                pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+            } catch (e) {
+                console.warn("Failed to load pdf.worker.min.js as Blob, falling back to direct URL", e);
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            }
             resolve(pdfjsLib);
         };
         script.onerror = () => {
@@ -459,6 +468,7 @@ export default function ConvertScreen() {
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
                     const fileIndex = startIndex + i;
+                    console.log(`[CONVERT] Processing file ${fileIndex}: ${file.name}`);
                     
                     if (sessionId !== currentRenderSession.current) break;
 
@@ -470,6 +480,7 @@ export default function ConvertScreen() {
                             const response = await fetch(file.uri);
                             arrayBuffer = await response.arrayBuffer();
                         }
+                        console.log(`[CONVERT] ArrayBuffer loaded, size: ${arrayBuffer.byteLength}`);
                         
                         // Update buffer in state
                         setOrganizeFiles(prev => {
@@ -484,9 +495,12 @@ export default function ConvertScreen() {
                         let pdfJsSuccess = false;
                         if (Platform.OS === 'web') {
                             try {
+                                console.log(`[CONVERT] Calling loadPdfJs`);
                                 const pdfjsLib = await loadPdfJs();
+                                console.log(`[CONVERT] Calling getDocument`);
                                 const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
                                 const pdf = await loadingTask.promise;
+                                console.log(`[CONVERT] getDocument success, numPages: ${pdf.numPages}`);
                                 
                                 setOrganizeFiles(prev => {
                                     const next = [...prev];
@@ -527,6 +541,7 @@ export default function ConvertScreen() {
                                         return next;
                                     });
 
+                                    console.log(`[CONVERT] getPage(1)`);
                                     const page = await pdf.getPage(1);
                                     const viewport = page.getViewport({ scale: 1.0 });
                                     const canvas = document.createElement('canvas');
@@ -534,8 +549,10 @@ export default function ConvertScreen() {
                                     canvas.width = viewport.width;
                                     canvas.height = viewport.height;
                                     if (ctx) {
+                                        console.log(`[CONVERT] page.render()`);
                                         await page.render({ canvasContext: ctx, viewport }).promise;
                                         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                                        console.log(`[CONVERT] dataUrl generated`);
                                         
                                         if (sessionId === currentRenderSession.current) {
                                             setOrganizePages(prev => {
@@ -546,6 +563,7 @@ export default function ConvertScreen() {
                                                 }
                                                 return next;
                                             });
+                                            console.log(`[CONVERT] updated state for imageUri`);
                                         }
                                     }
                                     page.cleanup();
@@ -692,6 +710,14 @@ export default function ConvertScreen() {
                                         const targetIdx = next.findIndex(p => p.fileIndex === fileIndex && p.pageIndex === 0);
                                         if (targetIdx !== -1) {
                                             next[targetIdx] = { ...next[targetIdx], imageUri: URL.createObjectURL(blob) };
+                                        } else {
+                                            next.push({
+                                                id: `${fileIndex}-0-${Date.now()}`,
+                                                fileIndex: fileIndex,
+                                                fileName: file.name,
+                                                pageIndex: 0,
+                                                imageUri: URL.createObjectURL(blob)
+                                            });
                                         }
                                         return next;
                                     });
@@ -700,6 +726,7 @@ export default function ConvertScreen() {
                         }
                     } catch (fileError: any) {
                         console.error(`Erreur pour le fichier ${file.name}:`, fileError);
+                        window.alert(`Erreur backend: ${fileError.message}`);
                     }
                 }
             }, 0);

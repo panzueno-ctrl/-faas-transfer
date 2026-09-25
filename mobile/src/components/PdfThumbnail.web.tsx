@@ -8,9 +8,16 @@ const initPdfJs = async () => {
     return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
-        script.onload = () => {
+        script.onload = async () => {
             const pdfjs = (window as any).pdfjsLib;
-            pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+            try {
+                const res = await fetch('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js');
+                const text = await res.text();
+                const blob = new Blob([text], { type: 'text/javascript' });
+                pdfjs.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+            } catch (e) {
+                pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+            }
             pdfjsLib = pdfjs;
             resolve(pdfjs);
         };
