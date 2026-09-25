@@ -414,6 +414,7 @@ export default function ConvertScreen() {
 
     const initOrganizeEditor = async (files: any[], appendToExisting = false, targetStep: string = 'organize_editor') => {
         try {
+            const effectiveTargetStep = appendToExisting ? step : targetStep;
             const pastelColors = ['#ffcfcf', '#cbf2e8', '#fff0b5', '#dfd5f6', '#c2ebf9'];
             const newOrganizePages: OrganizePageItem[] = appendToExisting ? [...organizePages] : [];
             const newOrganizeFiles: any[] = appendToExisting ? [...organizeFiles] : [];
@@ -488,7 +489,8 @@ export default function ConvertScreen() {
                                     setOrganizePages(prev => {
                                         const next = [...prev];
                                         const newSkeletons = [];
-                                        for (let j = 0; j < pdf.numPages; j++) {
+                                        const pagesToProcess = effectiveTargetStep === 'merge_editor' ? 1 : pdf.numPages;
+                                        for (let j = 0; j < pagesToProcess; j++) {
                                             newSkeletons.push({
                                                 id: `${fileIndex}-${j}-${Date.now()}`,
                                                 fileIndex: fileIndex,
@@ -529,7 +531,7 @@ export default function ConvertScreen() {
                                     }
                                 }
 
-                                if (pdf.numPages > 1) {
+                                if (pdf.numPages > 1 && effectiveTargetStep !== 'merge_editor') {
                                     for (let j = 2; j <= pdf.numPages; j++) {
                                         if (sessionId !== currentRenderSession.current) break;
                                         try {
@@ -569,7 +571,8 @@ export default function ConvertScreen() {
                                 setOrganizePages(prev => {
                                     const next = [...prev];
                                     const newSkeletons = [];
-                                    for (let j = 0; j < numPages; j++) {
+                                    const pagesToProcessMobile = effectiveTargetStep === 'merge_editor' ? 1 : numPages;
+                                    for (let j = 0; j < pagesToProcessMobile; j++) {
                                         newSkeletons.push({
                                             id: `${fileIndex}-${j}-${Date.now()}`,
                                             fileIndex: fileIndex,
@@ -602,7 +605,8 @@ export default function ConvertScreen() {
                             }
                             formData.append('file', fileBlob, file.name);
 
-                            const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard`, {
+                            const maxPagesParam = effectiveTargetStep === 'merge_editor' ? '&max_pages=1' : '';
+                            const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard${maxPagesParam}`, {
                                 method: 'POST',
                                 body: formData,
                                 headers: { 'Accept': 'application/zip, image/jpeg' }

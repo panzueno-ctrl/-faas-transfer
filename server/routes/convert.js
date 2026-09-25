@@ -127,9 +127,11 @@ router.post('/pdf-to-image', upload.single('file'), (req, res) => {
     // Gestion de la qualité (HD = 300 DPI, Standard = 150 DPI)
     const quality = req.body.quality || 'standard';
     const dpi = quality === 'hd' ? 300 : 150;
+    const maxPages = req.query.max_pages || req.body.max_pages;
+    const pageArgs = maxPages ? `-f 1 -l ${maxPages}` : "";
 
-    // Commande pdftoppm pour convertir toutes les pages en images
-    const command = `pdftoppm -${format === 'jpeg' ? 'jpeg' : 'png'} -r ${dpi} "${inputPath}" "${outputPrefix}"`;
+    // Commande pdftoppm pour convertir les pages en images
+    const command = `pdftoppm -${format === 'jpeg' ? 'jpeg' : 'png'} -r ${dpi} ${pageArgs} "${inputPath}" "${outputPrefix}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
