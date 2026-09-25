@@ -16716,3 +16716,27 @@ Ce fichier est un pilier de l'architecture. Voici son contenu intégral avec doc
 
 [   1] export { useColorScheme } from 'react-native';
 [   2] 
+
+================================================================================
+CHAPITRE 19 : RÉSOLUTION DU BUG DE PERFORMANCE (DEADLOCK WEB WORKER PDF.JS)
+================================================================================
+
+### Contexte et Apparition du Bug
+Lors de la sélection de multiples fichiers PDF simultanément dans l'interface (par exemple, pour la fonctionnalité 'Fusionner'), un ralentissement extrême suivi d'un blocage total (freeze) a été observé. L'interface affichait indéfiniment les indicateurs de chargement sans jamais afficher les miniatures.
+
+### Diagnostic du Problème
+Le problème provenait de deux failles majeures dans notre approche initiale de traitement asynchrone :
+1. Race Condition d'Initialisation : L'application lançait l'injection du script PDF.js dans le DOM simultanément pour chaque fichier via une boucle '.forEach'. Résultat : le navigateur tentait de charger et d'exécuter le moteur plusieurs fois à la même milliseconde, corrompant l'instance globale 'window.pdfjsLib'.
+2. Saturation Mémoire du Web Worker (OOM / Deadlock) : Même si le moteur chargeait, l'exécution concurrente de 'pdfjsLib.getDocument()' pour 5 fichiers forçait le Web Worker de Google Chrome à allouer de la mémoire pour parser tous les PDFs en même temps, ce qui aboutissait à un dépassement de capacité (Out Of Memory) et un plantage silencieux du Worker.
+
+### Architecture de la Solution
+Pour corriger cela, sans perdre les avantages du traitement côté client (gratuité, rapidité, respect de la vie privée), l'architecture suivante a été implémentée :
+
+A. Singleton pour le Chargement du Moteur :
+   Nous avons introduit une 'Promise' globale ('pdfJsLoadingPromise'). Si 5 processus demandent l'initialisation du moteur simultanément, seul le premier injectera le script, et les 4 autres se mettront en pause ('await') en écoutant cette même promesse.
+
+B. File d'Attente Séquentielle (Sequential Processing) :
+   Nous avons remplacé la boucle asynchrone '.forEach' par une boucle '.for' traditionnelle à l'intérieur d'un seul 'setTimeout'. Cela permet de traiter les fichiers l'un après l'autre. Le navigateur extrait les pages du Fichier 1, libère la mémoire, puis passe au Fichier 2. Cette approche élimine tout risque de surcharge mémoire.
+
+C. Filet de Sécurité Backend (Graceful Degradation) :
+   Nous avons ajouté un drapeau 'pdfJsSuccess'. Si, pour une raison obscure (par exemple un PDF corrompu bloquant le worker), l'extraction locale échoue (catch), l'application bascule désormais automatiquement et silencieusement vers notre serveur Backend pour faire le rendu de l'image. L'utilisateur ne reste ainsi jamais bloqué.

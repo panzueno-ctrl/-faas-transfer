@@ -474,8 +474,10 @@ export default function ConvertScreen() {
                         // Update buffer in state
                         setOrganizeFiles(prev => {
                             const next = [...prev];
-                            const target = next.find(f => f.originalIndex === fileIndex);
-                            if (target) target.buffer = arrayBuffer;
+                            const targetIndex = next.findIndex(f => f.originalIndex === fileIndex);
+                            if (targetIndex !== -1) {
+                                next[targetIndex] = { ...next[targetIndex], buffer: arrayBuffer };
+                            }
                             return next;
                         });
 
@@ -488,13 +490,18 @@ export default function ConvertScreen() {
                                 
                                 setOrganizeFiles(prev => {
                                     const next = [...prev];
-                                    const target = next.find(f => f.originalIndex === fileIndex);
-                                    if (target) target.pageCount = pdf.numPages;
+                                    const targetIndex = next.findIndex(f => f.originalIndex === fileIndex);
+                                    if (targetIndex !== -1) {
+                                        next[targetIndex] = { ...next[targetIndex], pageCount: pdf.numPages };
+                                    }
                                     return next;
                                 });
                                 
                                 if (pdf.numPages >= 1) {
-                                    if (sessionId !== currentRenderSession.current) break;
+                                    if (sessionId !== currentRenderSession.current) {
+                                        loadingTask.destroy();
+                                        break;
+                                    }
                                     
                                     setOrganizePages(prev => {
                                         const next = [...prev];
@@ -509,11 +516,11 @@ export default function ConvertScreen() {
                                                 imageUri: null as any
                                             });
                                         }
-                                        const targetIndex = next.findIndex(p => p.fileIndex === fileIndex);
-                                        if (targetIndex !== -1) {
+                                        const targetIdx = next.findIndex(p => p.fileIndex === fileIndex);
+                                        if (targetIdx !== -1) {
                                             let count = 0;
-                                            while (next[targetIndex + count]?.fileIndex === fileIndex) count++;
-                                            next.splice(targetIndex, count, ...newSkeletons);
+                                            while (next[targetIdx + count]?.fileIndex === fileIndex) count++;
+                                            next.splice(targetIdx, count, ...newSkeletons);
                                         } else {
                                             next.push(...newSkeletons);
                                         }
@@ -533,12 +540,15 @@ export default function ConvertScreen() {
                                         if (sessionId === currentRenderSession.current) {
                                             setOrganizePages(prev => {
                                                 const next = [...prev];
-                                                const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === 0);
-                                                if (target) target.imageUri = dataUrl;
+                                                const targetIdx = next.findIndex(p => p.fileIndex === fileIndex && p.pageIndex === 0);
+                                                if (targetIdx !== -1) {
+                                                    next[targetIdx] = { ...next[targetIdx], imageUri: dataUrl };
+                                                }
                                                 return next;
                                             });
                                         }
                                     }
+                                    page.cleanup();
                                 }
 
                                 if (pdf.numPages > 1 && effectiveTargetStep !== 'merge_editor') {
@@ -558,17 +568,21 @@ export default function ConvertScreen() {
                                                 if (sessionId === currentRenderSession.current) {
                                                     setOrganizePages(prev => {
                                                         const next = [...prev];
-                                                        const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === j - 1);
-                                                        if (target) target.imageUri = dataUrl;
+                                                        const targetIdx = next.findIndex(p => p.fileIndex === fileIndex && p.pageIndex === j - 1);
+                                                        if (targetIdx !== -1) {
+                                                            next[targetIdx] = { ...next[targetIdx], imageUri: dataUrl };
+                                                        }
                                                         return next;
                                                     });
                                                 }
                                             }
+                                            page.cleanup();
                                         } catch (e) {
                                             console.warn('Async thumbnail error', e);
                                         }
                                     }
                                 }
+                                loadingTask.destroy();
                                 pdfJsSuccess = true;
                             } catch (localError) {
                                 console.warn("Local PDF.js rendering failed", localError);
@@ -583,8 +597,10 @@ export default function ConvertScreen() {
                                 
                                 setOrganizeFiles(prev => {
                                     const next = [...prev];
-                                    const target = next.find(f => f.originalIndex === fileIndex);
-                                    if (target) target.pageCount = numPages;
+                                    const targetIdx = next.findIndex(f => f.originalIndex === fileIndex);
+                                    if (targetIdx !== -1) {
+                                        next[targetIdx] = { ...next[targetIdx], pageCount: numPages };
+                                    }
                                     return next;
                                 });
 
@@ -601,11 +617,11 @@ export default function ConvertScreen() {
                                             imageUri: null as any
                                         });
                                     }
-                                    const targetIndex = next.findIndex(p => p.fileIndex === fileIndex);
-                                    if (targetIndex !== -1) {
+                                    const targetIdx = next.findIndex(p => p.fileIndex === fileIndex);
+                                    if (targetIdx !== -1) {
                                         let count = 0;
-                                        while (next[targetIndex + count]?.fileIndex === fileIndex) count++;
-                                        next.splice(targetIndex, count, ...newSkeletons);
+                                        while (next[targetIdx + count]?.fileIndex === fileIndex) count++;
+                                        next.splice(targetIdx, count, ...newSkeletons);
                                     } else {
                                         next.push(...newSkeletons);
                                     }
@@ -652,9 +668,9 @@ export default function ConvertScreen() {
                                         if (sessionId === currentRenderSession.current) {
                                             setOrganizePages(prev => {
                                                 const next = [...prev];
-                                                const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === j);
-                                                if (target) {
-                                                    target.imageUri = URL.createObjectURL(imgBlob);
+                                                const targetIdx = next.findIndex(p => p.fileIndex === fileIndex && p.pageIndex === j);
+                                                if (targetIdx !== -1) {
+                                                    next[targetIdx] = { ...next[targetIdx], imageUri: URL.createObjectURL(imgBlob) };
                                                 } else {
                                                     next.push({
                                                         id: `${fileIndex}-${j}-${Date.now()}`,
@@ -673,8 +689,10 @@ export default function ConvertScreen() {
                                 if (sessionId === currentRenderSession.current) {
                                     setOrganizePages(prev => {
                                         const next = [...prev];
-                                        const target = next.find(p => p.fileIndex === fileIndex && p.pageIndex === 0);
-                                        if (target) target.imageUri = URL.createObjectURL(blob);
+                                        const targetIdx = next.findIndex(p => p.fileIndex === fileIndex && p.pageIndex === 0);
+                                        if (targetIdx !== -1) {
+                                            next[targetIdx] = { ...next[targetIdx], imageUri: URL.createObjectURL(blob) };
+                                        }
                                         return next;
                                     });
                                 }
