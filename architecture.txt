@@ -16740,3 +16740,20 @@ B. File d'Attente Séquentielle (Sequential Processing) :
 
 C. Filet de Sécurité Backend (Graceful Degradation) :
    Nous avons ajouté un drapeau 'pdfJsSuccess'. Si, pour une raison obscure (par exemple un PDF corrompu bloquant le worker), l'extraction locale échoue (catch), l'application bascule désormais automatiquement et silencieusement vers notre serveur Backend pour faire le rendu de l'image. L'utilisateur ne reste ainsi jamais bloqué.
+
+============================================================
+  18. HISTORIQUE DES BUGS (SUITE : ÉDITEUR PDF)
+============================================================
+
+Bug : Cercle de chargement infini sur l'outil Fusionner/Organiser PDF (Vercel)
+─────────────────────────────────────────────────────────
+- Symptôme : Lors de la sélection de multiples PDF, les squelettes apparaissaient avec un compteur de page correct, mais le cercle de chargement tournait indéfiniment. Les miniatures ne s'affichaient jamais, bien que la conversion en tâche de fond s'exécutait correctement (PDF.js / Web Worker).
+- Cause racine (React State Sync) : 
+  Le composant parent (convert.tsx) envoyait les pages squelettes avec des IDs temporels dynamiques : 'id: fichier-page-Date.now()'.
+  Lorsqu'une page finissait de se générer en arrière-plan, le parent remplaçait le squelette par un nouveau avec un nouveau 'Date.now()'.
+  Cependant, les sous-composants (MergeEditor.tsx et OrganizeEditor.tsx) utilisaient un hook useEffect de synchronisation d'état fusionnée (pour ne pas casser l'ordre du Drag-n-Drop). Ce hook cherchait la page par son ID strict. 
+  Si l'ID changeait, l'éditeur ne mettait pas à jour l'image du squelette existant et gardait l'ancien Squelette en mémoire avec son image 'null'.
+- Solution (Golden Fix) :
+  Nous avons rendu les identifiants de squelette 100% DÉTERMINISTES. 
+  Remplacement de 'fichier-0-Date.now()' par 'fichier-0' (Basé sur le numéro du fichier et l'index de page).
+  Ainsi, la synchronisation React entre les composants parent et enfant est devenue parfaitement fiable, et l'image apparaît instantanément une fois générée.

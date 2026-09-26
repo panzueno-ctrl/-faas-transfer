@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import PdfThumbnail from '../../../components/PdfThumbnail';
+import PdfThumbnail from './PdfThumbnail';
 
 export interface ResultScreenProps {
     resultUrl: string;
