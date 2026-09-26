@@ -240,7 +240,7 @@ export default function ConvertScreen() {
 
                                     console.log(`[CONVERT] getPage(1)`);
                                     const page = await pdf.getPage(1);
-                                    const viewport = page.getViewport({ scale: 1.0 });
+                                    const viewport = page.getViewport({ scale: 0.4 });
                                     const canvas = document.createElement('canvas');
                                     const ctx = canvas.getContext('2d');
                                     canvas.width = viewport.width;
@@ -248,7 +248,7 @@ export default function ConvertScreen() {
                                     if (ctx) {
                                         console.log(`[CONVERT] page.render()`);
                                         await page.render({ canvasContext: ctx, viewport }).promise;
-                                        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                                        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
                                         console.log(`[CONVERT] dataUrl generated`);
                                         
                                         if (sessionId === currentRenderSession.current) {
@@ -271,14 +271,14 @@ export default function ConvertScreen() {
                                         if (sessionId !== currentRenderSession.current) break;
                                         try {
                                             const page = await pdf.getPage(j);
-                                            const viewport = page.getViewport({ scale: 1.0 });
+                                            const viewport = page.getViewport({ scale: 0.4 });
                                             const canvas = document.createElement('canvas');
                                             const ctx = canvas.getContext('2d');
                                             canvas.width = viewport.width;
                                             canvas.height = viewport.height;
                                             if (ctx) {
                                                 await page.render({ canvasContext: ctx, viewport }).promise;
-                                                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                                                const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
                                                 
                                                 if (sessionId === currentRenderSession.current) {
                                                     setOrganizePages(prev => {
