@@ -42,6 +42,8 @@ import PdfEditor, { PdfEditItem } from '../components/PdfEditor';
 import CompressEditor from '../components/CompressEditor';
 import { PDFDocument, rgb, StandardFonts, degrees } from 'pdf-lib/dist/pdf-lib.esm.js';
 import JSZip from 'jszip';
+import ResultScreen from '../features/convert/ui/ResultScreen';
+import ProcessingScreen from '../features/convert/ui/ProcessingScreen';
 
 let pdfJsLoadingPromise: Promise<any> | null = null;
 const loadPdfJs = (): Promise<any> => {
