@@ -5,7 +5,7 @@
  */
 
 import { useConvertActions, WatermarkSettings } from '../features/convert/hooks/useConvertActions';
-import { shareAsync } from 'expo-sharing';
+
 import ToolSelectionScreen from '../features/convert/ui/ToolSelectionScreen';
 import ToolIntroScreen from '../features/convert/ui/ToolIntroScreen';
 import { useState, useEffect, useRef } from 'react';
@@ -20,6 +20,7 @@ import {
     TextInput,
     Platform,
     Image,
+    Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,7 +35,7 @@ import { useTranslation } from 'react-i18next';
 import PdfThumbnail from '../features/convert/ui/PdfThumbnail';
 import CompressionSelector, { CompressionLevel } from '../features/convert/ui/CompressionSelector';
 import PasswordProtector from '../features/convert/ui/PasswordProtector';
-import WatermarkEditor, { WatermarkSettings } from '../features/convert/ui/WatermarkEditor';
+import WatermarkEditor from '../features/convert/ui/WatermarkEditor';
 import ProtectEditor from '../features/convert/ui/ProtectEditor';
 import SplitEditor from '../features/convert/ui/SplitEditor';
 import OrganizeEditor, { OrganizePageItem, OrganizeFileItem } from '../features/convert/ui/OrganizeEditor';
@@ -277,8 +278,10 @@ export default function ConvertScreen() {
             a.click();
             URL.revokeObjectURL(resultUrl);
         } else {
-            if (await shareAsync) {
-                await shareAsync(resultUrl);
+            try {
+                await Share.share({ url: resultUrl });
+            } catch (error) {
+                console.error(error);
             }
         }
     };
