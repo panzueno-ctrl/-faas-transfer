@@ -42,42 +42,10 @@ import PdfEditor, { PdfEditItem } from '../components/PdfEditor';
 import CompressEditor from '../components/CompressEditor';
 import { PDFDocument, rgb, StandardFonts, degrees } from 'pdf-lib/dist/pdf-lib.esm.js';
 import JSZip from 'jszip';
+import { usePdfEngine } from '../features/convert/hooks/usePdfEngine';
+import { useConvertApi } from '../features/convert/hooks/useConvertApi';
 import ResultScreen from '../features/convert/ui/ResultScreen';
 import ProcessingScreen from '../features/convert/ui/ProcessingScreen';
-
-let pdfJsLoadingPromise: Promise<any> | null = null;
-const loadPdfJs = (): Promise<any> => {
-    if ((window as any).pdfjsLib) {
-        return Promise.resolve((window as any).pdfjsLib);
-    }
-    if (pdfJsLoadingPromise) {
-        return pdfJsLoadingPromise;
-    }
-    pdfJsLoadingPromise = new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-        script.onload = async () => {
-            const pdfjsLib = (window as any).pdfjsLib;
-            try {
-                // Preload the worker as a Blob URL to avoid Cross-Origin Worker restrictions in some browsers
-                const res = await fetch('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js');
-                const text = await res.text();
-                const blob = new Blob([text], { type: 'text/javascript' });
-                pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
-            } catch (e) {
-                console.warn("Failed to load pdf.worker.min.js as Blob, falling back to direct URL", e);
-                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-            }
-            resolve(pdfjsLib);
-        };
-        script.onerror = () => {
-            pdfJsLoadingPromise = null;
-            reject(new Error("Failed to load pdf.js"));
-        };
-        document.body.appendChild(script);
-    });
-    return pdfJsLoadingPromise;
-};
 
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
@@ -113,7 +81,6 @@ export default function ConvertScreen() {
     
     // Premium UI states
     const [pdfPassword, setPdfPassword] = useState('');
-    const [processingTime, setProcessingTime] = useState(0);
     const [pdfOriginalBuffer, setPdfOriginalBuffer] = useState<ArrayBuffer | null>(null);
     const [watermarkConfig, setWatermarkConfig] = useState<WatermarkSettings | null>(null);
     const [conversionQuality, setConversionQuality] = useState<ConversionQuality>('standard');
@@ -127,12 +94,20 @@ export default function ConvertScreen() {
     const [pdfDocRef, setPdfDocRef] = useState<any>(null);
     const [isSplitting, setIsSplitting] = useState(false);
     
-    // PdfEditor states
-    const [pdfEditorPages, setPdfEditorPages] = useState<string[]>([]);
-    const [organizePages, setOrganizePages] = useState<OrganizePageItem[]>([]);
-    const [organizeFiles, setOrganizeFiles] = useState<any[]>([]);
 
-    const currentRenderSession = useRef<number>(0);
+    const {
+        pdfOriginalBuffer, setPdfOriginalBuffer,
+        pdfEditorPages, setPdfEditorPages,
+        organizePages, setOrganizePages,
+        organizeFiles, setOrganizeFiles,
+        pdfDocRef, setPdfDocRef,
+        currentRenderSession,
+        initPdfEditor, handlePdfEditorComplete, resetEngine
+    } = usePdfEngine({ setStep, setResultUrl });
+
+    const { apiProcessingTime: apiProcessingTime, processFiles } = useConvertApi({
+        setStep, setResultUrl, setLocalError, t, selectedService, selectedFiles, options: { pdfPassword, compressionLevel, numberingConfig, ocrLang, conversionQuality }
+    });
 
     const cancelTool = (targetStep: string = 'tool_intro') => {
         setStep(targetStep as any);
@@ -150,229 +125,6 @@ export default function ConvertScreen() {
     };
 
     // initSplitPDF removed in favor of initOrganizeEditor
-
-    const initPdfEditor = async (file: any, targetStep: string = 'pdf_editor') => {
-        setStep('preparing_editor');
-        try {
-            // 1. Lire le buffer original
-            let arrayBuffer: ArrayBuffer;
-            if (Platform.OS === 'web' && file.file) {
-                arrayBuffer = await file.file.arrayBuffer();
-            } else {
-                const response = await fetch(file.uri);
-                arrayBuffer = await response.arrayBuffer();
-            }
-            setPdfOriginalBuffer(arrayBuffer);
-
-            let pages: string[] = [];
-
-            if (Platform.OS === 'web') {
-                try {
-                    const pdfjsLib = await loadPdfJs();
-                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
-                    const pdf = await loadingTask.promise;
-                    
-                    // Only need first page for protect and compress, need all for watermark/rotate
-                    const maxPages = (targetStep === 'protect_editor' || targetStep === 'compress_editor') ? 1 : Math.min(pdf.numPages, 50); // Cap at 50 to prevent freezing for watermark
-                    
-                    for (let j = 1; j <= maxPages; j++) {
-                        const page = await pdf.getPage(j);
-                        const viewport = page.getViewport({ scale: 1.0 });
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        if (ctx) {
-                            canvas.width = viewport.width;
-                            canvas.height = viewport.height;
-                            await page.render({ canvasContext: ctx, viewport }).promise;
-                            pages.push(canvas.toDataURL('image/jpeg', 0.8));
-                        }
-                    }
-                } catch (e) {
-                    console.warn("Local PDF rendering failed, falling back to backend", e);
-                }
-            }
-            
-            // Si Web a échoué ou si on est sur Mobile, on utilise le backend
-            if (pages.length === 0) {
-                const formData = new FormData();
-                let fileBlob;
-                if (Platform.OS === 'web' && file.file) {
-                    fileBlob = file.file;
-                } else {
-                    const response_file = await fetch(file.uri);
-                    fileBlob = await response_file.blob();
-                }
-                formData.append('file', fileBlob, file.name);
-
-                const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard`, {
-                    method: 'POST',
-                    body: formData,
-                    headers: { 'Accept': 'application/zip, image/jpeg' }
-                });
-
-                if (!res.ok) throw new Error("Échec de la génération des images: " + await res.text());
-
-                const contentType = res.headers.get('content-type');
-                const blob = await res.blob();
-
-                if (contentType?.includes('zip')) {
-                    const zip = new JSZip();
-                    const unzipped = await zip.loadAsync(blob);
-                    const fileNames = Object.keys(unzipped.files).sort(); 
-                    // Limiter aussi pour le backend si ce n'est que protect/compress
-                    const limit = (targetStep === 'protect_editor' || targetStep === 'compress_editor') ? 1 : fileNames.length;
-                    for (let j = 0; j < Math.min(limit, fileNames.length); j++) {
-                        const filename = fileNames[j];
-                        const f = unzipped.files[filename];
-                        if (!f.dir) {
-                            const imgBlob = await f.async('blob');
-                            pages.push(URL.createObjectURL(imgBlob));
-                        }
-                    }
-                } else {
-                    pages.push(URL.createObjectURL(blob));
-                }
-            }
-
-            setPdfEditorPages(pages);
-            setStep(targetStep as any);
-        } catch (e: any) {
-            console.error("Error in initPdfEditor:", e);
-            if (Platform.OS === 'web') {
-                window.alert("Erreur: Impossible de préparer l'éditeur PDF. Détails: " + (e.message || String(e)));
-            } else {
-                Alert.alert("Erreur", "Impossible de préparer l'éditeur PDF. Veuillez réessayer.");
-            }
-            setStep('staging');
-        }
-    };
-
-    const handlePdfEditorComplete = async (edits: PdfEditItem[]) => {
-        if (!pdfOriginalBuffer) return;
-        setStep('processing');
-        try {
-            const pdfDoc = await PDFDocument.load(pdfOriginalBuffer);
-            const pdfPages = pdfDoc.getPages();
-
-            // Embed fonts
-            const fontNormal = await pdfDoc.embedFont(StandardFonts.Helvetica);
-            const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-            const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
-            const fontBoldItalic = await pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique);
-
-            for (const edit of edits) {
-                const page = pdfPages[edit.pageIndex];
-                if (!page) continue;
-
-                const { width, height } = page.getSize();
-                
-                if (edit.type === 'text' && edit.text) {
-                    const x = (edit.x / 100) * width;
-                    const fontSize = edit.size || 24;
-                    const y = height - ((edit.y / 100) * height) - fontSize;
-
-                    if (edit.backgroundColor && edit.backgroundColor.startsWith('#')) {
-                        const bgHex = edit.backgroundColor.replace('#', '');
-                        const bgR = parseInt(bgHex.substring(0, 2), 16) / 255;
-                        const bgG = parseInt(bgHex.substring(2, 4), 16) / 255;
-                        const bgB = parseInt(bgHex.substring(4, 6), 16) / 255;
-                        
-                        const rectWidth = (edit.width || 15) * (width / 100);
-                        const rectHeight = (edit.height || 4) * (height / 100);
-                        const rectY = height - ((edit.y / 100) * height) - rectHeight;
-
-                        page.drawRectangle({
-                            x,
-                            y: rectY,
-                            width: rectWidth,
-                            height: rectHeight,
-                            color: rgb(bgR, bgG, bgB),
-                        });
-                    }
-
-                    let r = 0, g = 0, b = 0;
-                    if (edit.color && edit.color.startsWith('#')) {
-                        const hex = edit.color.replace('#', '');
-                        r = parseInt(hex.substring(0, 2), 16) / 255;
-                        g = parseInt(hex.substring(2, 4), 16) / 255;
-                        b = parseInt(hex.substring(4, 6), 16) / 255;
-                    }
-
-                    let fontToUse = fontNormal;
-                    if (edit.fontWeight === 'bold' && edit.fontStyle === 'italic') {
-                        fontToUse = fontBoldItalic;
-                    } else if (edit.fontWeight === 'bold') {
-                        fontToUse = fontBold;
-                    } else if (edit.fontStyle === 'italic') {
-                        fontToUse = fontItalic;
-                    }
-
-                    let xOffset = 0;
-                    if (edit.textAlign === 'center' || edit.textAlign === 'right') {
-                        const textWidth = fontToUse.widthOfTextAtSize(edit.text, fontSize);
-                        if (edit.textAlign === 'center') xOffset = -textWidth / 2;
-                        if (edit.textAlign === 'right') xOffset = -textWidth;
-                    }
-
-                    page.drawText(edit.text, {
-                        x: x + xOffset,
-                        y,
-                        size: fontSize,
-                        font: fontToUse,
-                        color: rgb(r, g, b),
-                    });
-                }
-
-                if (edit.type === 'signature' && edit.signatureData) {
-                    const sig = edit.signatureData as any;
-                    const x = (edit.x / 100) * width;
-                    const rectWidth = (edit.width || 20) * (width / 100);
-                    const rectHeight = (edit.height || 10) * (height / 100);
-                    const y = height - ((edit.y / 100) * height) - rectHeight;
-
-                    if (sig.type === 'text') {
-                        page.drawText(sig.data, {
-                            x, y, size: rectHeight * 0.8, font: fontItalic, color: rgb(0,0,0)
-                        });
-                    } else if (sig.type === 'path') {
-                        const scaleX = rectWidth / (sig.width || 500);
-                        const scaleY = rectHeight / (sig.height || 200);
-                        const scale = Math.min(scaleX, scaleY);
-                        page.drawSvgPath(sig.data, {
-                            x, y: y + rectHeight, scale, borderColor: rgb(0,0,0), borderWidth: 2
-                        });
-                    } else if (sig.type === 'image') {
-                        try {
-                            const isPng = sig.data.includes('image/png') || sig.data.endsWith('.png');
-                            // Si c'est une URI locale (ImagePicker), on charge via fetch
-                            const imgBytes = await fetch(sig.data).then(r => r.arrayBuffer());
-                            let pdfImg;
-                            if (isPng) {
-                                pdfImg = await pdfDoc.embedPng(imgBytes);
-                            } else {
-                                pdfImg = await pdfDoc.embedJpg(imgBytes);
-                            }
-                            page.drawImage(pdfImg, {
-                                x, y, width: rectWidth, height: rectHeight
-                            });
-                        } catch (e) {
-                            console.error("Failed to embed signature image", e);
-                        }
-                    }
-                }
-            }
-
-            const modifiedPdfBytes = await pdfDoc.save();
-            const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
-            const url = URL.createObjectURL(blob);
-            setResultUrl(url);
-            setStep('done');
-        } catch (e: any) {
-            console.error("Error applying PDF edits:", e);
-            Alert.alert("Erreur", "Échec de l'application des modifications.");
-            setStep('staging');
-        }
-    };
 
     const initOrganizeEditor = async (files: any[], appendToExisting = false, targetStep: string = 'organize_editor') => {
         try {
@@ -1167,151 +919,6 @@ export default function ConvertScreen() {
 
     const handleRemoveFile = (indexToRemove: number) => {
         setSelectedFiles(prev => prev.filter((_, index) => index !== indexToRemove));
-    };
-
-    const processFiles = async (passwordOverride?: string, filesOverride?: any[], compressionLevelOverride?: CompressionLevel) => {
-        const targetFiles = filesOverride || selectedFiles;
-        if (targetFiles.length === 0) return;
-        
-        setStep('processing');
-        
-        let baseName = targetFiles[0].name.split('.').slice(0, -1).join('.');
-        if (targetFiles.length > 1 && selectedService.id === 'merge-pdf') {
-            baseName = 'document_fusionne';
-        } else {
-            baseName += '_converti';
-        }
-        setFileName(baseName);
-
-        try {
-            const formData = new FormData();
-            
-            if (selectedService.id === 'compress-pdf') {
-                setProcessingTime(0);
-                const timerId = setInterval(() => {
-                    setProcessingTime(prev => prev + 1);
-                }, 1000);
-                (window as any)._processingTimer = timerId;
-            }
-
-            for (let i = 0; i < targetFiles.length; i++) {
-                const file = targetFiles[i];
-                let blob;
-                if (Platform.OS === 'web' && file.file) {
-                    blob = file.file;
-                } else {
-                    const response_file = await fetch(file.uri);
-                    blob = await response_file.blob();
-                }
-                
-                const fieldName = selectedService.multiple ? 'files' : 'file';
-                formData.append(fieldName, blob, file.name);
-                
-                if (!selectedService.multiple) break; 
-            }
-
-            if (selectedService.id === 'protect-pdf') {
-                formData.append('password', passwordOverride || pdfPassword || 'faas2024');
-            }
-            if (selectedService.id === 'compress-pdf') {
-                formData.append('compressionLevel', compressionLevelOverride || compressionLevel);
-            }
-            if (selectedService.id === 'number-pdf') {
-                formData.append('position', numberingConfig.position);
-                formData.append('format', numberingConfig.format);
-            }
-            if (selectedService.id === 'ocr-pdf') {
-                formData.append('lang', ocrLang);
-            }
-            if (selectedService.id === 'pdf-to-image' || selectedService.id === 'image-to-pdf') {
-                formData.append('quality', conversionQuality);
-            }
-
-            const controller = new AbortController();
-            // Augmentation du timeout à 5 minutes pour laisser les gros fichiers se traiter
-            const timeoutId = setTimeout(() => controller.abort(), 300000); 
-
-            const response = await fetch(`${SERVER_URL}${selectedService.endpoint}`, {
-                method: 'POST',
-                body: formData,
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);
-
-            if (!response.ok) {
-                if (response.status === 404) {
-                    throw new Error('NotImplemented');
-                }
-                const errorText = await response.text();
-                throw new Error(errorText || 'Erreur serveur');
-            }
-
-            let resultBlob;
-            
-            if (selectedService.id === 'compress-pdf') {
-                const data = await response.json();
-                if (!data.jobId) throw new Error('Erreur serveur (pas de jobId)');
-                
-                const jobId = data.jobId;
-                
-                // Boucle de polling (ticket)
-                let pollingSeconds = 0;
-                while (true) {
-                    await new Promise(r => setTimeout(r, 3000));
-                    pollingSeconds += 3;
-                    
-                    // Abort after 30 seconds as requested by the user
-                    if (pollingSeconds >= 30) {
-                        throw new Error("Délai dépassé (30s) : Fichier trop lourd pour notre serveur gratuit. Veuillez utiliser un fichier de moins de 10 Mo.");
-                    }
-
-                    const statusRes = await fetch(`${SERVER_URL}/convert/status/${jobId}`);
-                    if (!statusRes.ok) throw new Error('Erreur serveur');
-                    
-                    const statusData = await statusRes.json();
-                    
-                    if (statusData.status === 'done') {
-                        const blobRes = await fetch(`${SERVER_URL}/convert/download/${jobId}`);
-                        if (!blobRes.ok) throw new Error('Erreur serveur au téléchargement');
-                        resultBlob = await blobRes.blob();
-                        break;
-                    } else if (statusData.status === 'error') {
-                        throw new Error(statusData.error || 'La compression a échoué.');
-                    }
-                    // Si status === 'processing', on attend le prochain tour de boucle
-                }
-            } else {
-                // Fonctionnement normal synchrone pour les autres outils
-                resultBlob = await response.blob();
-            }
-
-            const url = URL.createObjectURL(resultBlob);
-            setResultUrl(url);
-            setStep('done');
-            if ((window as any)._processingTimer) {
-                clearInterval((window as any)._processingTimer);
-            }
-
-        } catch (error: any) {
-            if ((window as any)._processingTimer) {
-                clearInterval((window as any)._processingTimer);
-            }
-            console.error('CONVERT_ERROR:', error);
-            let errorMsg = error.message && error.message !== 'Erreur serveur' && error.message !== 'Failed to fetch' ? error.message : 'Le traitement a échoué. Vérifiez vos fichiers et réessayez.';
-            if (error.name === 'AbortError' || (error.message && error.message.includes('aborted'))) {
-                errorMsg = 'Le serveur (hébergement gratuit) met trop de temps à répondre pour ce fichier lourd. Le délai a expiré.';
-            } else if (error.message === 'NotImplemented') {
-                errorMsg = 'Cette fonctionnalité est en cours de développement et sera disponible prochainement !';
-            }
-
-            if (Platform.OS === 'web') {
-                window.alert(errorMsg);
-            } else {
-                Alert.alert(t('common.error'), errorMsg);
-            }
-            setStep('staging');
-        }
     };
 
     const downloadResult = async () => {
@@ -2236,7 +1843,7 @@ export default function ConvertScreen() {
     if (step === 'processing') {
         return (
             <ProcessingScreen
-                processingTime={processingTime}
+                processingTime={apiProcessingTime}
                 selectedFilesCount={selectedFiles.length}
                 fileName={fileName}
                 colors={colors}
