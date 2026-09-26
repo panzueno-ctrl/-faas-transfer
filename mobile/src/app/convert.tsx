@@ -451,7 +451,7 @@ export default function ConvertScreen() {
 
                 // Add skeleton page to trigger ActivityIndicator instantly
                 newOrganizePages.push({
-                    id: `${fileIndex}-0-${Date.now()}`,
+                    id: `${fileIndex}-0`,
                     fileIndex: fileIndex,
                     fileName: file.name,
                     pageIndex: 0,
@@ -523,7 +523,7 @@ export default function ConvertScreen() {
                                         const pagesToProcess = effectiveTargetStep === 'merge_editor' ? 1 : pdf.numPages;
                                         for (let j = 0; j < pagesToProcess; j++) {
                                             newSkeletons.push({
-                                                id: `${fileIndex}-${j}-${Date.now()}`,
+                                                id: `${fileIndex}-${j}`,
                                                 fileIndex: fileIndex,
                                                 fileName: file.name,
                                                 pageIndex: j,
@@ -628,7 +628,7 @@ export default function ConvertScreen() {
                                     const pagesToProcessMobile = effectiveTargetStep === 'merge_editor' ? 1 : numPages;
                                     for (let j = 0; j < pagesToProcessMobile; j++) {
                                         newSkeletons.push({
-                                            id: `${fileIndex}-${j}-${Date.now()}`,
+                                            id: `${fileIndex}-${j}`,
                                             fileIndex: fileIndex,
                                             fileName: file.name,
                                             pageIndex: j,
@@ -691,7 +691,7 @@ export default function ConvertScreen() {
                                                     next[targetIdx] = { ...next[targetIdx], imageUri: URL.createObjectURL(imgBlob) };
                                                 } else {
                                                     next.push({
-                                                        id: `${fileIndex}-${j}-${Date.now()}`,
+                                                        id: `${fileIndex}-${j}`,
                                                         fileIndex: fileIndex,
                                                         fileName: file.name,
                                                         pageIndex: j,
@@ -712,7 +712,7 @@ export default function ConvertScreen() {
                                             next[targetIdx] = { ...next[targetIdx], imageUri: URL.createObjectURL(blob) };
                                         } else {
                                             next.push({
-                                                id: `${fileIndex}-0-${Date.now()}`,
+                                                id: `${fileIndex}-0`,
                                                 fileIndex: fileIndex,
                                                 fileName: file.name,
                                                 pageIndex: 0,
