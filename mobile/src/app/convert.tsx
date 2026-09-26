@@ -217,7 +217,7 @@ export default function ConvertScreen() {
                                     setOrganizePages(prev => {
                                         const next = [...prev];
                                         const newSkeletons = [];
-                                        const pagesToProcess = effectiveTargetStep === 'merge_editor' ? 1 : pdf.numPages;
+                                        const pagesToProcess = pdf.numPages;
                                         for (let j = 0; j < pagesToProcess; j++) {
                                             newSkeletons.push({
                                                 id: `${fileIndex}-${j}`,
@@ -266,7 +266,7 @@ export default function ConvertScreen() {
                                     page.cleanup();
                                 }
 
-                                if (pdf.numPages > 1 && effectiveTargetStep !== 'merge_editor') {
+                                if (pdf.numPages > 1) {
                                     for (let j = 2; j <= pdf.numPages; j++) {
                                         if (sessionId !== currentRenderSession.current) break;
                                         try {
@@ -322,7 +322,7 @@ export default function ConvertScreen() {
                                 setOrganizePages(prev => {
                                     const next = [...prev];
                                     const newSkeletons = [];
-                                    const pagesToProcessMobile = effectiveTargetStep === 'merge_editor' ? 1 : numPages;
+                                    const pagesToProcessMobile = numPages;
                                     for (let j = 0; j < pagesToProcessMobile; j++) {
                                         newSkeletons.push({
                                             id: `${fileIndex}-${j}`,
