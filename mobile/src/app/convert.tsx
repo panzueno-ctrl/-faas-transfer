@@ -162,10 +162,13 @@ export default function ConvertScreen() {
 
             // 2. PROCESS ASYNC IN BACKGROUND (SEQUENTIAL TO AVOID OOM)
             setTimeout(async () => {
+                // PHASE 1: GENERATE ALL COVERS FIRST
+                const processingQueue = [];
+
                 for (let i = 0; i < files.length; i++) {
                     const file = files[i];
                     const fileIndex = startIndex + i;
-                    console.log(`[CONVERT] Processing file ${fileIndex}: ${file.name}`);
+                    console.log(`[CONVERT] Processing cover for file ${fileIndex}: ${file.name}`);
                     
                     if (sessionId !== currentRenderSession.current) break;
 
@@ -177,9 +180,7 @@ export default function ConvertScreen() {
                             const response = await fetch(file.uri);
                             arrayBuffer = await response.arrayBuffer();
                         }
-                        console.log(`[CONVERT] ArrayBuffer loaded, size: ${arrayBuffer.byteLength}`);
                         
-                        // Update buffer in state
                         setOrganizeFiles(prev => {
                             const next = [...prev];
                             const targetIndex = next.findIndex(f => f.originalIndex === fileIndex);
@@ -192,12 +193,9 @@ export default function ConvertScreen() {
                         let pdfJsSuccess = false;
                         if (Platform.OS === 'web') {
                             try {
-                                console.log(`[CONVERT] Calling loadPdfJs`);
                                 const pdfjsLib = await loadPdfJs();
-                                console.log(`[CONVERT] Calling getDocument`);
                                 const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
                                 const pdf = await loadingTask.promise;
-                                console.log(`[CONVERT] getDocument success, numPages: ${pdf.numPages}`);
                                 
                                 setOrganizeFiles(prev => {
                                     const next = [...prev];
@@ -209,11 +207,6 @@ export default function ConvertScreen() {
                                 });
                                 
                                 if (pdf.numPages >= 1) {
-                                    if (sessionId !== currentRenderSession.current) {
-                                        loadingTask.destroy();
-                                        break;
-                                    }
-                                    
                                     setOrganizePages(prev => {
                                         const next = [...prev];
                                         const newSkeletons = [];
@@ -238,7 +231,6 @@ export default function ConvertScreen() {
                                         return next;
                                     });
 
-                                    console.log(`[CONVERT] getPage(1)`);
                                     const page = await pdf.getPage(1);
                                     const viewport = page.getViewport({ scale: 0.4 });
                                     const canvas = document.createElement('canvas');
@@ -246,10 +238,8 @@ export default function ConvertScreen() {
                                     canvas.width = viewport.width;
                                     canvas.height = viewport.height;
                                     if (ctx) {
-                                        console.log(`[CONVERT] page.render()`);
                                         await page.render({ canvasContext: ctx, viewport }).promise;
                                         const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-                                        console.log(`[CONVERT] dataUrl generated`);
                                         
                                         if (sessionId === currentRenderSession.current) {
                                             setOrganizePages(prev => {
@@ -260,58 +250,23 @@ export default function ConvertScreen() {
                                                 }
                                                 return next;
                                             });
-                                            console.log(`[CONVERT] updated state for imageUri`);
                                         }
                                     }
                                     page.cleanup();
                                 }
-
-                                const processRemainingPages = async (pdfDoc: any, fIndex: number, sId: number, lTask: any) => {
-                                    try {
-                                        if (pdfDoc.numPages > 1) {
-                                            for (let j = 2; j <= pdfDoc.numPages; j++) {
-                                                if (sId !== currentRenderSession.current) break;
-                                                if (j % 5 === 0) await new Promise(r => setTimeout(r, 15));
-                                                try {
-                                                    const page = await pdfDoc.getPage(j);
-                                                    const viewport = page.getViewport({ scale: 0.4 });
-                                                    const canvas = document.createElement('canvas');
-                                                    const ctx = canvas.getContext('2d');
-                                                    canvas.width = viewport.width;
-                                                    canvas.height = viewport.height;
-                                                    if (ctx) {
-                                                        await page.render({ canvasContext: ctx, viewport }).promise;
-                                                        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-                                                        if (sId === currentRenderSession.current) {
-                                                            setOrganizePages(prev => {
-                                                                const next = [...prev];
-                                                                const targetIdx = next.findIndex(p => p.fileIndex === fIndex && p.pageIndex === j - 1);
-                                                                if (targetIdx !== -1) {
-                                                                    next[targetIdx] = { ...next[targetIdx], imageUri: dataUrl };
-                                                                }
-                                                                return next;
-                                                            });
-                                                        }
-                                                    }
-                                                    page.cleanup();
-                                                } catch (e) {
-                                                    console.warn('Async thumbnail error', e);
-                                                }
-                                            }
-                                        }
-                                    } finally {
-                                        lTask.destroy();
-                                    }
-                                };
-                                processRemainingPages(pdf, fileIndex, sessionId, loadingTask);
+                                
+                                loadingTask.destroy(); // Free memory immediately
                                 pdfJsSuccess = true;
+                                
+                                if (pdf.numPages > 1) {
+                                    processingQueue.push({ fileIndex, file, arrayBuffer, numPages: pdf.numPages, method: 'web' });
+                                }
                             } catch (localError) {
-                                console.warn("Local PDF.js rendering failed", localError);
+                                console.warn("Local PDF.js rendering failed for cover", localError);
                             }
                         }
                         
                         if (!pdfJsSuccess) {
-                            // Fallback backend for Mobile OR failed Web worker
                             try {
                                 const tempDoc = await PDFDocument.load(arrayBuffer.slice(0), { ignoreEncryption: true });
                                 const numPages = tempDoc.getPageCount();
@@ -328,8 +283,7 @@ export default function ConvertScreen() {
                                 setOrganizePages(prev => {
                                     const next = [...prev];
                                     const newSkeletons = [];
-                                    const pagesToProcessMobile = numPages;
-                                    for (let j = 0; j < pagesToProcessMobile; j++) {
+                                    for (let j = 0; j < numPages; j++) {
                                         newSkeletons.push({
                                             id: `${fileIndex}-${j}`,
                                             fileIndex: fileIndex,
@@ -348,90 +302,135 @@ export default function ConvertScreen() {
                                     }
                                     return next;
                                 });
+                                
+                                processingQueue.push({ fileIndex, file, numPages, method: 'backend' });
                             } catch (e) {
-                                console.warn("Failed to read page count locally for fallback", e);
+                                console.warn("Fallback reading failed", e);
                             }
+                        }
 
-                            const formData = new FormData();
-                            let fileBlob;
-                            if (Platform.OS === 'web' && file.file) {
-                                fileBlob = file.file;
-                            } else {
-                                const response_file = await fetch(file.uri);
-                                fileBlob = await response_file.blob();
-                            }
-                            formData.append('file', fileBlob, file.name);
-
-                            const maxPagesParam = effectiveTargetStep === 'merge_editor' ? '&max_pages=1' : '';
-                            const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard${maxPagesParam}`, {
-                                method: 'POST',
-                                body: formData,
-                                headers: { 'Accept': 'application/zip, image/jpeg' }
-                            });
-
-                            if (!res.ok) {
-                                throw new Error(`Erreur backend: ${res.status}`);
-                            }
-
-                            const contentType = res.headers.get('content-type');
-                            const blob = await res.blob();
-
-                            if (contentType?.includes('zip')) {
-                                const zip = new JSZip();
-                                const unzipped = await zip.loadAsync(blob);
-                                const fileNames = Object.keys(unzipped.files).sort();
-                                for (let j = 0; j < fileNames.length; j++) {
+                    } catch (fileError: any) {
+                        console.error(`Erreur pour le fichier ${file.name}:`, fileError);
+                        if (Platform.OS === 'web') window.alert(`Erreur: ${fileError.message}`);
+                    }
+                }
+                
+                // PHASE 2: GENERATE REMAINING PAGES FOR ALL FILES (Sequential background)
+                const processRemaining = async () => {
+                    for (const item of processingQueue) {
+                        if (sessionId !== currentRenderSession.current) break;
+                        
+                        if (item.method === 'web') {
+                            try {
+                                const pdfjsLib = await loadPdfJs();
+                                const loadingTask = pdfjsLib.getDocument({ data: item.arrayBuffer.slice(0) });
+                                const pdf = await loadingTask.promise;
+                                
+                                for (let j = 2; j <= pdf.numPages; j++) {
                                     if (sessionId !== currentRenderSession.current) break;
-                                    const filename = fileNames[j];
-                                    const f = unzipped.files[filename];
-                                    if (!f.dir) {
-                                        const imgBlob = await f.async('blob');
+                                    
+                                    // Yield to UI heavily
+                                    if (j % 5 === 0) await new Promise(r => setTimeout(r, 20));
+                                    
+                                    try {
+                                        const page = await pdf.getPage(j);
+                                        const viewport = page.getViewport({ scale: 0.4 });
+                                        const canvas = document.createElement('canvas');
+                                        const ctx = canvas.getContext('2d');
+                                        canvas.width = viewport.width;
+                                        canvas.height = viewport.height;
+                                        if (ctx) {
+                                            await page.render({ canvasContext: ctx, viewport }).promise;
+                                            const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                                            
+                                            if (sessionId === currentRenderSession.current) {
+                                                setOrganizePages(prev => {
+                                                    const next = [...prev];
+                                                    const targetIdx = next.findIndex(p => p.fileIndex === item.fileIndex && p.pageIndex === j - 1);
+                                                    if (targetIdx !== -1) {
+                                                        next[targetIdx] = { ...next[targetIdx], imageUri: dataUrl };
+                                                    }
+                                                    return next;
+                                                });
+                                            }
+                                        }
+                                        page.cleanup();
+                                    } catch (e) {
+                                        console.warn('Async thumbnail error', e);
+                                    }
+                                }
+                                loadingTask.destroy();
+                            } catch (e) {
+                                console.warn('Phase 2 web error', e);
+                            }
+                        } else {
+                            // Backend fallback for remaining pages (if needed)
+                            try {
+                                const formData = new FormData();
+                                let fileBlob;
+                                if (Platform.OS === 'web' && item.file.file) {
+                                    fileBlob = item.file.file;
+                                } else {
+                                    const response_file = await fetch(item.file.uri);
+                                    fileBlob = await response_file.blob();
+                                }
+                                formData.append('file', fileBlob, item.file.name);
+
+                                const maxPagesParam = effectiveTargetStep === 'merge_editor' ? '&max_pages=1' : '';
+                                const res = await fetch(`${SERVER_URL}/convert/pdf-to-image?format=jpeg&quality=standard${maxPagesParam}`, {
+                                    method: 'POST',
+                                    body: formData,
+                                    headers: { 'Accept': 'application/zip, image/jpeg' }
+                                });
+                                
+                                if (res.ok) {
+                                    const contentType = res.headers.get('content-type');
+                                    const blob = await res.blob();
+
+                                    if (contentType?.includes('zip')) {
+                                        const zip = new JSZip();
+                                        const unzipped = await zip.loadAsync(blob);
+                                        const fileNames = Object.keys(unzipped.files).sort();
+                                        for (let j = 0; j < fileNames.length; j++) {
+                                            if (sessionId !== currentRenderSession.current) break;
+                                            const filename = fileNames[j];
+                                            const f = unzipped.files[filename];
+                                            if (!f.dir) {
+                                                const imgBlob = await f.async('blob');
+                                                if (sessionId === currentRenderSession.current) {
+                                                    setOrganizePages(prev => {
+                                                        const next = [...prev];
+                                                        const targetIdx = next.findIndex(p => p.fileIndex === item.fileIndex && p.pageIndex === j);
+                                                        if (targetIdx !== -1) {
+                                                            next[targetIdx] = { ...next[targetIdx], imageUri: URL.createObjectURL(imgBlob) };
+                                                        }
+                                                        return next;
+                                                    });
+                                                }
+                                            }
+                                        }
+                                    } else {
                                         if (sessionId === currentRenderSession.current) {
                                             setOrganizePages(prev => {
                                                 const next = [...prev];
-                                                const targetIdx = next.findIndex(p => p.fileIndex === fileIndex && p.pageIndex === j);
+                                                const targetIdx = next.findIndex(p => p.fileIndex === item.fileIndex && p.pageIndex === 0);
                                                 if (targetIdx !== -1) {
-                                                    next[targetIdx] = { ...next[targetIdx], imageUri: URL.createObjectURL(imgBlob) };
-                                                } else {
-                                                    next.push({
-                                                        id: `${fileIndex}-${j}`,
-                                                        fileIndex: fileIndex,
-                                                        fileName: file.name,
-                                                        pageIndex: j,
-                                                        imageUri: URL.createObjectURL(imgBlob)
-                                                    });
+                                                    next[targetIdx] = { ...next[targetIdx], imageUri: URL.createObjectURL(blob) };
                                                 }
                                                 return next;
                                             });
                                         }
                                     }
                                 }
-                            } else {
-                                if (sessionId === currentRenderSession.current) {
-                                    setOrganizePages(prev => {
-                                        const next = [...prev];
-                                        const targetIdx = next.findIndex(p => p.fileIndex === fileIndex && p.pageIndex === 0);
-                                        if (targetIdx !== -1) {
-                                            next[targetIdx] = { ...next[targetIdx], imageUri: URL.createObjectURL(blob) };
-                                        } else {
-                                            next.push({
-                                                id: `${fileIndex}-0`,
-                                                fileIndex: fileIndex,
-                                                fileName: file.name,
-                                                pageIndex: 0,
-                                                imageUri: URL.createObjectURL(blob)
-                                            });
-                                        }
-                                        return next;
-                                    });
-                                }
+                            } catch (e) {
+                                console.warn('Phase 2 backend error', e);
                             }
                         }
-                    } catch (fileError: any) {
-                        console.error(`Erreur pour le fichier ${file.name}:`, fileError);
-                        window.alert(`Erreur backend: ${fileError.message}`);
                     }
-                }
+                };
+                
+                // Launch phase 2 in background without awaiting
+                processRemaining();
             }, 0);
         } catch (e: any) {
             console.error("Error in initOrganizeEditor:", e);
