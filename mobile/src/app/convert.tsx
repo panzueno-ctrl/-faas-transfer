@@ -81,7 +81,6 @@ export default function ConvertScreen() {
     
     // Premium UI states
     const [pdfPassword, setPdfPassword] = useState('');
-    const [pdfOriginalBuffer, setPdfOriginalBuffer] = useState<ArrayBuffer | null>(null);
     const [watermarkConfig, setWatermarkConfig] = useState<WatermarkSettings | null>(null);
     const [conversionQuality, setConversionQuality] = useState<ConversionQuality>('standard');
     const [numberingConfig, setNumberingConfig] = useState<NumberingConfig>({ position: 'bottom-center', format: 'total' });
@@ -91,7 +90,6 @@ export default function ConvertScreen() {
     const [signers, setSigners] = useState<{name: string, email: string}[]>([{ name: '', email: '' }]);
     const [isSendingRequest, setIsSendingRequest] = useState(false);
     
-    const [pdfDocRef, setPdfDocRef] = useState<any>(null);
     const [isSplitting, setIsSplitting] = useState(false);
     
 
