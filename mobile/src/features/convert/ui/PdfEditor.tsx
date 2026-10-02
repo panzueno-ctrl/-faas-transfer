@@ -189,21 +189,16 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
             y = (locationY / canvasSize.height) * 100;
         }
         
-        if (activeTool === 'replace') {
+        if (activeTool === 'whiteout') {
             const newEdit: PdfEditItem = {
                 id: Date.now().toString(),
                 pageIndex: currentPageIndex,
-                type: 'text',
+                type: 'whiteout',
                 x, y,
                 width: 15,
                 height: 4,
                 backgroundColor: '#ffffff',
-                text: '',
-                color: selectedColor,
-                size: selectedSize,
-                fontWeight: selectedWeight,
-                fontStyle: selectedStyle,
-                textAlign: selectedAlign,
+                color: '#ffffff' // Ensure it's white for the whiteout view
             };
             setEdits([...edits, newEdit]);
             setSelectedEditId(newEdit.id);
@@ -279,11 +274,11 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
 
                         {!restrictedMode && (
                             <Pressable 
-                                style={[styles.toolBtn, activeTool === 'replace' && styles.toolBtnActive, { marginLeft: 8 }]} 
-                                onPress={() => setActiveTool(activeTool === 'replace' ? null : 'replace')}
+                                style={[styles.toolBtn, activeTool === 'whiteout' && styles.toolBtnActive, { marginLeft: 8 }]} 
+                                onPress={() => setActiveTool(activeTool === 'whiteout' ? null : 'replace')}
                             >
-                                <Ionicons name="create" size={20} color={activeTool === 'replace' ? '#e74c3c' : colors.text} />
-                                <Text style={[styles.toolBtnText, { color: activeTool === 'replace' ? '#e74c3c' : colors.text }]}>Remplacer texte</Text>
+                                <Ionicons name="square" size={20} color={activeTool === 'whiteout' ? '#e74c3c' : colors.text} />
+                                <Text style={[styles.toolBtnText, { color: activeTool === 'whiteout' ? '#e74c3c' : colors.text }]}>Gomme</Text>
                             </Pressable>
                         )}
 
@@ -298,60 +293,7 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
 
                     <View style={styles.toolbarDivider} />
 
-                    {(activeTool === 'text' || activeTool === 'replace') && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                            {/* Font Size */}
-                            <View style={styles.richTextGroup}>
-                                <Pressable onPress={() => updateFormatting({ size: Math.max(8, selectedSize - 2) })} style={styles.richTextBtn}>
-                                    <Ionicons name="remove" size={16} color={colors.text} />
-                                </Pressable>
-                                <Text style={{ width: 24, textAlign: 'center', fontSize: 14 }}>{selectedSize}</Text>
-                                <Pressable onPress={() => updateFormatting({ size: Math.min(72, selectedSize + 2) })} style={styles.richTextBtn}>
-                                    <Ionicons name="add" size={16} color={colors.text} />
-                                </Pressable>
-                            </View>
 
-                            {/* Formatting */}
-                            <View style={styles.richTextGroup}>
-                                <Pressable 
-                                    onPress={() => updateFormatting({ fontWeight: selectedWeight === 'bold' ? 'normal' : 'bold' })} 
-                                    style={[styles.richTextBtn, selectedWeight === 'bold' && { backgroundColor: 'rgba(52, 152, 219, 0.2)' }]}
-                                >
-                                    <Text style={{ fontWeight: 'bold', fontSize: 16, color: selectedWeight === 'bold' ? '#3498db' : colors.text }}>B</Text>
-                                </Pressable>
-                                <Pressable 
-                                    onPress={() => updateFormatting({ fontStyle: selectedStyle === 'italic' ? 'normal' : 'italic' })} 
-                                    style={[styles.richTextBtn, selectedStyle === 'italic' && { backgroundColor: 'rgba(52, 152, 219, 0.2)' }]}
-                                >
-                                    <Text style={{ fontStyle: 'italic', fontSize: 16, fontFamily: 'serif', color: selectedStyle === 'italic' ? '#3498db' : colors.text }}>I</Text>
-                                </Pressable>
-                            </View>
-
-                            {/* Alignment */}
-                            <View style={styles.richTextGroup}>
-                                <Pressable onPress={() => updateFormatting({ textAlign: 'left' })} style={[styles.richTextBtn, selectedAlign === 'left' && { backgroundColor: 'rgba(52, 152, 219, 0.2)' }]}>
-                                    <Ionicons name="menu" size={16} color={selectedAlign === 'left' ? '#3498db' : colors.text} style={{ transform: [{ scaleX: 0.8 }, { translateX: -2 }] }} />
-                                </Pressable>
-                                <Pressable onPress={() => updateFormatting({ textAlign: 'center' })} style={[styles.richTextBtn, selectedAlign === 'center' && { backgroundColor: 'rgba(52, 152, 219, 0.2)' }]}>
-                                    <Ionicons name="menu" size={16} color={selectedAlign === 'center' ? '#3498db' : colors.text} style={{ transform: [{ scaleX: 0.8 }] }} />
-                                </Pressable>
-                                <Pressable onPress={() => updateFormatting({ textAlign: 'right' })} style={[styles.richTextBtn, selectedAlign === 'right' && { backgroundColor: 'rgba(52, 152, 219, 0.2)' }]}>
-                                    <Ionicons name="menu" size={16} color={selectedAlign === 'right' ? '#3498db' : colors.text} style={{ transform: [{ scaleX: 0.8 }, { translateX: 2 }] }} />
-                                </Pressable>
-                            </View>
-
-                            {/* Color Picker */}
-                            <View style={styles.colorPicker}>
-                                {COLORS.map(c => (
-                                    <Pressable 
-                                        key={c} 
-                                        style={[styles.colorSwatch, { backgroundColor: c }, selectedColor === c && styles.colorSwatchActive]}
-                                        onPress={() => updateFormatting({ color: c })}
-                                    />
-                                ))}
-                            </View>
-                        </View>
-                    )}
                 </View>
 
                 <View style={styles.toolbarRight}>
@@ -361,6 +303,64 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
                     </Pressable>
                 </View>
             </View>
+            
+            {/* Secondary Word-like Formatting Toolbar */}
+            {activeTool === 'text' && (
+                <View style={{ width: '100%', backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 8, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', zIndex: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 3 }}>
+                    <Text style={{ color: colors.textMuted, marginRight: 16, fontWeight: '600', fontSize: 13, textTransform: 'uppercase' }}>Format :</Text>
+                    
+                    {/* Font Size */}
+                    <View style={[styles.richTextGroup, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border }]}>
+                        <Pressable onPress={() => updateFormatting({ size: Math.max(8, selectedSize - 2) })} style={styles.richTextBtn}>
+                            <Ionicons name="remove" size={16} color={colors.text} />
+                        </Pressable>
+                        <Text style={{ width: 30, textAlign: 'center', fontSize: 14, fontWeight: 'bold', color: colors.text }}>{selectedSize}</Text>
+                        <Pressable onPress={() => updateFormatting({ size: Math.min(72, selectedSize + 2) })} style={styles.richTextBtn}>
+                            <Ionicons name="add" size={16} color={colors.text} />
+                        </Pressable>
+                    </View>
+
+                    {/* Formatting */}
+                    <View style={[styles.richTextGroup, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, marginLeft: 16 }]}>
+                        <Pressable 
+                            onPress={() => updateFormatting({ fontWeight: selectedWeight === 'bold' ? 'normal' : 'bold' })} 
+                            style={[styles.richTextBtn, selectedWeight === 'bold' && { backgroundColor: 'rgba(52, 152, 219, 0.15)' }]}
+                        >
+                            <Text style={{ fontWeight: '900', fontSize: 16, color: selectedWeight === 'bold' ? '#3498db' : colors.text }}>B</Text>
+                        </Pressable>
+                        <Pressable 
+                            onPress={() => updateFormatting({ fontStyle: selectedStyle === 'italic' ? 'normal' : 'italic' })} 
+                            style={[styles.richTextBtn, selectedStyle === 'italic' && { backgroundColor: 'rgba(52, 152, 219, 0.15)' }]}
+                        >
+                            <Text style={{ fontStyle: 'italic', fontSize: 16, fontFamily: 'serif', fontWeight: 'bold', color: selectedStyle === 'italic' ? '#3498db' : colors.text }}>I</Text>
+                        </Pressable>
+                    </View>
+
+                    {/* Alignment */}
+                    <View style={[styles.richTextGroup, { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, marginLeft: 16 }]}>
+                        <Pressable onPress={() => updateFormatting({ textAlign: 'left' })} style={[styles.richTextBtn, selectedAlign === 'left' && { backgroundColor: 'rgba(52, 152, 219, 0.15)' }]}>
+                            <Ionicons name="menu" size={16} color={selectedAlign === 'left' ? '#3498db' : colors.text} style={{ transform: [{ scaleX: 0.8 }, { translateX: -2 }] }} />
+                        </Pressable>
+                        <Pressable onPress={() => updateFormatting({ textAlign: 'center' })} style={[styles.richTextBtn, selectedAlign === 'center' && { backgroundColor: 'rgba(52, 152, 219, 0.15)' }]}>
+                            <Ionicons name="menu" size={16} color={selectedAlign === 'center' ? '#3498db' : colors.text} style={{ transform: [{ scaleX: 0.8 }] }} />
+                        </Pressable>
+                        <Pressable onPress={() => updateFormatting({ textAlign: 'right' })} style={[styles.richTextBtn, selectedAlign === 'right' && { backgroundColor: 'rgba(52, 152, 219, 0.15)' }]}>
+                            <Ionicons name="menu" size={16} color={selectedAlign === 'right' ? '#3498db' : colors.text} style={{ transform: [{ scaleX: 0.8 }, { translateX: 2 }] }} />
+                        </Pressable>
+                    </View>
+
+                    {/* Color Picker */}
+                    <View style={[styles.colorPicker, { marginLeft: 24, padding: 4, backgroundColor: colors.background, borderRadius: 8, borderWidth: 1, borderColor: colors.border }]}>
+                        {COLORS.map(c => (
+                            <Pressable 
+                                key={c} 
+                                style={[styles.colorSwatch, { backgroundColor: c, width: 20, height: 20, marginHorizontal: 4 }, selectedColor === c && styles.colorSwatchActive]}
+                                onPress={() => updateFormatting({ color: c })}
+                            />
+                        ))}
+                    </View>
+                </View>
+            )}
 
             <View style={styles.mainArea}>
                 {/* Left Sidebar (Thumbnails) */}
