@@ -164,32 +164,37 @@ export default function SplitEditor({
                                 return (
                                     <React.Fragment key={page.id}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <Pressable 
-                                                onPress={() => {
-                                                    if (splitTab === 'extract') {
-                                                        toggleExtractedPage(index);
-                                                    }
-                                                }}
-                                                style={[
-                                                    styles.pageWrapper, 
-                                                    { 
-                                                        borderColor: splitTab === 'extract' && isExtracted ? colors.primary : (splitTab === 'extract' ? 'transparent' : fileInfo.color), 
-                                                        borderWidth: splitTab === 'extract' ? 2 : 1, 
-                                                        opacity: (splitTab === 'extract' && !isExtracted) ? 0.7 : 1
-                                                    }
-                                                ]}
-                                            >
-                                                <Image source={{ uri: page.imageUri }} style={styles.pageImage} resizeMode="contain" />
-                                                
-                                                {splitTab === 'extract' && (
-                                                    <View style={[styles.checkCircle, { 
-                                                        backgroundColor: isExtracted ? colors.primary : 'rgba(0,0,0,0.5)',
-                                                        borderColor: isExtracted ? colors.primary : '#fff'
-                                                    }]}>
-                                                        {isExtracted && <Ionicons name="checkmark" size={16} color="#fff" />}
-                                                    </View>
-                                                )}
-                                            </Pressable>
+                                            <View style={{ alignItems: 'center' }}>
+                                                <Pressable 
+                                                    onPress={() => {
+                                                        if (splitTab === 'extract') {
+                                                            toggleExtractedPage(index);
+                                                        }
+                                                    }}
+                                                    style={[
+                                                        styles.pageWrapper, 
+                                                        { 
+                                                            borderColor: splitTab === 'extract' && isExtracted ? colors.primary : (splitTab === 'extract' ? 'transparent' : fileInfo.color), 
+                                                            borderWidth: splitTab === 'extract' ? 2 : 1, 
+                                                            opacity: (splitTab === 'extract' && !isExtracted) ? 0.7 : 1
+                                                        }
+                                                    ]}
+                                                >
+                                                    <Image source={{ uri: page.imageUri }} style={styles.pageImage} resizeMode="contain" />
+                                                    
+                                                    {splitTab === 'extract' && (
+                                                        <View style={[styles.checkCircle, { 
+                                                            backgroundColor: isExtracted ? colors.primary : 'rgba(0,0,0,0.5)',
+                                                            borderColor: isExtracted ? colors.primary : '#fff'
+                                                        }]}>
+                                                            {isExtracted && <Ionicons name="checkmark" size={16} color="#fff" />}
+                                                        </View>
+                                                    )}
+                                                </Pressable>
+                                                <View style={{ marginTop: 8, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
+                                                    <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '500' }}>Page {index + 1}</Text>
+                                                </View>
+                                            </View>
 
                                             {splitTab === 'split' && index < pages.length - 1 && (
                                                 <Pressable 
