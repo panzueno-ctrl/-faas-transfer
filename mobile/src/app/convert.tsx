@@ -130,7 +130,14 @@ export default function ConvertScreen() {
         setFileName,
         splitTab,
         splitPoints,
-        splitInterval
+        splitTab,
+        splitPoints,
+        splitInterval,
+        currentRenderSession,
+        extractedPages,
+        setIsSplitting,
+        setLocalError,
+        setResultFiles
     });
 
 
@@ -348,6 +355,42 @@ export default function ConvertScreen() {
             setIsSendingRequest(false);
         }
     };
+
+
+    const [session, setSession] = useState<Session | null>(null);
+
+    useEffect(() => {
+        if (step === 'done' && Platform.OS === 'web') {
+            if (resultUrl) {
+                try {
+                    const ext = (selectedService?.id === 'split-pdf' && splitTab === 'extract') ? 'pdf' : (selectedService?.outputExt || 'zip');
+                    const a = document.createElement('a');
+                    a.href = resultUrl;
+                    a.download = `${fileName}.${ext}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    if (ext === 'pdf') {
+                        window.open(resultUrl, '_blank');
+                    }
+                } catch (e) {
+                    console.log('Auto-download blocked', e);
+                }
+            }
+        }
+    }, [step, resultUrl]);
+
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+        });
+        
+        return () => subscription.unsubscribe();
+    }, []);
 
     if (step === 'menu') {
         const toolsToDisplay = activeTab === 'files' ? FILE_TOOLS : MEDIA_TOOLS;

@@ -29,7 +29,14 @@ interface UseConvertActionsProps {
     splitTab: 'split' | 'extract';
     splitPoints: number[];
     splitInterval: number;
+    currentRenderSession: any;
+    extractedPages: number[];
+    setIsSplitting: (v: boolean) => void;
+    setLocalError: (e: string) => void;
+    setResultFiles: (files: any) => void;
 }
+
+const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
 export function useConvertActions({
     setStep,
@@ -46,7 +53,12 @@ export function useConvertActions({
     setFileName,
     splitTab,
     splitPoints,
-    splitInterval
+    splitInterval,
+    currentRenderSession,
+    extractedPages,
+    setIsSplitting,
+    setLocalError,
+    setResultFiles
 }: UseConvertActionsProps) {
 
     const initOrganizeEditor = async (files: any[], appendToExisting = false, targetStep: string = 'organize_editor') => {
@@ -696,45 +708,6 @@ export function useConvertActions({
             }
         }, 100);
     };
-
-    const [session, setSession] = useState<Session | null>(null);
-
-    useEffect(() => {
-        if (step === 'done' && Platform.OS === 'web') {
-            if (resultUrl) {
-                try {
-                    const ext = (selectedService?.id === 'split-pdf' && splitTab === 'extract') ? 'pdf' : (selectedService?.outputExt || 'zip');
-                    // Auto-download
-                    const a = document.createElement('a');
-                    a.href = resultUrl;
-                    a.download = `${fileName}.${ext}`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    
-                    // Auto-open in new tab for PDFs
-                    if (ext === 'pdf') {
-                        window.open(resultUrl, '_blank');
-                    }
-                } catch (e) {
-                    console.log('Auto-download blocked', e);
-                }
-            }
-        }
-    }, [step, resultUrl]);
-
-    useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-        });
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session);
-        });
-        
-        return () => subscription.unsubscribe();
-    }, []);
-
 
     return {
         initOrganizeEditor,
