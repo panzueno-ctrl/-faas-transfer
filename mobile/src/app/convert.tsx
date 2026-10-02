@@ -364,32 +364,38 @@ export default function ConvertScreen() {
             return acc;
         }, {} as Record<string, typeof FILE_TOOLS>);
 
-        return (
-            <ToolSelectionScreen
-                styles={styles}
-                colors={colors}
-                t={t}
-                router={router}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                groupedTools={groupedTools}
-                handleServicePress={handleServicePress}
-            />
+                return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                <ToolSelectionScreen
+                    styles={styles}
+                    colors={colors}
+                    t={t}
+                    router={router}
+                    searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                    groupedTools={groupedTools}
+                    handleServicePress={handleServicePress}
+                />
+            </SafeAreaView>
         );
     }
 
     if (step === 'tool_intro') {
-        return (
-            <ToolIntroScreen
-                styles={styles}
-                colors={colors}
-                t={t}
-                selectedService={selectedService}
-                handleSelectFiles={() => handleSelectFiles(false)}
-                cancelTool={cancelTool}
-            />
+                return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                <ToolIntroScreen
+                    styles={styles}
+                    colors={colors}
+                    t={t}
+                    selectedService={selectedService}
+                    handleSelectFiles={() => handleSelectFiles(false)}
+                    cancelTool={cancelTool}
+                />
+            </SafeAreaView>
         );
     }
 
