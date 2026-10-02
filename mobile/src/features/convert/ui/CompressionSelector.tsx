@@ -149,14 +149,20 @@ export default function CompressionSelector({ value, onChange, fileSize = 0 }: C
                     <Text style={{ color: colors.text, fontSize: 13, fontWeight: '500', marginBottom: 8 }}>
                         Nouvelle taille de fichier estimée
                     </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12 }}>
-                        <Text style={{ color: colors.success, fontSize: 18, fontWeight: 'bold' }}>
-                            -{formatSize(animSavedSize)}
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 4 }}>
+                        <Text style={{ color: colors.textMuted, fontSize: 14, textDecorationLine: 'line-through' }}>
+                            {formatSize(fileSize)}
                         </Text>
-                        <Text style={{ color: colors.textMuted, fontSize: 13, marginLeft: 8, paddingBottom: 2 }}>
-                            ~{formatSize(animNewSize)} (-{currentConfig.reduction}%)
+                        <Text style={{ color: colors.textMuted, fontSize: 14, marginHorizontal: 8 }}>
+                            ➔
+                        </Text>
+                        <Text style={{ color: colors.success, fontSize: 22, fontWeight: 'bold' }}>
+                            {formatSize(animNewSize)}
                         </Text>
                     </View>
+                    <Text style={{ color: colors.success, fontSize: 13, marginBottom: 12 }}>
+                        Économie estimée : -{formatSize(animSavedSize)} (-{currentConfig.reduction}%)
+                    </Text>
                     
                     {/* Progress Bar Visual */}
                     <View style={{ height: 4, backgroundColor: 'rgba(16, 185, 129, 0.2)', borderRadius: 2, overflow: 'hidden' }}>
