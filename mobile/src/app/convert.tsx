@@ -837,6 +837,25 @@ export default function ConvertScreen() {
         );
     }
 
+    if (step === 'split_editor') {
+        return (
+            <SplitEditor
+                pages={organizePages}
+                files={organizeFiles}
+                splitTab={splitTab}
+                setSplitTab={setSplitTab as any}
+                splitPoints={splitPoints}
+                setSplitPoints={setSplitPoints as any}
+                extractedPages={extractedPages}
+                setExtractedPages={setExtractedPages as any}
+                onComplete={() => handleSplitPDF()}
+                onCancel={reset}
+                colors={colors}
+                isSplitting={isSplitting}
+            />
+        );
+    }
+
     if (step === 'processing') {
         return (
             <ProcessingScreen
