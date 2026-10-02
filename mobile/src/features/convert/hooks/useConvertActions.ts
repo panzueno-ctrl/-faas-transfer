@@ -14,6 +14,7 @@ export interface WatermarkSettings {
 }
 
 interface UseConvertActionsProps {
+    step: string;
     setStep: (step: string) => void;
     setResultUrl: (url: string) => void;
     pdfOriginalBuffer: ArrayBuffer | null;
@@ -39,6 +40,7 @@ interface UseConvertActionsProps {
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
 export function useConvertActions({
+    step,
     setStep,
     setResultUrl,
     pdfOriginalBuffer,

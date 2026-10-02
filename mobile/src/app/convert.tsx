@@ -116,6 +116,7 @@ export default function ConvertScreen() {
         handleMergeComplete,
         handleSplitPDF
     } = useConvertActions({
+        step,
         setStep: setStep as any,
         setResultUrl,
         pdfOriginalBuffer,
