@@ -8,7 +8,7 @@ export default function ToolIntroScreen({
     colors,
     selectedService,
     handleSelectFiles,
-    reset
+    cancelTool
 }: any) {
     return (
         <View style={styles.contentWrapper}>
@@ -19,7 +19,7 @@ export default function ToolIntroScreen({
                         (pressed || hovered) && styles.backButtonHovered,
                         { position: 'relative', top: 0, left: 0 }
                     ]}
-                    onPress={reset}>
+                    onPress={cancelTool}>
                     <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
                     <Text style={styles.backButtonText}>Retour aux outils</Text>
                 </Pressable>
