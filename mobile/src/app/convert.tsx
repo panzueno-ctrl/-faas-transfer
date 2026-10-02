@@ -44,6 +44,7 @@ import ConversionOptions, { ConversionQuality } from '../features/convert/ui/Con
 import NumberingSelector, { NumberingConfig } from '../features/convert/ui/NumberingSelector';
 import OcrLanguageSelector, { OcrLanguage } from '../features/convert/ui/OcrLanguageSelector';
 import PdfEditor, { PdfEditItem } from '../features/convert/ui/PdfEditor';
+import RotationEditor from '../features/convert/ui/RotationEditor';
 import CompressEditor from '../features/convert/ui/CompressEditor';
 import { PDFDocument, rgb, StandardFonts, degrees } from 'pdf-lib/dist/pdf-lib.esm.js';
 import JSZip from 'jszip';

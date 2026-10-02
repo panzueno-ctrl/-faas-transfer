@@ -24,7 +24,6 @@ export interface OrganizeFileItem {
     color: string;
     originalIndex: number;
     pageCount?: number;
-    pageCount?: number;
 }
 
 interface OrganizeEditorProps {
