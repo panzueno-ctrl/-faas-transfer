@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator, Platform, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
-import PdfEditor from '../../components/PdfEditor';
+import PdfEditor from '../../features/convert/ui/PdfEditor';
 import { Ionicons } from '@expo/vector-icons';
 import JSZip from 'jszip';
 

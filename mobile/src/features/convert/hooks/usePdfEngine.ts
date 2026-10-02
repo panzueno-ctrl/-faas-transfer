@@ -2,8 +2,8 @@ import { useState, useRef } from 'react';
 import { Platform, Alert } from 'react-native';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib/dist/pdf-lib.esm.js';
 import JSZip from 'jszip';
-import { OrganizePageItem } from '../../../components/OrganizeEditor';
-import { PdfEditItem } from '../../../components/PdfEditor';
+import { OrganizePageItem } from '../ui/OrganizeEditor';
+import { PdfEditItem } from '../ui/PdfEditor';
 
 const SERVER_URL = __DEV__ ? 'http://localhost:3000' : 'https://faas-transfer.onrender.com';
 
