@@ -852,6 +852,8 @@ export default function ConvertScreen() {
                 onCancel={reset}
                 colors={colors}
                 isSplitting={isSplitting}
+                splitInterval={splitInterval}
+                setSplitInterval={setSplitInterval as any}
             />
         );
     }

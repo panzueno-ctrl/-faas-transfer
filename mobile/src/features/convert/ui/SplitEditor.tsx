@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Image, SafeAreaView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Image, SafeAreaView, Platform, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { OrganizePageItem, OrganizeFileItem } from './OrganizeEditor';
 
@@ -16,6 +16,8 @@ interface SplitEditorProps {
     onCancel: () => void;
     colors: any;
     isSplitting?: boolean;
+    splitInterval: number;
+    setSplitInterval: (interval: number) => void;
 }
 
 export default function SplitEditor({
@@ -30,7 +32,9 @@ export default function SplitEditor({
     onComplete,
     onCancel,
     colors,
-    isSplitting = false
+    isSplitting = false,
+    splitInterval,
+    setSplitInterval
 }: SplitEditorProps) {
 
     const toggleSplitPoint = (index: number) => {
@@ -96,6 +100,58 @@ export default function SplitEditor({
                         <Text style={[styles.subtitle, { color: colors.textMuted }]}>
                             {splitTab === 'split' ? 'Cliquez sur les ciseaux pour séparer les pages.' : 'Cochez les pages que vous souhaitez conserver.'}
                         </Text>
+                        
+                        {splitTab === 'split' && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, paddingHorizontal: 16, borderRadius: 24, borderWidth: 1, borderColor: colors.border, marginTop: 16 }}>
+                                <Text style={{ color: colors.textMuted, marginRight: 12 }}>Diviser toutes les</Text>
+                                <Pressable 
+                                    onPress={() => {
+                                        const newInt = Math.max(1, splitInterval - 1);
+                                        setSplitInterval(newInt);
+                                        const newPoints = [];
+                                        for (let i = newInt - 1; i < pages.length - 1; i += newInt) newPoints.push(i);
+                                        setSplitPoints(newPoints);
+                                    }}
+                                    style={({hovered}: any) => [{ padding: 8 }, hovered && { opacity: 0.7 }]}
+                                >
+                                    <Ionicons name="remove-circle-outline" size={24} color={colors.primary} />
+                                </Pressable>
+                                <TextInput 
+                                    value={splitInterval ? String(splitInterval) : ''}
+                                    onChangeText={(val) => {
+                                        const cleanVal = val.replace(/[^0-9]/g, '');
+                                        if (cleanVal === '') {
+                                            setSplitInterval('' as any);
+                                            setSplitPoints([]);
+                                            return;
+                                        }
+                                        const newInt = parseInt(cleanVal);
+                                        if (!isNaN(newInt)) {
+                                            const validInt = Math.max(1, newInt);
+                                            setSplitInterval(validInt);
+                                            const newPoints = [];
+                                            for (let i = validInt - 1; i < pages.length - 1; i += validInt) newPoints.push(i);
+                                            setSplitPoints(newPoints);
+                                        }
+                                    }}
+                                    keyboardType="numeric"
+                                    style={{ color: colors.text, fontSize: 16, fontWeight: 'bold', marginHorizontal: 8, minWidth: 40, textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 }}
+                                />
+                                <Pressable 
+                                    onPress={() => {
+                                        const newInt = Math.min(pages.length, splitInterval + 1);
+                                        setSplitInterval(newInt);
+                                        const newPoints = [];
+                                        for (let i = newInt - 1; i < pages.length - 1; i += newInt) newPoints.push(i);
+                                        setSplitPoints(newPoints);
+                                    }}
+                                    style={({hovered}: any) => [{ padding: 8 }, hovered && { opacity: 0.7 }]}
+                                >
+                                    <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
+                                </Pressable>
+                                <Text style={{ color: colors.textMuted, marginLeft: 12 }}>pages</Text>
+                            </View>
+                        )}
                     </View>
 
                     <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent}>
