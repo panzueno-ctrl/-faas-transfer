@@ -181,79 +181,82 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
     };
 
     const handleWhiteoutStart = (e: any) => {
-        const { x, y } = getCoordinates(e);
+        let x = (e.nativeEvent.locationX / canvasSize.width) * 100;
+        let y = (e.nativeEvent.locationY / canvasSize.height) * 100;
+        
+        // Fallback for some web cases
+        if (isNaN(x) || isNaN(y)) {
+             const rect = e.target?.getBoundingClientRect();
+             if (rect) {
+                 const clientX = e.nativeEvent.clientX || (e.nativeEvent.touches ? e.nativeEvent.touches[0].clientX : 0);
+                 const clientY = e.nativeEvent.clientY || (e.nativeEvent.touches ? e.nativeEvent.touches[0].clientY : 0);
+                 x = ((clientX - rect.left) / rect.width) * 100;
+                 y = ((clientY - rect.top) / rect.height) * 100;
+             }
+        }
+
         if (!isNaN(x) && !isNaN(y)) {
             setDrawingWhiteout({ startX: x, startY: y, currentX: x, currentY: y });
         }
     };
 
     const handleWhiteoutMove = (e: any) => {
-        if (drawingWhiteout) {
-            const { x, y } = getCoordinates(e);
-            if (!isNaN(x) && !isNaN(y)) {
-                setDrawingWhiteout(prev => prev ? { ...prev, currentX: x, currentY: y } : null);
-            }
+        if (!drawingWhiteout) return;
+        
+        let x = (e.nativeEvent.locationX / canvasSize.width) * 100;
+        let y = (e.nativeEvent.locationY / canvasSize.height) * 100;
+        
+        if (isNaN(x) || isNaN(y)) {
+             const rect = e.target?.getBoundingClientRect();
+             if (rect) {
+                 const clientX = e.nativeEvent.clientX || (e.nativeEvent.touches ? e.nativeEvent.touches[0].clientX : 0);
+                 const clientY = e.nativeEvent.clientY || (e.nativeEvent.touches ? e.nativeEvent.touches[0].clientY : 0);
+                 x = ((clientX - rect.left) / rect.width) * 100;
+                 y = ((clientY - rect.top) / rect.height) * 100;
+             }
+        }
+
+        if (!isNaN(x) && !isNaN(y)) {
+            setDrawingWhiteout(prev => prev ? { ...prev, currentX: x, currentY: y } : null);
         }
     };
 
     const handleWhiteoutEnd = () => {
         setDrawingWhiteout((prev) => {
             if (prev) {
-                const width = Math.abs(prev.currentX - prev.startX);
-                const height = Math.abs(prev.currentY - prev.startY);
-                const left = Math.min(prev.startX, prev.currentX);
-                const top = Math.min(prev.startY, prev.currentY);
+                let width = Math.abs(prev.currentX - prev.startX);
+                let height = Math.abs(prev.currentY - prev.startY);
+                let left = Math.min(prev.startX, prev.currentX);
+                let top = Math.min(prev.startY, prev.currentY);
                 
-                // Allow drawing even small boxes, but ignore tiny clicks < 0.2%
-                if (width > 0.2 && height > 0.2) {
-                    const newEdit: PdfEditItem = {
-                        id: Date.now().toString(),
-                        pageIndex: currentPageIndex,
-                        type: 'whiteout',
-                        x: left,
-                        y: top,
-                        width: width,
-                        height: height,
-                        backgroundColor: '#ffffff',
-                        color: '#ffffff'
-                    };
-                    setEdits(prevEdits => [...prevEdits, newEdit]);
-                    setSelectedEditId(newEdit.id);
+                // If it was just a single click (no drag), drop a standard size white box
+                if (width < 0.5 && height < 0.5) {
+                    width = 15;
+                    height = 4;
+                    // center the box on the click
+                    left = prev.startX - (width / 2);
+                    top = prev.startY - (height / 2);
                 }
+                
+                const newEdit: PdfEditItem = {
+                    id: Date.now().toString(),
+                    pageIndex: currentPageIndex,
+                    type: 'whiteout',
+                    x: left,
+                    y: top,
+                    width: width,
+                    height: height,
+                    backgroundColor: '#ffffff',
+                    color: '#ffffff'
+                };
+                setEdits(prevEdits => [...prevEdits, newEdit]);
+                setSelectedEditId(newEdit.id);
             }
             return null;
         });
     };
 
-    const whiteoutLayerRef = useRef<any>(null);
-    useEffect(() => {
-        if (Platform.OS !== 'web' || !whiteoutLayerRef.current) return;
-        
-        const node = whiteoutLayerRef.current as HTMLElement;
-        
-        const onDown = (e: MouseEvent) => {
-            if (activeTool !== 'whiteout') return;
-            handleWhiteoutStart(e);
-        };
-        const onMove = (e: MouseEvent) => {
-            if (activeTool !== 'whiteout' || !drawingWhiteout) return;
-            handleWhiteoutMove(e);
-        };
-        const onUp = (e: MouseEvent) => {
-            if (activeTool !== 'whiteout' || !drawingWhiteout) return;
-            handleWhiteoutEnd();
-        };
 
-        node.addEventListener('mousedown', onDown);
-        node.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp); // Catch up anywhere
-
-        return () => {
-            node.removeEventListener('mousedown', onDown);
-            node.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
-        };
-    }, [activeTool, drawingWhiteout, canvasSize]);
     // -----------------------------
 
     const handleCanvasPress = (e: any) => {
@@ -521,14 +524,13 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
                         {/* Dedicated drawing layer for whiteout */}
                         {activeTool === 'whiteout' && (
                             <View 
-                                ref={whiteoutLayerRef}
                                 style={[styles.interactionOverlay, { zIndex: 10, cursor: 'crosshair' }]}
-                                {...(Platform.OS !== 'web' ? {
-                                    onTouchStart: handleWhiteoutStart,
-                                    onTouchMove: handleWhiteoutMove,
-                                    onTouchEnd: handleWhiteoutEnd,
-                                    onTouchCancel: handleWhiteoutEnd
-                                } : {})}
+                                onStartShouldSetResponder={() => true}
+                                onMoveShouldSetResponder={() => true}
+                                onResponderGrant={handleWhiteoutStart}
+                                onResponderMove={handleWhiteoutMove}
+                                onResponderRelease={handleWhiteoutEnd}
+                                onResponderTerminate={handleWhiteoutEnd}
                             >
                                 {drawingWhiteout && (
                                     <View style={{
