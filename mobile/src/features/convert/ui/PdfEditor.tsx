@@ -154,67 +154,76 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
     const getCoordinates = (e: any) => {
         let x = 0;
         let y = 0;
-        if (Platform.OS === 'web') {
-            const nativeEvent = e.nativeEvent as any;
-            if (nativeEvent.offsetX !== undefined && nativeEvent.offsetY !== undefined) {
-                x = (nativeEvent.offsetX / canvasSize.width) * 100;
-                y = (nativeEvent.offsetY / canvasSize.height) * 100;
-            } else {
-                const target = e.target as HTMLElement;
-                if (target && target.getBoundingClientRect) {
-                    const rect = target.getBoundingClientRect();
-                    x = ((nativeEvent.clientX - rect.left) / rect.width) * 100;
-                    y = ((nativeEvent.clientY - rect.top) / rect.height) * 100;
+        try {
+            if (Platform.OS === 'web') {
+                const nativeEvent = e.nativeEvent || e;
+                if (nativeEvent.offsetX !== undefined && nativeEvent.offsetY !== undefined) {
+                    x = (nativeEvent.offsetX / canvasSize.width) * 100;
+                    y = (nativeEvent.offsetY / canvasSize.height) * 100;
+                } else {
+                    const target = e.target as HTMLElement;
+                    if (target && target.getBoundingClientRect) {
+                        const rect = target.getBoundingClientRect();
+                        const clientX = nativeEvent.clientX ?? (nativeEvent.touches && nativeEvent.touches[0] ? nativeEvent.touches[0].clientX : 0);
+                        const clientY = nativeEvent.clientY ?? (nativeEvent.touches && nativeEvent.touches[0] ? nativeEvent.touches[0].clientY : 0);
+                        x = ((clientX - rect.left) / rect.width) * 100;
+                        y = ((clientY - rect.top) / rect.height) * 100;
+                    }
                 }
+            } else {
+                x = (e.nativeEvent.locationX / canvasSize.width) * 100;
+                y = (e.nativeEvent.locationY / canvasSize.height) * 100;
             }
-        } else {
-            x = (e.nativeEvent.locationX / canvasSize.width) * 100;
-            y = (e.nativeEvent.locationY / canvasSize.height) * 100;
+        } catch (err) {
+            console.log("Error getting coords", err);
         }
         return { x, y };
     };
 
-    const panResponderRef = useRef(
-        PanResponder.create({
-            onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: () => true,
-            onPanResponderGrant: (e) => {
-                const { x, y } = getCoordinates(e);
-                setDrawingWhiteout({ startX: x, startY: y, currentX: x, currentY: y });
-            },
-            onPanResponderMove: (e) => {
-                const { x, y } = getCoordinates(e);
+    const handleWhiteoutStart = (e: any) => {
+        const { x, y } = getCoordinates(e);
+        if (!isNaN(x) && !isNaN(y)) {
+            setDrawingWhiteout({ startX: x, startY: y, currentX: x, currentY: y });
+        }
+    };
+
+    const handleWhiteoutMove = (e: any) => {
+        if (drawingWhiteout) {
+            const { x, y } = getCoordinates(e);
+            if (!isNaN(x) && !isNaN(y)) {
                 setDrawingWhiteout(prev => prev ? { ...prev, currentX: x, currentY: y } : null);
-            },
-            onPanResponderRelease: () => {
-                setDrawingWhiteout((prev) => {
-                    if (prev) {
-                        const width = Math.abs(prev.currentX - prev.startX);
-                        const height = Math.abs(prev.currentY - prev.startY);
-                        const left = Math.min(prev.startX, prev.currentX);
-                        const top = Math.min(prev.startY, prev.currentY);
-                        
-                        if (width > 0.5 && height > 0.5) {
-                            const newEdit: PdfEditItem = {
-                                id: Date.now().toString(),
-                                pageIndex: currentPageIndex,
-                                type: 'whiteout',
-                                x: left,
-                                y: top,
-                                width: width,
-                                height: height,
-                                backgroundColor: '#ffffff',
-                                color: '#ffffff'
-                            };
-                            setEdits(prevEdits => [...prevEdits, newEdit]);
-                            setSelectedEditId(newEdit.id);
-                        }
-                    }
-                    return null;
-                });
             }
-        })
-    ).current;
+        }
+    };
+
+    const handleWhiteoutEnd = () => {
+        setDrawingWhiteout((prev) => {
+            if (prev) {
+                const width = Math.abs(prev.currentX - prev.startX);
+                const height = Math.abs(prev.currentY - prev.startY);
+                const left = Math.min(prev.startX, prev.currentX);
+                const top = Math.min(prev.startY, prev.currentY);
+                
+                // Allow drawing even small boxes, but ignore tiny clicks < 0.2%
+                if (width > 0.2 && height > 0.2) {
+                    const newEdit: PdfEditItem = {
+                        id: Date.now().toString(),
+                        pageIndex: currentPageIndex,
+                        type: 'whiteout',
+                        x: left,
+                        y: top,
+                        width: width,
+                        height: height,
+                        backgroundColor: '#ffffff',
+                        color: '#ffffff'
+                    };
+                    setEdits(prevEdits => [...prevEdits, newEdit]);
+                    setSelectedEditId(newEdit.id);
+                }
+            }
+            return null;
+        });
+    };
     // -----------------------------
 
     const handleCanvasPress = (e: any) => {
@@ -482,8 +491,18 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
                         {/* Dedicated drawing layer for whiteout */}
                         {activeTool === 'whiteout' && (
                             <View 
-                                style={[styles.interactionOverlay, { zIndex: 10 }]}
-                                {...panResponderRef.panHandlers}
+                                style={[styles.interactionOverlay, { zIndex: 10, cursor: 'crosshair' }]}
+                                {...(Platform.OS === 'web' ? {
+                                    onMouseDown: handleWhiteoutStart,
+                                    onMouseMove: handleWhiteoutMove,
+                                    onMouseUp: handleWhiteoutEnd,
+                                    onMouseLeave: handleWhiteoutEnd
+                                } : {
+                                    onTouchStart: handleWhiteoutStart,
+                                    onTouchMove: handleWhiteoutMove,
+                                    onTouchEnd: handleWhiteoutEnd,
+                                    onTouchCancel: handleWhiteoutEnd
+                                })}
                             >
                                 {drawingWhiteout && (
                                     <View style={{
