@@ -19,7 +19,7 @@ export default function ToolIntroScreen({
                         (pressed || hovered) && styles.backButtonHovered,
                         { position: 'relative', top: 0, left: 0 }
                     ]}
-                    onPress={cancelTool}>
+                    onPress={() => cancelTool('menu')}>
                     <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
                     <Text style={styles.backButtonText}>Retour aux outils</Text>
                 </Pressable>
