@@ -224,6 +224,36 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
             return null;
         });
     };
+
+    const whiteoutLayerRef = useRef<any>(null);
+    useEffect(() => {
+        if (Platform.OS !== 'web' || !whiteoutLayerRef.current) return;
+        
+        const node = whiteoutLayerRef.current as HTMLElement;
+        
+        const onDown = (e: MouseEvent) => {
+            if (activeTool !== 'whiteout') return;
+            handleWhiteoutStart(e);
+        };
+        const onMove = (e: MouseEvent) => {
+            if (activeTool !== 'whiteout' || !drawingWhiteout) return;
+            handleWhiteoutMove(e);
+        };
+        const onUp = (e: MouseEvent) => {
+            if (activeTool !== 'whiteout' || !drawingWhiteout) return;
+            handleWhiteoutEnd();
+        };
+
+        node.addEventListener('mousedown', onDown);
+        node.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp); // Catch up anywhere
+
+        return () => {
+            node.removeEventListener('mousedown', onDown);
+            node.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+    }, [activeTool, drawingWhiteout, canvasSize]);
     // -----------------------------
 
     const handleCanvasPress = (e: any) => {
@@ -491,18 +521,14 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
                         {/* Dedicated drawing layer for whiteout */}
                         {activeTool === 'whiteout' && (
                             <View 
+                                ref={whiteoutLayerRef}
                                 style={[styles.interactionOverlay, { zIndex: 10, cursor: 'crosshair' }]}
-                                {...(Platform.OS === 'web' ? {
-                                    onMouseDown: handleWhiteoutStart,
-                                    onMouseMove: handleWhiteoutMove,
-                                    onMouseUp: handleWhiteoutEnd,
-                                    onMouseLeave: handleWhiteoutEnd
-                                } : {
+                                {...(Platform.OS !== 'web' ? {
                                     onTouchStart: handleWhiteoutStart,
                                     onTouchMove: handleWhiteoutMove,
                                     onTouchEnd: handleWhiteoutEnd,
                                     onTouchCancel: handleWhiteoutEnd
-                                })}
+                                } : {})}
                             >
                                 {drawingWhiteout && (
                                     <View style={{
