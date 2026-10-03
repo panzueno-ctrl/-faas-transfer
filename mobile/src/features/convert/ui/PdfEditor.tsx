@@ -98,6 +98,7 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
     const [activeTool, setActiveTool] = useState<PdfEditType | null>(null);
     const [selectedColor, setSelectedColor] = useState('#e74c3c');
     const [canvasSize, setCanvasSize] = useState({ width: 800, height: 1131 });
+    const [drawingWhiteout, setDrawingWhiteout] = useState<{startX: number, startY: number, currentX: number, currentY: number} | null>(null);
     const [isSignaturePadOpen, setIsSignaturePadOpen] = useState(false);
     
     useEffect(() => {
@@ -148,6 +149,71 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
         setEdits(prev => prev.filter(e => e.type !== 'text' || e.text?.trim() !== '' || e.id === selectedEditId));
     }, [selectedEditId]);
 
+
+    // --- DRAWING WHITEOUT LOGIC ---
+    const getCoordinates = (e: any) => {
+        let x = 0;
+        let y = 0;
+        if (Platform.OS === 'web') {
+            const nativeEvent = e.nativeEvent as any;
+            if (nativeEvent.offsetX !== undefined) {
+                x = (nativeEvent.offsetX / canvasSize.width) * 100;
+                y = (nativeEvent.offsetY / canvasSize.height) * 100;
+            } else {
+                const target = e.target as HTMLElement;
+                const rect = target.getBoundingClientRect();
+                x = ((nativeEvent.clientX - rect.left) / rect.width) * 100;
+                y = ((nativeEvent.clientY - rect.top) / rect.height) * 100;
+            }
+        } else {
+            x = (e.nativeEvent.locationX / canvasSize.width) * 100;
+            y = (e.nativeEvent.locationY / canvasSize.height) * 100;
+        }
+        return { x, y };
+    };
+
+    const handlePointerDown = (e: any) => {
+        if (activeTool === 'whiteout') {
+            const { x, y } = getCoordinates(e);
+            setDrawingWhiteout({ startX: x, startY: y, currentX: x, currentY: y });
+        }
+    };
+
+    const handlePointerMove = (e: any) => {
+        if (activeTool === 'whiteout' && drawingWhiteout) {
+            const { x, y } = getCoordinates(e);
+            setDrawingWhiteout(prev => prev ? { ...prev, currentX: x, currentY: y } : null);
+        }
+    };
+
+    const handlePointerUp = (e: any) => {
+        if (activeTool === 'whiteout' && drawingWhiteout) {
+            const width = Math.abs(drawingWhiteout.currentX - drawingWhiteout.startX);
+            const height = Math.abs(drawingWhiteout.currentY - drawingWhiteout.startY);
+            const left = Math.min(drawingWhiteout.startX, drawingWhiteout.currentX);
+            const top = Math.min(drawingWhiteout.startY, drawingWhiteout.currentY);
+            
+            // Only add if it's large enough (prevent tiny accidental clicks)
+            if (width > 0.5 && height > 0.5) {
+                const newEdit: PdfEditItem = {
+                    id: Date.now().toString(),
+                    pageIndex: currentPageIndex,
+                    type: 'whiteout',
+                    x: left,
+                    y: top,
+                    width: width,
+                    height: height,
+                    backgroundColor: '#ffffff',
+                    color: '#ffffff'
+                };
+                setEdits([...edits, newEdit]);
+                setSelectedEditId(newEdit.id);
+            }
+            setDrawingWhiteout(null);
+        }
+    };
+    // -----------------------------
+
     const handleCanvasPress = (e: any) => {
         if (Platform.OS === 'web') {
             const nativeEvent = e.nativeEvent as any;
@@ -189,21 +255,7 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
             y = (locationY / canvasSize.height) * 100;
         }
         
-        if (activeTool === 'whiteout') {
-            const newEdit: PdfEditItem = {
-                id: Date.now().toString(),
-                pageIndex: currentPageIndex,
-                type: 'whiteout',
-                x, y,
-                width: 15,
-                height: 4,
-                backgroundColor: '#ffffff',
-                color: '#ffffff' // Ensure it's white for the whiteout view
-            };
-            setEdits([...edits, newEdit]);
-            setSelectedEditId(newEdit.id);
-            return;
-        }
+
 
         if (activeTool === 'text') {
             const newEdit: PdfEditItem = {
@@ -391,7 +443,25 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
                             style={styles.interactionOverlay} 
                             onLayout={(e) => setCanvasSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
                             onPress={handleCanvasPress}
+                            onPointerDown={handlePointerDown}
+                            onPointerMove={handlePointerMove}
+                            onPointerUp={handlePointerUp}
                         >
+                            {/* Render drawing whiteout block */}
+                            {drawingWhiteout && activeTool === 'whiteout' && (
+                                <View style={{
+                                    position: 'absolute',
+                                    left: `${Math.min(drawingWhiteout.startX, drawingWhiteout.currentX)}%`,
+                                    top: `${Math.min(drawingWhiteout.startY, drawingWhiteout.currentY)}%`,
+                                    width: `${Math.abs(drawingWhiteout.currentX - drawingWhiteout.startX)}%`,
+                                    height: `${Math.abs(drawingWhiteout.currentY - drawingWhiteout.startY)}%`,
+                                    backgroundColor: '#ffffff',
+                                    opacity: 0.8,
+                                    borderWidth: 1,
+                                    borderColor: '#e74c3c',
+                                    borderStyle: 'dashed'
+                                }} />
+                            )}
                             {/* Render all text edits for this page */}
                             {edits.filter(e => e.pageIndex === currentPageIndex).map(edit => {
                                 const isSelected = edit.id === selectedEditId;
