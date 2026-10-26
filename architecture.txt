@@ -16989,3 +16989,28 @@ Compléter le binôme Sécurité PDF (Verrouiller / Déverrouiller) afin de perm
 - Staging dédié dans `convert.tsx` : Lorsqu'un utilisateur sélectionne 'Déverrouiller', un volet élégant apparaît avec une icône de cadenas ouvert, des explications claires et un champ de saisie du mot de passe avec bascule de visibilité (œil).
 - Validation préventive : Le bouton 'Terminer' reste désactivé tant qu'aucun mot de passe n'est renseigné.
 - Gestion d'erreur améliorée dans `useConvertApi.ts` : Clone de la réponse pour extraire les messages d'erreur JSON précis renvoyés par l'API au lieu d'un message générique.
+
+================================================================================
+CHAPITRE 27 : INTÉGRATION DE L'OUTIL DE COMPRESSION D'IMAGES (COMPRESS-IMAGE)
+================================================================================
+Date : Lundi, 26 Octobre 2026 à 16h51 et 23 secondes
+
+### 1. Objectif Fonctionnel
+Permettre à l'utilisateur d'optimiser et d'alléger drastiquement le poids de ses photos (JPG, PNG, HEIC, WebP) avant tout transfert ou partage, résolvant directement la problématique de saturation de la bande passante sur mobile.
+
+### 2. Architecture Technique Implémentée
+
+#### A. Moteur de Compression ImageMagick (Node.js Backend) :
+- Route POST `/convert/compress-image` recevant le fichier et le paramètre `compressionLevel`.
+- Commande d'exécution optimisée :
+  `convert "${inputPath}" -background white -flatten ${options} "${outputPath}"`
+- Trois profils de compression calibrés :
+  1. **Simple (low) :** `-strip -quality 85%` (préservation maximale des détails, idéal pour l'impression ou les travaux graphiques, gain d'environ 30 à 40%).
+  2. **Modéré (recommended) :** `-strip -resize 2560x2560> -quality 65%` (meilleur ratio qualité/poids pour le web et l'envoi rapide, gain de 50 à 75%).
+  3. **Fort (extreme) :** `-strip -resize 1920x1920> -quality 45%` (réduction agressive de la résolution et du poids, gain jusqu'à 85-90%).
+- Nettoyage des métadonnées EXIF (`-strip`) : élimine les coordonnées GPS, aperçus embarqués et balises d'appareil photo qui pèsent souvent 1 à 2 Mo inutilement sur les clichés de smartphones.
+
+#### B. Intégration Frontend (Staging & Sélecteur Visuel) :
+- Affichage du composant `CompressionSelector` dans l'écran de staging de `convert.tsx` dès qu'une image est sélectionnée.
+- Calcul dynamique et animé de l'estimation du poids final et de l'espace économisé.
+- Envoi synchrone et téléchargement instantané du fichier compressé via `ResultScreen`.

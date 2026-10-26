@@ -51,7 +51,7 @@ export function useConvertApi({
             if (selectedService?.id === 'unlock-pdf') {
                 formData.append('password', passwordOverride || options?.unlockPassword || '');
             }
-            if (selectedService?.id === 'compress-pdf') {
+            if (selectedService?.id === 'compress-pdf' || selectedService?.id === 'compress-image') {
                 formData.append('compressionLevel', compressionLevelOverride || options?.compressionLevel || 'recommended');
             }
             if (selectedService?.id === 'number-pdf') {

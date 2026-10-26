@@ -608,6 +608,16 @@ export default function ConvertScreen() {
                             </View>
                         )}
 
+                        {selectedService.id === 'compress-image' && (
+                            <View style={{ width: '100%', maxWidth: 400, marginBottom: 24, padding: 20, backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}>
+                                <CompressionSelector 
+                                    value={compressionLevel} 
+                                    onChange={setCompressionLevel} 
+                                    fileSize={selectedFiles[0]?.size || 0}
+                                />
+                            </View>
+                        )}
+
                         {selectedService.id === 'ocr-pdf' && (
                             <OcrLanguageSelector onChange={setOcrLang} />
                         )}

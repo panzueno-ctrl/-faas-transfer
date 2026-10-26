@@ -830,6 +830,44 @@ router.post('/png-to-jpg', upload.single('file'), (req, res) => {
 // POST /convert/heic-to-jpg
 // Convertit HEIC (iPhone) en JPG via ImageMagick
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// POST /convert/compress-image
+// Compresse et optimise une image via ImageMagick
+// Body params: compressionLevel ('low' | 'recommended' | 'extreme')
+// ─────────────────────────────────────────────
+router.post('/compress-image', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const outputPath = `/tmp/${Date.now()}-compressed.jpg`;
+    const level = req.body.compressionLevel || 'recommended';
+
+    let options = '-strip -resize 2560x2560> -quality 65%';
+    if (level === 'low') {
+        options = '-strip -quality 85%';
+    } else if (level === 'extreme') {
+        options = '-strip -resize 1920x1920> -quality 45%';
+    }
+
+    const command = `convert "${inputPath}" -background white -flatten ${options} "${outputPath}"`;
+
+    exec(command, (error) => {
+        if (error) {
+            console.error('COMPRESS_IMAGE_ERROR:', error);
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            return res.status(500).json({ message: "La compression de l'image a échoué." });
+        }
+
+        const originalName = req.file.originalname ? req.file.originalname.replace(/\.[^/.]+$/, "") : "image";
+        res.setHeader('Content-Disposition', `attachment; filename="${originalName}-compressed.jpg"`);
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.download(outputPath, (err) => {
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+        });
+    });
+});
+
 router.post('/heic-to-jpg', upload.single('file'), (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
 
