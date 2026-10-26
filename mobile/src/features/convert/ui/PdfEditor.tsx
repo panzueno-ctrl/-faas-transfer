@@ -321,7 +321,7 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
                         <Ionicons name="close" size={24} color={colors.text} />
                     </Pressable>
                     <Text style={[styles.toolbarTitle, { color: colors.text }]}>
-                        Modifier PDF
+                        {autoOpenSignTool ? 'Signer PDF' : 'Modifier PDF'}
                     </Text>
                 </View>
 

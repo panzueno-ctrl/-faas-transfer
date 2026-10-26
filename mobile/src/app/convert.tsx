@@ -248,6 +248,10 @@ export default function ConvertScreen() {
                 setSelectedFiles(prev => [...prev, ...res.assets]);
             } else {
                 setSelectedFiles(res.assets);
+                if (res.assets.length > 0 && res.assets[0].name) {
+                    const baseName = res.assets[0].name.replace(/\.[^/.]+$/, "");
+                    setFileName(baseName);
+                }
                 if (selectedService.id === 'split-pdf') {
                     initOrganizeEditor(res.assets, false, 'split_editor');
                     setSplitPoints([]);
@@ -661,6 +665,108 @@ export default function ConvertScreen() {
         );
     }
 
+    if (step === 'sign_choice') {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                <View style={styles.contentWrapper}>
+                    <View style={{ flexDirection: 'row', width: '100%', justifyContent: 'space-between', paddingHorizontal: 32, paddingTop: 32, position: 'absolute', top: 0, zIndex: 20 }}>
+                        <Pressable 
+                            style={({ pressed, hovered }: any) => [
+                                styles.backButton,
+                                (pressed || hovered) && styles.backButtonHovered,
+                                { position: 'relative', top: 0, left: 0 }
+                            ]}
+                            onPress={() => cancelTool('tool_intro')}>
+                            <Ionicons name="arrow-back-outline" size={18} color={colors.textMuted} />
+                            <Text style={styles.backButtonText}>Annuler</Text>
+                        </Pressable>
+                    </View>
+
+                    <View style={[styles.scrollContent, { flex: 1, justifyContent: 'center' }]}>
+                        <View style={{ backgroundColor: colors.card, padding: 40, borderRadius: 24, borderWidth: 1, borderColor: colors.border, width: '100%', maxWidth: 500, alignItems: 'center' }}>
+                            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(59, 130, 246, 0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
+                                <Ionicons name="pencil-outline" size={32} color={colors.primary} />
+                            </View>
+                            <Text style={[styles.title, { fontSize: 28, marginBottom: 12 }]}>Qui va signer ce document ?</Text>
+                            <Text style={[styles.subtitle, { marginBottom: 32 }]}>Choisissez si vous devez signer vous-même le document ou le faire signer par d'autres personnes.</Text>
+                            
+                            <View style={{ width: '100%', gap: 16 }}>
+                                <Pressable 
+                                    style={({ hovered, pressed }: any) => [
+                                        { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 16, backgroundColor: colors.background, borderWidth: 2, borderColor: colors.primary, cursor: 'pointer' },
+                                        hovered && { backgroundColor: 'rgba(59, 130, 246, 0.05)' },
+                                        pressed && { opacity: 0.8 }
+                                    ]}
+                                    onPress={() => {
+                                        if (selectedFiles.length > 0) {
+                                            initPdfEditor(selectedFiles[0]);
+                                        }
+                                    }}
+                                >
+                                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+                                        <Ionicons name="person-outline" size={24} color="#fff" />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 4 }}>Uniquement moi</Text>
+                                        <Text style={{ color: colors.textMuted, fontSize: 14 }}>J'ajoute ma propre signature.</Text>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={24} color={colors.textMuted} />
+                                </Pressable>
+
+                                <Pressable 
+                                    style={({ hovered, pressed }: any) => [
+                                        { flexDirection: 'row', alignItems: 'center', padding: 20, borderRadius: 16, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, cursor: 'pointer' },
+                                        hovered && { borderColor: colors.textMuted },
+                                        pressed && { opacity: 0.8 }
+                                    ]}
+                                    onPress={() => {
+                                        setStep('request_signature');
+                                    }}
+                                >
+                                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.cardHovered, alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+                                        <Ionicons name="people-outline" size={24} color={colors.text} />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={{ color: colors.text, fontSize: 18, fontWeight: '700', marginBottom: 4 }}>Plusieurs personnes</Text>
+                                        <Text style={{ color: colors.textMuted, fontSize: 14 }}>Je demande des signatures à d'autres.</Text>
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={24} color={colors.textMuted} />
+                                </Pressable>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
+    if (step === 'signature_request_done') {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.backgroundGlow} pointerEvents="none" />
+                <View style={styles.contentWrapper}>
+                    <View style={[styles.scrollContent, { flex: 1, justifyContent: 'center', alignItems: 'center' }]}>
+                        <View style={{ backgroundColor: colors.card, padding: 40, borderRadius: 24, borderWidth: 1, borderColor: colors.border, width: '100%', maxWidth: 500, alignItems: 'center' }}>
+                            <Ionicons name="checkmark-circle" size={80} color={colors.success} style={{ marginBottom: 16 }} />
+                            <Text style={[styles.title, { fontSize: 26, marginBottom: 12 }]}>Demandes envoyées !</Text>
+                            <Text style={[styles.subtitle, { marginBottom: 32, textAlign: 'center' }]}>
+                                Les invitations à signer ont été envoyées par e-mail avec succès pour le document <Text style={{ color: colors.text, fontWeight: '700' }}>{fileName || 'document.pdf'}</Text>.
+                            </Text>
+                            <Pressable 
+                                style={[styles.primaryButton, { width: '100%', justifyContent: 'center', alignItems: 'center', flexDirection: 'row' }]} 
+                                onPress={reset}
+                            >
+                                <Ionicons name="arrow-back-outline" size={20} color="#ffffff" style={{ marginRight: 8 }} />
+                                <Text style={styles.primaryButtonText}>Retour aux outils</Text>
+                            </Pressable>
+                        </View>
+                    </View>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     if (step === 'request_signature') {
         return (
             <SafeAreaView style={styles.container}>
@@ -772,7 +878,7 @@ export default function ConvertScreen() {
                 pages={pdfEditorPages} 
                 colors={colors}
                 onComplete={handlePdfEditorComplete}
-                onCancel={() => cancelTool()}
+                onCancel={() => cancelTool(selectedService?.id === 'sign-pdf' ? 'sign_choice' : 'tool_intro')}
                 autoOpenSignTool={selectedService?.id === 'sign-pdf'}
             />
         );

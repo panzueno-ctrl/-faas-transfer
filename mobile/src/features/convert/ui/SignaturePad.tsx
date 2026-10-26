@@ -112,9 +112,11 @@ export default function SignaturePad({ visible, onClose, onSave, colors }: Signa
             });
 
             if (!result.canceled && result.assets && result.assets.length > 0) {
-                const base64 = result.assets[0].base64;
-                const uri = result.assets[0].uri;
-                const imageStr = base64 ? `data:image/jpeg;base64,${base64}` : uri;
+                const asset = result.assets[0];
+                const mime = asset.mimeType || (asset.uri?.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg');
+                const base64 = asset.base64;
+                const uri = asset.uri;
+                const imageStr = base64 ? `data:${mime};base64,${base64}` : uri;
                 
                 const sig: SignatureData = { type: 'image', data: imageStr };
                 await saveSignatureToStorage(sig);
@@ -284,7 +286,7 @@ const styles = StyleSheet.create({
     tabText: { fontWeight: '600' },
     contentArea: { padding: 20 },
     drawContainer: { gap: 16 },
-    canvasArea: { width: '100%', height: 200, borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
+    canvasArea: { width: '100%', height: 200, borderWidth: 1, borderRadius: 8, overflow: 'hidden', userSelect: 'none', touchAction: 'none' } as any,
     drawActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     primaryBtn: { backgroundColor: '#3498db', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
     typeContainer: { paddingVertical: 20 },

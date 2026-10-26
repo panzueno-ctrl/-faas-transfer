@@ -251,8 +251,12 @@ export function usePdfEngine({ setStep, setResultUrl }: { setStep: (step: string
                         });
                     } else if (sig.type === 'image') {
                         try {
-                            const isPng = sig.data.includes('image/png') || sig.data.endsWith('.png');
                             const imgBytes = await fetch(sig.data).then(r => r.arrayBuffer());
+                            const uint8 = new Uint8Array(imgBytes);
+                            // Robust detection of PNG magic bytes: 0x89 0x50 0x4E 0x47
+                            const isPng = (uint8[0] === 0x89 && uint8[1] === 0x50 && uint8[2] === 0x4E && uint8[3] === 0x47) 
+                                       || sig.data.includes('image/png') 
+                                       || sig.data.endsWith('.png');
                             let pdfImg;
                             if (isPng) {
                                 pdfImg = await pdfDoc.embedPng(imgBytes);

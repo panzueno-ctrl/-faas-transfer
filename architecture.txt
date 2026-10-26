@@ -17014,3 +17014,30 @@ Permettre à l'utilisateur d'optimiser et d'alléger drastiquement le poids de s
 - Affichage du composant `CompressionSelector` dans l'écran de staging de `convert.tsx` dès qu'une image est sélectionnée.
 - Calcul dynamique et animé de l'estimation du poids final et de l'espace économisé.
 - Envoi synchrone et téléchargement instantané du fichier compressé via `ResultScreen`.
+
+================================================================================
+CHAPITRE 28 : RÉSOLUTION DU BUG CRITIQUE ET RESTAURATION DU FLUX DE SIGNATURE PDF (SIGN-PDF)
+================================================================================
+Date : Lundi, 26 Octobre 2026 à 17h14 et 00 secondes
+
+### 1. Contexte & Diagnostic du Dysfonctionnement
+Lors de la sélection d'un document dans l'outil "Signer PDF" (`sign-pdf`), l'application sautait directement et anormalement vers l'écran "Done / ResultScreen" avec un nom de fichier vide (`.pdf`), sans laisser à l'utilisateur la possibilité de signer, d'importer une signature ou de choisir ses destinataires.
+
+#### Cause Racine :
+Lors d'une précédente refactorisation architecturale FSD, le bloc conditionnel `if (step === 'sign_choice')` avait été omis dans `mobile/src/app/convert.tsx`. Comme le gestionnaire de fichiers exécutait `setStep('sign_choice')`, l'absence de ce cas provoquait un fallthrough immédiat vers le dernier `return` du composant qui rendait directement `ResultScreen`.
+
+### 2. Solutions Techniques et Architecture Appliquée
+
+#### A. Rétablissement de l'Écran de Décision (`sign_choice`) :
+- Rendu d'une vue modale guidée "Qui va signer ce document ?" proposant deux parcours distincts :
+  1. **"Uniquement moi"** : Déclenche `initPdfEditor(file)` en mode signature automatique (`autoOpenSignTool={true}`). Dès l'ouverture du PDF, la fenêtre de création de signature (`SignaturePad`) s'ouvre automatiquement. L'utilisateur peut ainsi dessiner, taper en italique ou importer son image de signature, puis la placer et la dimensionner sur le document avant d'exporter.
+  2. **"Plusieurs personnes"** : Redirige vers l'écran `request_signature` permettant d'inviter un ou plusieurs destinataires par email via l'API backend `/signature/send-requests`.
+
+#### B. Ajout de l'Écran de Succès pour Demandes Distantes (`signature_request_done`) :
+- Création d'une vue de complétion dédiée confirmant l'envoi des invitations par email aux tiers, avec bouton de réinitialisation pour retourner à l'accueil.
+
+#### C. Robustesse de l'Import d'Image de Signature (`SignaturePad` & `usePdfEngine`) :
+- **Support Transparent PNG :** Lors de l'import d'une image de signature scannée via `ImagePicker`, le type MIME réel est désormais conservé (au lieu d'un format JPEG forcé), préservant la transparence des tampons et signatures.
+- **Détection par Magic Bytes :** Dans `usePdfEngine.ts`, l'analyse des 4 premiers octets (`0x89 0x50 0x4E 0x47`) garantit l'utilisation de `pdfDoc.embedPng()` pour les PNG et de `pdfDoc.embedJpg()` pour les JPG sans risque d'erreur d'encodage.
+- **Ergonomie Web du Pad de Dessin :** Ajout de `userSelect: 'none'` et `touchAction: 'none'` sur la zone de dessin pour empêcher le scroll ou le glisser-déposer parasite du navigateur pendant le tracé de la signature.
+- **Nom de Fichier Persistant :** Extraction automatique du nom de base du fichier dès la sélection (`res.assets[0].name`) pour garantir un affichage propre lors du téléchargement.
