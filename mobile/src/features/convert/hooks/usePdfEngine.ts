@@ -216,6 +216,21 @@ export function usePdfEngine({ setStep, setResultUrl }: { setStep: (step: string
                     });
                 }
 
+                                if (edit.type === 'whiteout') {
+                    const x = (edit.x / 100) * width;
+                    const rectWidth = ((edit.width || 18) / 100) * width;
+                    const rectHeight = ((edit.height || 4) / 100) * height;
+                    const rectY = height - ((edit.y / 100) * height) - rectHeight;
+
+                    page.drawRectangle({
+                        x,
+                        y: rectY,
+                        width: rectWidth,
+                        height: rectHeight,
+                        color: rgb(1, 1, 1),
+                    });
+                }
+
                 if (edit.type === 'signature' && edit.signatureData) {
                     const sig = edit.signatureData as any;
                     const x = (edit.x / 100) * width;

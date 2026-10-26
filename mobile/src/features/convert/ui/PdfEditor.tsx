@@ -229,13 +229,13 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
                 let left = Math.min(prev.startX, prev.currentX);
                 let top = Math.min(prev.startY, prev.currentY);
                 
-                // If it was just a single click (no drag), drop a standard size white box
-                if (width < 0.5 && height < 0.5) {
-                    width = 15;
+                // If it was just a single click (no drag or tiny drag), drop a standard size white box
+                if (width < 1 && height < 1) {
+                    width = 18;
                     height = 4;
                     // center the box on the click
-                    left = prev.startX - (width / 2);
-                    top = prev.startY - (height / 2);
+                    left = Math.max(0, prev.startX - (width / 2));
+                    top = Math.max(0, prev.startY - (height / 2));
                 }
                 
                 const newEdit: PdfEditItem = {
@@ -251,6 +251,8 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
                 };
                 setEdits(prevEdits => [...prevEdits, newEdit]);
                 setSelectedEditId(newEdit.id);
+                // Reset active tool so user can immediately move or resize the new whiteout box
+                setActiveTool(null);
             }
             return null;
         });
@@ -372,10 +374,10 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
                         {!restrictedMode && (
                             <Pressable 
                                 style={[styles.toolBtn, activeTool === 'whiteout' && styles.toolBtnActive, { marginLeft: 8 }]} 
-                                onPress={() => setActiveTool(activeTool === 'whiteout' ? null : 'replace')}
+                                onPress={() => setActiveTool(activeTool === 'whiteout' ? null : 'whiteout')}
                             >
-                                <Ionicons name="square" size={20} color={activeTool === 'whiteout' ? '#e74c3c' : colors.text} />
-                                <Text style={[styles.toolBtnText, { color: activeTool === 'whiteout' ? '#e74c3c' : colors.text }]}>Gomme</Text>
+                                <Ionicons name="square" size={20} color={activeTool === 'whiteout' ? '#3498db' : colors.text} />
+                                <Text style={[styles.toolBtnText, { color: activeTool === 'whiteout' ? '#3498db' : colors.text }]}>Gomme</Text>
                             </Pressable>
                         )}
 
@@ -524,7 +526,7 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
                         {/* Dedicated drawing layer for whiteout */}
                         {activeTool === 'whiteout' && (
                             <View 
-                                style={[styles.interactionOverlay, { zIndex: 10, cursor: 'crosshair' }]}
+                                style={[styles.interactionOverlay, { zIndex: 10, cursor: 'crosshair' as any }]}
                                 onStartShouldSetResponder={() => true}
                                 onMoveShouldSetResponder={() => true}
                                 onResponderGrant={handleWhiteoutStart}
@@ -703,7 +705,7 @@ const styles = StyleSheet.create({
     interactionOverlay: {
         position: 'absolute',
         top: 0, left: 0, right: 0, bottom: 0,
-        cursor: 'crosshair' as any,
+        cursor: 'crosshair' as any as any,
     },
     premiumEditBox: {
         padding: 4,
@@ -895,6 +897,48 @@ function PdfEditItemView({ edit, isSelected, canvasSize, onSelect, onRemove, onC
                     {sig.type === 'image' && (
                         <Image source={{ uri: sig.data }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
                     )}
+                </Pressable>
+
+                {isSelected && (
+                    <View {...resizePanResponder.panHandlers} style={styles.resizeHandle} />
+                )}
+            </View>
+        );
+    }
+
+    if (edit.type === 'whiteout') {
+        const boxWidth = (edit.width || 18) * (canvasSize.width / 100);
+        const boxHeight = (edit.height || 4) * (canvasSize.height / 100);
+
+        return (
+            <View 
+                style={[
+                    styles.premiumEditBox, 
+                    isSelected && styles.premiumEditBoxSelected, 
+                    { 
+                        width: boxWidth, 
+                        height: boxHeight, 
+                        backgroundColor: '#ffffff',
+                        borderWidth: isSelected ? 1.5 : 0,
+                        borderColor: isSelected ? '#3498db' : 'transparent',
+                        borderStyle: isSelected ? 'dashed' : 'solid',
+                        padding: 0,
+                    }
+                ]}
+            >
+                {isSelected && (
+                    <View style={styles.premiumToolbar}>
+                        <View {...panHandlers} style={[styles.premiumDragHandle, { cursor: Platform.OS === 'web' ? 'grab' : 'default' }] as any}>
+                            <Ionicons name="move" size={16} color="#fff" />
+                        </View>
+                        <Pressable onPress={onRemove} style={styles.premiumDeleteBtn}>
+                            <Ionicons name="trash" size={16} color="#fff" />
+                        </Pressable>
+                    </View>
+                )}
+                
+                <Pressable onPress={onSelect} style={{ width: '100%', height: '100%', cursor: 'pointer' as any as any }}>
+                    <View style={{ width: '100%', height: '100%', backgroundColor: '#ffffff' }} />
                 </Pressable>
 
                 {isSelected && (
