@@ -342,10 +342,15 @@ export default function ConvertScreen() {
             formData.append('file', blob, selectedFiles[0].name || 'document.pdf');
             formData.append('signers', JSON.stringify(validSigners));
 
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 20000);
+
             const res = await fetch(`${SERVER_URL}/signature/send-requests`, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
 
             if (!res.ok) {
                 const errorData = await res.json();
@@ -357,7 +362,7 @@ export default function ConvertScreen() {
 
         } catch (error: any) {
             console.error(error);
-            setLocalError(error.message || "Une erreur s'est produite.");
+            setLocalError(error.name === 'AbortError' ? "Le serveur a mis trop de temps à répondre. Veuillez réessayer." : (error.message || "Une erreur s'est produite."));
         } finally {
             setIsSendingRequest(false);
         }

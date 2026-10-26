@@ -17041,3 +17041,27 @@ Lors d'une précédente refactorisation architecturale FSD, le bloc conditionnel
 - **Détection par Magic Bytes :** Dans `usePdfEngine.ts`, l'analyse des 4 premiers octets (`0x89 0x50 0x4E 0x47`) garantit l'utilisation de `pdfDoc.embedPng()` pour les PNG et de `pdfDoc.embedJpg()` pour les JPG sans risque d'erreur d'encodage.
 - **Ergonomie Web du Pad de Dessin :** Ajout de `userSelect: 'none'` et `touchAction: 'none'` sur la zone de dessin pour empêcher le scroll ou le glisser-déposer parasite du navigateur pendant le tracé de la signature.
 - **Nom de Fichier Persistant :** Extraction automatique du nom de base du fichier dès la sélection (`res.assets[0].name`) pour garantir un affichage propre lors du téléchargement.
+
+================================================================================
+CHAPITRE 29 : OPTIMISATION PARALLÈLE ET SÉCURISATION ASYNCHRONE DE L'ENVOI DES DEMANDES DE SIGNATURE
+================================================================================
+Date : Lundi, 26 Octobre 2026 à 17h29 et 15 secondes
+
+### 1. Contexte & Diagnostic du Blocage
+Lors de la soumission d'une demande de signatures multiples depuis l'interface "Demande de signatures" (avec 3 destinataires), le bouton restait figé sur "Envoi en cours..." avec un spinner infini.
+
+#### Causes Racines Identifiées :
+1. **Boucle Séquentielle Bloquante :** Le contrôleur backend `server/routes/signature.js` réinstanciait `nodemailer.createTransport` et exécutait `await transporter.sendMail()` l'un après l'autre pour chaque destinataire au sein d'une boucle `for`.
+2. **Absence de Timeouts Nodemailer :** En l'absence de `connectionTimeout` et `greetingTimeout`, un blocage de poignée de main SMTP sur le cloud Render (liens ports 25/587 ou restrictions d'IP) laissait le socket TCP suspendu jusqu'à 2 minutes par signataire (soit 6 minutes pour 3 signataires), déclenchant le timeout passerelle du navigateur.
+3. **URL Front-End Erronée :** `frontUrl` retombait par défaut sur `http://localhost:8081` au lieu de `https://faas-transfer.vercel.app`.
+
+### 2. Solutions Techniques Appliquées
+
+#### A. Envoi Parallèle et Non-Bloquant (Backend - `server/routes/signature.js`) :
+- **Transporter Réutilisé & Sécurisé :** Configuration de `smtp.gmail.com` sur le port 465 (SSL direct) avec des garde-fous stricts : `connectionTimeout: 8000ms`, `greetingTimeout: 8000ms`, `socketTimeout: 12000ms`.
+- **Parallélisation `Promise.allSettled` :** Tous les courriels d'invitation sont expédiés en parallèle.
+- **Réponse HTTP Asynchrone (`Promise.race`) :** L'enregistrement du document et des jetons d'accès uniques étant déjà consolidé dans Supabase, la réponse HTTP attend au maximum 4 secondes. Si les serveurs SMTP mettent plus de temps, la réponse `{ success: true }` est délivrée sans délai au frontend pour afficher immédiatement l'écran de complétion, pendant que les e-mails achèvent leur émission en tâche de fond.
+- **Lien Public Valide :** Remplacement de l'URL de base par `https://faas-transfer.vercel.app` pour générer des liens cliquables opérationnels (`/sign/<token>`).
+
+#### B. Robustesse Frontend (`mobile/src/app/convert.tsx`) :
+- Intégration d'un `AbortController` (délai de 20s) sur le `fetch` vers l'endpoint `/signature/send-requests` afin d'éviter tout blocage de l'interface et de notifier l'utilisateur de manière conviviale en cas d'anomalie réseau.

@@ -13,6 +13,43 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY; // Anon key is fine if RLS allows inserts
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const createTransporter = () => {
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
+    return nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
+        auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS
+        },
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 12000
+    });
+};
+
+router.get('/test-email', async (req, res) => {
+    const to = req.query.to || 'panzueno@gmail.com';
+    const results = {};
+    const start = Date.now();
+    try {
+        const trans = createTransporter();
+        if (!trans) throw new Error("SMTP credentials missing");
+        await trans.verify();
+        const info = await trans.sendMail({
+            from: `"Fast Transfer" <${process.env.SMTP_USER}>`,
+            to: to,
+            subject: 'Test Fast Transfer Signature',
+            text: 'Test de connectivite SMTP reussi.'
+        });
+        results.email = { success: true, duration: Date.now() - start, messageId: info.messageId };
+    } catch (e) {
+        results.email = { success: false, duration: Date.now() - start, error: e.message, code: e.code };
+    }
+    return res.json({ envUser: !!process.env.SMTP_USER, envPass: !!process.env.SMTP_PASS, results });
+});
+
 
 
 // Middleware Multer pour l'upload temporaire en mémoire
@@ -95,54 +132,49 @@ router.post('/send-requests', upload.single('file'), async (req, res) => {
             return res.status(500).json({ error: "Erreur BDD signataires." });
         }
 
-        // 4. Envoyer les e-mails
-        const frontUrl = process.env.FRONTEND_URL || 'http://localhost:8081'; // URL de l'app mobile/web
+        // 4. Envoyer les e-mails en parallèle sans bloquer la requête
+        const frontUrl = process.env.FRONTEND_URL || 'https://faas-transfer.vercel.app';
 
-        for (const reqData of requestsData) {
-            const signLink = `${frontUrl}/sign/${reqData.token}`;
-            const mailOptions = {
-                from: `"Fast Transfer Signature" <${process.env.SMTP_USER}>`,
-                to: reqData.signer_email,
-                subject: "Demande de signature de document",
-                html: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-                        <h2 style="color: #3b82f6;">Demande de signature</h2>
-                        <p>Bonjour ${reqData.signer_name},</p>
-                        <p>On vous a envoyé un document à signer de toute urgence.</p>
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="${signLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Examiner et signer le document</a>
-                        </div>
-                        <p style="color: #666; font-size: 12px;">Ce lien est unique et sécurisé. Ne le partagez pas avec d'autres personnes.</p>
-                    </div>
-                `
-            };
-
-            // Envoi de l'email via Nodemailer (SMTP)
-            if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-                try {
-                    const transporter = nodemailer.createTransport({
-                        service: 'gmail',
-                        auth: {
-                            user: process.env.SMTP_USER,
-                            pass: process.env.SMTP_PASS
-                        }
-                    });
-                    
-                    await transporter.sendMail({
-                        from: `"Fast Transfer" <${process.env.SMTP_USER}>`,
-                        to: reqData.signer_email,
-                        subject: "Demande de signature de document",
-                        html: mailOptions.html
-                    });
-                    console.log("Email envoyé avec succès à", reqData.signer_email);
-                } catch (err) {
-                    console.error("Erreur envoi SMTP à", reqData.signer_email, err);
-                }
-            } else {
-                console.log(`[SMTP non configuré] Simulation d'envoi à ${reqData.signer_email} : ${signLink}`);
+        const sendEmails = async () => {
+            const transporter = createTransporter();
+            if (!transporter) {
+                console.log("[SMTP non configuré] Simulation d'envoi d'emails");
+                return;
             }
 
-        }
+            await Promise.allSettled(requestsData.map(async (reqData) => {
+                const signLink = `${frontUrl}/sign/${reqData.token}`;
+                const mailOptions = {
+                    from: `"Fast Transfer Signature" <${process.env.SMTP_USER}>`,
+                    to: reqData.signer_email,
+                    subject: "Demande de signature de document",
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                            <h2 style="color: #3b82f6;">Demande de signature</h2>
+                            <p>Bonjour ${reqData.signer_name},</p>
+                            <p>On vous a envoyé un document à signer de toute urgence.</p>
+                            <div style="text-align: center; margin: 30px 0;">
+                                <a href="${signLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Examiner et signer le document</a>
+                            </div>
+                            <p style="color: #666; font-size: 12px;">Ce lien est unique et sécurisé. Ne le partagez pas avec d'autres personnes.</p>
+                        </div>
+                    `
+                };
+
+                try {
+                    await transporter.sendMail(mailOptions);
+                    console.log("Email envoyé avec succès à", reqData.signer_email);
+                } catch (err) {
+                    console.error("Erreur envoi SMTP à", reqData.signer_email, err.message);
+                }
+            }));
+        };
+
+        // Attente au maximum 4 secondes pour que les e-mails partent immédiatement sans bloquer le client
+        await Promise.race([
+            sendEmails(),
+            new Promise(resolve => setTimeout(resolve, 4000))
+        ]);
 
         return res.json({ success: true, documentId, message: "Demandes envoyées avec succès." });
 
@@ -351,13 +383,8 @@ router.post('/complete-request', async (req, res) => {
             // Envoyer l'email final avec le lien vers le document signé
             if (process.env.SMTP_USER && process.env.SMTP_PASS) {
                 try {
-                    const transporter = nodemailer.createTransport({
-                        service: 'gmail',
-                        auth: {
-                            user: process.env.SMTP_USER,
-                            pass: process.env.SMTP_PASS
-                        }
-                    });
+                    const transporter = createTransporter();
+                    if (!transporter) throw new Error("SMTP non configure");
                     
                     const allEmails = allRequests.map(r => r.signer_email);
                     
