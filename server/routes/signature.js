@@ -405,13 +405,27 @@ router.get('/request/:token', async (req, res) => {
         const signedCount = allSigners ? allSigners.filter(s => s.status === 'signed').length : (data.status === 'signed' ? 1 : 0);
         const allSigned = (totalCount > 0 && signedCount === totalCount) || (data.signature_documents?.status === 'completed');
 
+        // Si au moins un signataire a signé et que le PDF signé n'a pas encore été généré, le générer à la volée
+        let finalFileUrl = data.signature_documents?.final_file_url;
+        if (!finalFileUrl && signedCount > 0) {
+            try {
+                finalFileUrl = await compileAndSaveSignedPdf(data.document_id, allSigned);
+                if (data.signature_documents) {
+                    data.signature_documents.final_file_url = finalFileUrl;
+                }
+            } catch (compileErr) {
+                console.error("Auto-compile PDF error:", compileErr);
+            }
+        }
+
         return res.json({ 
             request: data, 
             ...data,
             allSigners: allSigners || [],
             totalCount,
             signedCount,
-            allSigned
+            allSigned,
+            finalFileUrl
         });
 
     } catch (error) {
