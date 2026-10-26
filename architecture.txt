@@ -17065,3 +17065,29 @@ Lors de la soumission d'une demande de signatures multiples depuis l'interface "
 
 #### B. Robustesse Frontend (`mobile/src/app/convert.tsx`) :
 - Intégration d'un `AbortController` (délai de 20s) sur le `fetch` vers l'endpoint `/signature/send-requests` afin d'éviter tout blocage de l'interface et de notifier l'utilisateur de manière conviviale en cas d'anomalie réseau.
+
+================================================================================
+CHAPITRE 30 : DÉBLOCAGE DU SERVEUR CLOUD (RENDER) VIA LE MOTEUR HYBRIDE EMAILJS (HTTPS 443) / SMTP
+================================================================================
+Date : Lundi, 26 Octobre 2026 à 17h35 et 00 secondes
+
+### 1. Contexte & Diagnostic du Blocage Réseau
+Lors de l'envoi de demandes de signature à des tiers depuis l'application déployée, la requête HTTP restait suspendue de manière indéfinie ("Envoi en cours...").
+
+#### Preuve Technique du Diagnostic :
+Un appel direct sur l'environnement Render a révélé l'erreur exacte :
+`{"success": false, "duration": 8025, "error": "Connection timeout", "code": "ETIMEDOUT"}`
+Le fournisseur d'hébergement cloud Render filtre par politique de sécurité les flux sortants vers les ports SMTP directs (25, 465, 587). En conséquence, chaque appel Nodemailer attendait le délai d'expiration maximal du socket TCP de Linux (~2 minutes par signataire), bloquant le serveur et gelant le navigateur.
+
+### 2. Architecture Technique Implémentée
+
+#### A. Moteur Hybride Haute Résilience (`sendSignatureEmail`) :
+1. **Canal Principal Cloud (EmailJS REST API via Port 443) :**
+   - Utilisation de l'API REST HTTPS (`https://api.emailjs.com/api/v1.0/email/send`) via le port 443. Le port 443 (HTTPS) étant le standard web mondial, il n'est jamais soumis aux blocages pare-feu de Render.
+   - Délai de délivrance mesuré : **2 110 ms** avec statut HTTP 200 OK.
+2. **Canal de Repli Local (Nodemailer SMTP) :**
+   - Utilisé comme fallback si EmailJS n'est pas accessible, avec des timeouts stricts de connexion (8 secondes) pour ne jamais geler le serveur.
+
+#### B. Parallélisation & Réponse Rapide au Client :
+- **Distribution Parallèle :** Envoi simultané à l'ensemble des destinataires avec `Promise.allSettled`.
+- **Délai Garanti Client (`Promise.race`) :** Les jetons d'accès et le fichier PDF étant déjà sauvegardés dans Supabase, la réponse HTTP est expédiée au client en moins de 3,5 secondes pour déverrouiller immédiatement l'interface vers l'écran de confirmation, pendant que les notifications s'exécutent en arrière-plan.

@@ -13,6 +13,12 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY; // Anon key is fine if RLS allows inserts
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Email service configuration
+const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID || 'service_mt7zage';
+const EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID || 'template_9rqclwh';
+const EMAILJS_PUBLIC_KEY = process.env.EMAILJS_PUBLIC_KEY || 'wfUH1ka4iCmVHAT0V';
+const EMAILJS_PRIVATE_KEY = process.env.EMAILJS_PRIVATE_KEY || 'MZhB82OiQppd-fZyGpXTK';
+
 const createTransporter = () => {
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
     return nodemailer.createTransport({
@@ -29,28 +35,88 @@ const createTransporter = () => {
     });
 };
 
+/**
+ * Envoie un email de manière résiliente :
+ * 1. EmailJS via HTTPS (Port 443, non bloqué par les hébergeurs cloud comme Render)
+ * 2. Repli automatique sur Nodemailer SMTP (si disponible)
+ */
+async function sendSignatureEmail({ to_email, to_name, signLink, subject, htmlContent }) {
+    // 1. Essai EmailJS (HTTPS REST API - hautement fiable en environnement Cloud)
+    if (EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_PUBLIC_KEY) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+            const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    service_id: EMAILJS_SERVICE_ID,
+                    template_id: EMAILJS_TEMPLATE_ID,
+                    user_id: EMAILJS_PUBLIC_KEY,
+                    accessToken: EMAILJS_PRIVATE_KEY,
+                    template_params: {
+                        to_email: to_email,
+                        to_name: to_name || 'Signataire',
+                        signer_name: to_name || 'Signataire',
+                        sign_link: signLink || '',
+                        subject: subject || 'Demande de signature',
+                        htmlContent: htmlContent
+                    }
+                }),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                console.log(`[EmailJS] Email envoyé avec succès à ${to_email}`);
+                return { success: true, provider: 'emailjs' };
+            } else {
+                const errText = await response.text();
+                console.warn(`[EmailJS] Échec HTTP (${response.status}) pour ${to_email}:`, errText);
+            }
+        } catch (e) {
+            console.warn(`[EmailJS] Erreur réseau pour ${to_email}:`, e.message);
+        }
+    }
+
+    // 2. Repli Nodemailer SMTP
+    const transporter = createTransporter();
+    if (transporter) {
+        try {
+            await transporter.sendMail({
+                from: `"Fast Transfer" <${process.env.SMTP_USER}>`,
+                to: to_email,
+                subject: subject,
+                html: htmlContent
+            });
+            console.log(`[SMTP] Email envoyé avec succès à ${to_email}`);
+            return { success: true, provider: 'smtp' };
+        } catch (err) {
+            console.error(`[SMTP] Erreur envoi SMTP à ${to_email}:`, err.message);
+        }
+    }
+
+    console.log(`[Simulation] Aucun service email n'a pu joindre ${to_email}. Lien: ${signLink}`);
+    return { success: false, error: 'No email service succeeded' };
+}
+
 router.get('/test-email', async (req, res) => {
     const to = req.query.to || 'panzueno@gmail.com';
-    const results = {};
     const start = Date.now();
-    try {
-        const trans = createTransporter();
-        if (!trans) throw new Error("SMTP credentials missing");
-        await trans.verify();
-        const info = await trans.sendMail({
-            from: `"Fast Transfer" <${process.env.SMTP_USER}>`,
-            to: to,
-            subject: 'Test Fast Transfer Signature',
-            text: 'Test de connectivite SMTP reussi.'
-        });
-        results.email = { success: true, duration: Date.now() - start, messageId: info.messageId };
-    } catch (e) {
-        results.email = { success: false, duration: Date.now() - start, error: e.message, code: e.code };
-    }
-    return res.json({ envUser: !!process.env.SMTP_USER, envPass: !!process.env.SMTP_PASS, results });
+    const result = await sendSignatureEmail({
+        to_email: to,
+        to_name: 'Enoch Test',
+        signLink: 'https://faas-transfer.vercel.app/convert',
+        subject: 'Test Diagnostic Fast Transfer',
+        htmlContent: '<p>Test de connectivité email Fast Transfer.</p>'
+    });
+    return res.json({
+        duration: Date.now() - start,
+        result,
+        envEmailJS: !!EMAILJS_SERVICE_ID,
+        envSMTP: !!process.env.SMTP_USER
+    });
 });
-
-
 
 // Middleware Multer pour l'upload temporaire en mémoire
 const upload = multer({
@@ -132,48 +198,38 @@ router.post('/send-requests', upload.single('file'), async (req, res) => {
             return res.status(500).json({ error: "Erreur BDD signataires." });
         }
 
-        // 4. Envoyer les e-mails en parallèle sans bloquer la requête
+        // 4. Envoyer les e-mails en parallèle
         const frontUrl = process.env.FRONTEND_URL || 'https://faas-transfer.vercel.app';
 
-        const sendEmails = async () => {
-            const transporter = createTransporter();
-            if (!transporter) {
-                console.log("[SMTP non configuré] Simulation d'envoi d'emails");
-                return;
-            }
-
+        const sendAllEmails = async () => {
             await Promise.allSettled(requestsData.map(async (reqData) => {
                 const signLink = `${frontUrl}/sign/${reqData.token}`;
-                const mailOptions = {
-                    from: `"Fast Transfer Signature" <${process.env.SMTP_USER}>`,
-                    to: reqData.signer_email,
-                    subject: "Demande de signature de document",
-                    html: `
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-                            <h2 style="color: #3b82f6;">Demande de signature</h2>
-                            <p>Bonjour ${reqData.signer_name},</p>
-                            <p>On vous a envoyé un document à signer de toute urgence.</p>
-                            <div style="text-align: center; margin: 30px 0;">
-                                <a href="${signLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Examiner et signer le document</a>
-                            </div>
-                            <p style="color: #666; font-size: 12px;">Ce lien est unique et sécurisé. Ne le partagez pas avec d'autres personnes.</p>
+                const htmlContent = `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+                        <h2 style="color: #3b82f6;">Demande de signature</h2>
+                        <p>Bonjour ${reqData.signer_name},</p>
+                        <p>On vous a envoyé un document à signer de toute urgence.</p>
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="${signLink}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Examiner et signer le document</a>
                         </div>
-                    `
-                };
+                        <p style="color: #666; font-size: 12px;">Ce lien est unique et sécurisé. Ne le partagez pas avec d'autres personnes.</p>
+                    </div>
+                `;
 
-                try {
-                    await transporter.sendMail(mailOptions);
-                    console.log("Email envoyé avec succès à", reqData.signer_email);
-                } catch (err) {
-                    console.error("Erreur envoi SMTP à", reqData.signer_email, err.message);
-                }
+                return sendSignatureEmail({
+                    to_email: reqData.signer_email,
+                    to_name: reqData.signer_name,
+                    signLink: signLink,
+                    subject: "Demande de signature de document",
+                    htmlContent: htmlContent
+                });
             }));
         };
 
-        // Attente au maximum 4 secondes pour que les e-mails partent immédiatement sans bloquer le client
+        // On attend au maximum 3.5 secondes pour expédier immédiatement les emails sans faire poireauter le client
         await Promise.race([
-            sendEmails(),
-            new Promise(resolve => setTimeout(resolve, 4000))
+            sendAllEmails(),
+            new Promise(resolve => setTimeout(resolve, 3500))
         ]);
 
         return res.json({ success: true, documentId, message: "Demandes envoyées avec succès." });
@@ -186,19 +242,21 @@ router.post('/send-requests', upload.single('file'), async (req, res) => {
 
 /**
  * GET /signature/request/:token
- * Récupère les informations d'une demande de signature via le token
+ * Récupère les infos d'une demande de signature via son token unique
  */
 router.get('/request/:token', async (req, res) => {
     try {
         const { token } = req.params;
 
-        const { data: requestData, error: reqError } = await supabase
+        // Récupérer la requête et les infos du document
+        const { data, error } = await supabase
             .from('signature_requests')
             .select(`
                 id,
-                signer_name,
                 signer_email,
+                signer_name,
                 status,
+                document_id,
                 signature_documents (
                     id,
                     original_file_url,
@@ -208,13 +266,15 @@ router.get('/request/:token', async (req, res) => {
             .eq('token', token)
             .single();
 
-        if (reqError || !requestData) {
+        if (error || !data) {
             return res.status(404).json({ error: "Demande introuvable ou invalide." });
         }
 
-        return res.json({
-            request: requestData
-        });
+        if (data.status === 'signed') {
+            return res.status(400).json({ error: "Ce document a déjà été signé par vos soins.", alreadySigned: true });
+        }
+
+        return res.json(data);
 
     } catch (error) {
         console.error('SIGNATURE_ERROR:', error);
@@ -224,32 +284,40 @@ router.get('/request/:token', async (req, res) => {
 
 /**
  * POST /signature/complete-request
- * Reçoit la signature finale d'un signataire (image base64 + coordonnées)
+ * Enregistre la signature apposée par l'utilisateur (dessin ou image)
  */
 router.post('/complete-request', async (req, res) => {
     try {
-        const { token, signatureBase64, x, y, pageIndex } = req.body;
+        const { token, signatureBase64, pageIndex, x, y } = req.body;
 
         if (!token || !signatureBase64) {
             return res.status(400).json({ error: "Token et signature requis." });
         }
 
-        // 1. Vérifier la validité du token
+        // 1. Récupérer la requête associée
         const { data: requestData, error: reqError } = await supabase
             .from('signature_requests')
-            .select('*, signature_documents(*)')
+            .select(`
+                id,
+                status,
+                document_id,
+                signature_documents (
+                    id,
+                    original_file_url
+                )
+            `)
             .eq('token', token)
             .single();
 
         if (reqError || !requestData) {
-            return res.status(404).json({ error: "Demande de signature invalide ou introuvable." });
+            return res.status(404).json({ error: "Demande introuvable." });
         }
 
         if (requestData.status === 'signed') {
-            return res.status(400).json({ error: "Ce document a déjà été signé par vous." });
+            return res.status(400).json({ error: "Ce document a déjà été signé." });
         }
 
-        // 2. Enregistrer les données de signature
+        // 2. Enregistrer la signature dans `signatures_data`
         const { error: dataError } = await supabase
             .from('signatures_data')
             .insert([{
@@ -380,37 +448,28 @@ router.post('/complete-request', async (req, res) => {
                 .update({ status: 'completed', final_file_url: finalFileUrl })
                 .eq('id', requestData.document_id);
 
-            // Envoyer l'email final avec le lien vers le document signé
-            if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-                try {
-                    const transporter = createTransporter();
-                    if (!transporter) throw new Error("SMTP non configure");
-                    
-                    const allEmails = allRequests.map(r => r.signer_email);
-                    
-                    const htmlContent = `
-                        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
-                            <h2 style="color: #333; text-align: center;">Document signé avec succès !</h2>
-                            <p>Bonjour,</p>
-                            <p>Tous les signataires ont terminé de signer le document. Vous pouvez télécharger le document final signé en cliquant sur le lien ci-dessous :</p>
-                            <div style="text-align: center; margin: 30px 0;">
-                                <a href="${finalFileUrl}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Télécharger le document</a>
-                            </div>
-                            <p style="color: #666; font-size: 12px;">Merci d'utiliser Fast Transfer.</p>
-                        </div>
-                    `;
-                    
-                    await transporter.sendMail({
-                        from: `"Fast Transfer" <${process.env.SMTP_USER}>`,
-                        to: allEmails.join(','),
-                        subject: "Votre document a été entièrement signé",
-                        html: htmlContent
-                    });
-                    console.log("Email final envoyé à tous les signataires :", allEmails);
-                } catch (err) {
-                    console.error("Erreur envoi de l'email final SMTP :", err);
-                }
-            }
+            // Envoyer l'email final à tous les signataires
+            const allEmails = allRequests.map(r => r.signer_email);
+            const htmlContent = `
+                <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eaeaea; border-radius: 10px;">
+                    <h2 style="color: #333; text-align: center;">Document signé avec succès !</h2>
+                    <p>Bonjour,</p>
+                    <p>Tous les signataires ont terminé de signer le document. Vous pouvez télécharger le document final signé en cliquant sur le lien ci-dessous :</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${finalFileUrl}" style="background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Télécharger le document</a>
+                    </div>
+                    <p style="color: #666; font-size: 12px;">Merci d'utiliser Fast Transfer.</p>
+                </div>
+            `;
+
+            // Envoi asynchrone sans bloquer la complétion
+            Promise.allSettled(allEmails.map(email => sendSignatureEmail({
+                to_email: email,
+                to_name: 'Signataire',
+                signLink: finalFileUrl,
+                subject: "Votre document a été entièrement signé",
+                htmlContent: htmlContent
+            }))).catch(err => console.error("Erreur envoi email final:", err));
 
             return res.json({ success: true, message: "Signature enregistrée avec succès.", finalFileUrl });
         }
