@@ -542,6 +542,40 @@ router.post('/protect-pdf', upload.single('file'), (req, res) => {
 // Extrait le texte d'une image via Tesseract
 // Query params: lang (default: eng, fra pour français)
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// POST /convert/unlock-pdf
+// Déverrouille un PDF protégé avec son mot de passe actuel via Ghostscript
+// Body params: password
+// ─────────────────────────────────────────────
+router.post('/unlock-pdf', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+    if (!req.body.password) return res.status(400).json({ message: 'Mot de passe manquant.' });
+
+    const inputPath = req.file.path;
+    const outputPath = `/tmp/${Date.now()}-unlocked.pdf`;
+    const password = req.body.password;
+
+    const command = `gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sPDFPassword="${password}" -sOutputFile="${outputPath}" "${inputPath}"`;
+
+    exec(command, (error, stdout, stderr) => {
+        const hasError = error || (stderr && (stderr.includes('Password did not work') || stderr.includes('Cannot decrypt')));
+        const outputExists = fs.existsSync(outputPath) && fs.statSync(outputPath).size > 0;
+
+        if (hasError || !outputExists) {
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+            return res.status(400).json({ message: 'Mot de passe incorrect ou document non déchiffrable.' });
+        }
+
+        res.setHeader('Content-Disposition', 'attachment; filename="unlocked.pdf"');
+        res.setHeader('Content-Type', 'application/pdf');
+        res.download(outputPath, (err) => {
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+        });
+    });
+});
+
 router.post('/ocr-image', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
 

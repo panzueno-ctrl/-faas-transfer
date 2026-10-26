@@ -48,6 +48,9 @@ export function useConvertApi({
             if (selectedService?.id === 'protect-pdf') {
                 formData.append('password', passwordOverride || options?.pdfPassword || 'faas2024');
             }
+            if (selectedService?.id === 'unlock-pdf') {
+                formData.append('password', passwordOverride || options?.unlockPassword || '');
+            }
             if (selectedService?.id === 'compress-pdf') {
                 formData.append('compressionLevel', compressionLevelOverride || options?.compressionLevel || 'recommended');
             }
@@ -77,8 +80,16 @@ export function useConvertApi({
                 if (response.status === 404) {
                     throw new Error('NotImplemented');
                 }
-                const errorText = await response.text();
-                throw new Error(errorText || 'Erreur serveur');
+                let errorMsg = 'Erreur serveur';
+                try {
+                    const clonedRes = response.clone();
+                    const errJson = await clonedRes.json();
+                    if (errJson && errJson.message) errorMsg = errJson.message;
+                    else errorMsg = await response.text();
+                } catch {
+                    errorMsg = await response.text();
+                }
+                throw new Error(errorMsg || 'Erreur serveur');
             }
 
             let resultBlob;

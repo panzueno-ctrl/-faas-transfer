@@ -16967,3 +16967,25 @@ Pour répondre exactement à l'exigence utilisateur sans rendre le blanco figé 
 
 3. **Résultat Ergonomique :**
    L'utilisateur n'a plus jamais besoin de cliquer à côté pour déplacer un texte. Il étale son blanco, clique sur 'Texte', clique directement dans le blanc, et tape instantanément son nouveau texte.
+
+================================================================================
+CHAPITRE 26 : IMPLÉMENTATION DE L'OUTIL DE DÉVERROUILLAGE PDF (UNLOCK-PDF)
+================================================================================
+Date : Lundi, 26 Octobre 2026 à 16h47 et 25 secondes
+
+### 1. Objectif Fonctionnel
+Compléter le binôme Sécurité PDF (Verrouiller / Déverrouiller) afin de permettre à tout utilisateur de supprimer définitivement la protection par mot de passe d'un document PDF légitime dont il connaît le mot de passe actuel.
+
+### 2. Architecture Technique Implémentée
+
+#### A. Backend FaaS (Render - Node.js / Ghostscript) :
+- Route POST `/convert/unlock-pdf` configurée avec `multer` pour la réception du flux binaire et du champ `password`.
+- Commande d'exécution Ghostscript :
+  `gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sPDFPassword="${password}" -sOutputFile="${outputPath}" "${inputPath}"`
+- Détection robuste des échecs de déchiffrement : Ghostscript retourne 0 même en cas d'échec de mot de passe, mais écrit des avertissements formels dans `stderr` (`Password did not work` ou `Cannot decrypt`). Le contrôleur analyse `stderr` et vérifie la taille du fichier produit. Si le mot de passe est invalide, une réponse HTTP 400 claire est renvoyée (`Mot de passe incorrect ou document non déchiffrable`).
+- Nettoyage automatique des fichiers temporaires à la fin du flux.
+
+#### B. Frontend Mobile / Web (React Native / Expo) :
+- Staging dédié dans `convert.tsx` : Lorsqu'un utilisateur sélectionne 'Déverrouiller', un volet élégant apparaît avec une icône de cadenas ouvert, des explications claires et un champ de saisie du mot de passe avec bascule de visibilité (œil).
+- Validation préventive : Le bouton 'Terminer' reste désactivé tant qu'aucun mot de passe n'est renseigné.
+- Gestion d'erreur améliorée dans `useConvertApi.ts` : Clone de la réponse pour extraire les messages d'erreur JSON précis renvoyés par l'API au lieu d'un message générique.

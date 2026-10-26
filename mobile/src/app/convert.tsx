@@ -87,6 +87,8 @@ export default function ConvertScreen() {
     
     // Premium UI states
     const [pdfPassword, setPdfPassword] = useState('');
+    const [unlockPassword, setUnlockPassword] = useState('');
+    const [showUnlockPassword, setShowUnlockPassword] = useState(false);
     const [watermarkConfig, setWatermarkConfig] = useState<WatermarkSettings | null>(null);
     const [conversionQuality, setConversionQuality] = useState<ConversionQuality>('standard');
     const [numberingConfig, setNumberingConfig] = useState<NumberingConfig>({ position: 'bottom-center', format: 'total' });
@@ -580,6 +582,32 @@ export default function ConvertScreen() {
                             <NumberingSelector onChange={setNumberingConfig} />
                         )}
 
+                        {selectedService.id === 'unlock-pdf' && (
+                            <View style={{ width: '100%', maxWidth: 400, marginBottom: 24, padding: 20, backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                                    <Ionicons name="lock-open-outline" size={24} color={colors.primary} style={{ marginRight: 8 }} />
+                                    <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>Déverrouiller le PDF</Text>
+                                </View>
+                                <Text style={{ fontSize: 13, color: colors.textMuted, marginBottom: 16 }}>
+                                    Entrez le mot de passe actuel de ce document pour supprimer définitivement sa protection.
+                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 12, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 12 }}>
+                                    <Ionicons name="key-outline" size={20} color={colors.textMuted} style={{ marginRight: 8 }} />
+                                    <TextInput
+                                        style={{ flex: 1, height: 48, color: colors.text, fontSize: 15 }}
+                                        placeholder="Mot de passe actuel"
+                                        placeholderTextColor={colors.textMuted}
+                                        secureTextEntry={!showUnlockPassword}
+                                        value={unlockPassword}
+                                        onChangeText={setUnlockPassword}
+                                    />
+                                    <Pressable onPress={() => setShowUnlockPassword(!showUnlockPassword)} style={{ padding: 8 }}>
+                                        <Ionicons name={showUnlockPassword ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} />
+                                    </Pressable>
+                                </View>
+                            </View>
+                        )}
+
                         {selectedService.id === 'ocr-pdf' && (
                             <OcrLanguageSelector onChange={setOcrLang} />
                         )}
@@ -593,9 +621,12 @@ export default function ConvertScreen() {
 
                         <View style={{ flexDirection: 'row', gap: 16, width: '100%', maxWidth: 400 }}>
                             <Pressable 
-                                style={[styles.primaryButton, selectedFiles.length === 0 && { opacity: 0.5 }]} 
-                                onPress={() => processFiles()}
-                                disabled={selectedFiles.length === 0}
+                                style={[
+                                    styles.primaryButton, 
+                                    (selectedFiles.length === 0 || (selectedService?.id === 'unlock-pdf' && !unlockPassword.trim())) && { opacity: 0.5 }
+                                ]} 
+                                onPress={() => processFiles(selectedService?.id === 'unlock-pdf' ? unlockPassword : undefined)}
+                                disabled={selectedFiles.length === 0 || (selectedService?.id === 'unlock-pdf' && !unlockPassword.trim())}
                             >
                                 <Ionicons name="checkmark-outline" size={22} color="#ffffff" />
                                 <Text style={styles.primaryButtonText}>Terminer</Text>
