@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import SignaturePad, { SignatureData } from './SignaturePad';
 import Svg, { Path } from 'react-native-svg';
 
-const DraggableItem = ({ x, y, canvasSize, onDragEnd, isSelected, onSelect, children }: any) => {
+const DraggableItem = ({ x, y, canvasSize, onDragEnd, isSelected, onSelect, pointerEvents, children }: any) => {
     const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
 
     // Use refs to keep latest values and avoid stale closures in PanResponder
@@ -48,6 +48,7 @@ const DraggableItem = ({ x, y, canvasSize, onDragEnd, isSelected, onSelect, chil
 
     return (
         <Animated.View
+            pointerEvents={pointerEvents}
             style={{
                 position: 'absolute',
                 left: `${x}%`,
@@ -501,6 +502,7 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
                                         y={edit.y} 
                                         canvasSize={canvasSize} 
                                         isSelected={isSelected}
+                                        pointerEvents={edit.type === 'whiteout' && activeTool === 'text' && !isSelected ? 'none' : 'auto'}
                                         onSelect={() => setSelectedEditId(edit.id)}
                                         onDragEnd={(newX: number, newY: number) => {
                                             setEdits(prev => prev.map(e => e.id === edit.id ? { ...e, x: newX, y: newY } : e));

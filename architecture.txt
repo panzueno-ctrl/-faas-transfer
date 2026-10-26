@@ -16929,3 +16929,19 @@ C. **Rendu Visuel et Contrôles Premium :**
 D. **Compilation Vectorielle Finale (`usePdfEngine.ts`) :**
    Ajout de l'instruction `page.drawRectangle()` dans `pdf-lib` :
    Les coordonnées relatives en pourcentage sont traduites au système cartésien du PDF (`x`, `rectY = height - y - rectHeight`, `width`, `height`). Le rectangle blanc est gravé avant les nouveaux calques de texte, garantissant que le texte de remplacement s'affiche impeccablement par-dessus.
+
+================================================================================
+CHAPITRE 24 : POLISSAGE UX DE L'ÉDITEUR PDF (CLICK-THROUGH DIRECT SUR BLANCO)
+================================================================================
+Date : Lundi, 26 Octobre 2026 à 13h34 et 32 secondes
+
+### 1. Constat et Retour d'Expérience Utilisateur
+Suite à la validation réussie de la gomme (remplacement visuel parfait du texte dans les tests utilisateurs), une friction ergonomique subtile a été identifiée :
+- Lorsqu'un utilisateur pose un bloc de blanco sur du texte et active ensuite l'outil 'Texte', cliquer directement sur la surface blanche sélectionnait à nouveau le rectangle de blanco au lieu de poser le curseur de texte.
+- L'utilisateur devait donc cliquer en dehors de la zone blanche pour générer le champ texte, puis le faire glisser au-dessus du blanco.
+
+### 2. Résolution par 'pointerEvents' Conditionnel
+Pour rendre le flux 100% naturel et fluide sans exiger de déplacement manuel :
+- Dans `PdfEditor.tsx`, nous avons configuré la propriété `pointerEvents` sur le conteneur `DraggableItem` des blocs de blanco.
+- Règle appliquée : Si `edit.type === 'whiteout'`, que l'outil actif est `'text'`, et que le bloc blanc n'est pas déjà en cours d'édition (`!isSelected`), alors `pointerEvents = 'none'`.
+- Résultat : Dès que le mode Texte est actif, le bloc de blanco devient transparent aux événements de clic. Un simple clic direct sur le blanc traverse la couche et déclenche instantanément la création du nouveau champ texte à l'emplacement exact cliqué.
