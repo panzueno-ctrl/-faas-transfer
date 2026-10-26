@@ -158,18 +158,16 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
         try {
             if (Platform.OS === 'web') {
                 const nativeEvent = e.nativeEvent || e;
-                if (nativeEvent.offsetX !== undefined && nativeEvent.offsetY !== undefined) {
+                const overlay = document.getElementById('pdf-canvas-overlay');
+                if (overlay) {
+                    const rect = overlay.getBoundingClientRect();
+                    const clientX = nativeEvent.clientX ?? (nativeEvent.touches && nativeEvent.touches[0] ? nativeEvent.touches[0].clientX : 0);
+                    const clientY = nativeEvent.clientY ?? (nativeEvent.touches && nativeEvent.touches[0] ? nativeEvent.touches[0].clientY : 0);
+                    x = ((clientX - rect.left) / rect.width) * 100;
+                    y = ((clientY - rect.top) / rect.height) * 100;
+                } else if (nativeEvent.offsetX !== undefined && nativeEvent.offsetY !== undefined) {
                     x = (nativeEvent.offsetX / canvasSize.width) * 100;
                     y = (nativeEvent.offsetY / canvasSize.height) * 100;
-                } else {
-                    const target = e.target as HTMLElement;
-                    if (target && target.getBoundingClientRect) {
-                        const rect = target.getBoundingClientRect();
-                        const clientX = nativeEvent.clientX ?? (nativeEvent.touches && nativeEvent.touches[0] ? nativeEvent.touches[0].clientX : 0);
-                        const clientY = nativeEvent.clientY ?? (nativeEvent.touches && nativeEvent.touches[0] ? nativeEvent.touches[0].clientY : 0);
-                        x = ((clientX - rect.left) / rect.width) * 100;
-                        y = ((clientY - rect.top) / rect.height) * 100;
-                    }
                 }
             } else {
                 x = (e.nativeEvent.locationX / canvasSize.width) * 100;
@@ -178,7 +176,7 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
         } catch (err) {
             console.log("Error getting coords", err);
         }
-        return { x, y };
+        return { x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) };
     };
 
     const handleWhiteoutStart = (e: any) => {
@@ -262,66 +260,33 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
 
     // -----------------------------
 
-    const handleCanvasPress = (e: any) => {
-        if (Platform.OS === 'web') {
-            const nativeEvent = e.nativeEvent as any;
-            const targetId = nativeEvent.target?.id;
-            // Ne pas traiter le clic si on a cliqué sur un élément enfant (comme un champ texte ou un bouton)
-            if (targetId !== 'pdf-canvas-overlay') {
-                return;
-            }
-        }
+    const addTextEdit = (x: number, y: number) => {
+        const newEdit: PdfEditItem = {
+            id: Date.now().toString(),
+            pageIndex: currentPageIndex,
+            type: 'text',
+            x,
+            y,
+            text: '',
+            color: selectedColor,
+            size: selectedSize,
+            fontWeight: selectedWeight,
+            fontStyle: selectedStyle,
+            textAlign: selectedAlign,
+        };
+        setEdits(prev => [...prev, newEdit]);
+        setSelectedEditId(newEdit.id);
+    };
 
+    const handleCanvasPress = (e: any) => {
         if (selectedEditId) {
             setSelectedEditId(null);
         }
 
-        if (activeTool !== 'text' && activeTool !== 'replace') return;
+        if (activeTool !== 'text') return;
         
-        // Use nativeEvent for cross-platform local coordinates
-        // Cross-platform coordinate calculation
-        let x = 0;
-        let y = 0;
-
-        if (Platform.OS === 'web') {
-            // Sur le web, e.nativeEvent.offsetX/offsetY est le plus fiable
-            const nativeEvent = e.nativeEvent as any;
-            if (nativeEvent.offsetX !== undefined) {
-                x = (nativeEvent.offsetX / canvasSize.width) * 100;
-                y = (nativeEvent.offsetY / canvasSize.height) * 100;
-            } else {
-                // Fallback avec getBoundingClientRect
-                const target = e.target as HTMLElement;
-                const rect = target.getBoundingClientRect();
-                x = ((nativeEvent.clientX - rect.left) / rect.width) * 100;
-                y = ((nativeEvent.clientY - rect.top) / rect.height) * 100;
-            }
-        } else {
-            // Sur mobile natif
-            const { locationX, locationY } = e.nativeEvent;
-            x = (locationX / canvasSize.width) * 100;
-            y = (locationY / canvasSize.height) * 100;
-        }
-        
-
-
-        if (activeTool === 'text') {
-            const newEdit: PdfEditItem = {
-                id: Date.now().toString(),
-                pageIndex: currentPageIndex,
-                type: 'text',
-                x,
-                y,
-                text: '',
-                color: selectedColor,
-                size: selectedSize,
-                fontWeight: selectedWeight,
-                fontStyle: selectedStyle,
-                textAlign: selectedAlign,
-            };
-            setEdits([...edits, newEdit]);
-            setSelectedEditId(newEdit.id);
-        }
+        const coords = getCoordinates(e);
+        addTextEdit(coords.x, coords.y);
     };
 
     const handleSignatureSave = (signature: SignatureData) => {
@@ -518,6 +483,9 @@ export default function PdfEditor({ pages, onComplete, onCancel, colors, autoOpe
                                                 onChangeText={(t: string) => setEdits(prev => prev.map(e => e.id === edit.id ? { ...e, text: t } : e))}
                                                 onResize={(w: number, h: number) => setEdits(prev => prev.map(e => e.id === edit.id ? { ...e, width: w, height: h } : e))}
                                                 panHandlers={panHandlers}
+                                                activeTool={activeTool}
+                                                getCoordinates={getCoordinates}
+                                                onAddText={addTextEdit}
                                             />
                                         )}
                                     </DraggableItem>
@@ -782,7 +750,7 @@ const styles = StyleSheet.create({
 });
 
 // Component to handle individual edit items and their resize handlers
-function PdfEditItemView({ edit, isSelected, canvasSize, onSelect, onRemove, onChangeText, onResize, panHandlers }: any) {
+function PdfEditItemView({ edit, isSelected, canvasSize, onSelect, onRemove, onChangeText, onResize, panHandlers, activeTool, getCoordinates, onAddText }: any) {
     const editRef = React.useRef(edit);
     React.useEffect(() => {
         editRef.current = edit;
@@ -912,6 +880,17 @@ function PdfEditItemView({ edit, isSelected, canvasSize, onSelect, onRemove, onC
         const boxWidth = (edit.width || 18) * (canvasSize.width / 100);
         const boxHeight = (edit.height || 4) * (canvasSize.height / 100);
 
+        const handleWhiteoutPress = (e: any) => {
+            if (activeTool === 'text') {
+                if (getCoordinates && onAddText) {
+                    const coords = getCoordinates(e);
+                    onAddText(coords.x, coords.y);
+                }
+                return;
+            }
+            onSelect();
+        };
+
         return (
             <View 
                 style={[
@@ -939,7 +918,7 @@ function PdfEditItemView({ edit, isSelected, canvasSize, onSelect, onRemove, onC
                     </View>
                 )}
                 
-                <Pressable onPress={onSelect} style={{ width: '100%', height: '100%', cursor: 'pointer' as any as any }}>
+                <Pressable onPress={handleWhiteoutPress} style={{ width: '100%', height: '100%', cursor: (activeTool === 'text' ? 'text' : 'pointer') as any }}>
                     <View style={{ width: '100%', height: '100%', backgroundColor: '#ffffff' }} />
                 </Pressable>
 

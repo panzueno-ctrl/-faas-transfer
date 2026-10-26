@@ -16945,3 +16945,25 @@ Pour rendre le flux 100% naturel et fluide sans exiger de déplacement manuel :
 - Dans `PdfEditor.tsx`, nous avons configuré la propriété `pointerEvents` sur le conteneur `DraggableItem` des blocs de blanco.
 - Règle appliquée : Si `edit.type === 'whiteout'`, que l'outil actif est `'text'`, et que le bloc blanc n'est pas déjà en cours d'édition (`!isSelected`), alors `pointerEvents = 'none'`.
 - Résultat : Dès que le mode Texte est actif, le bloc de blanco devient transparent aux événements de clic. Un simple clic direct sur le blanc traverse la couche et déclenche instantanément la création du nouveau champ texte à l'emplacement exact cliqué.
+
+================================================================================
+CHAPITRE 25 : PRIORITÉ ABSOLUE DE L'OUTIL TEXTE SUR LE BLANCO DANS L'ÉDITEUR
+================================================================================
+Date : Lundi, 26 Octobre 2026 à 13h46 et 57 secondes
+
+### 1. Analyse du Comportement Relevé
+Lors de l'application d'un bloc blanc (blanco) puis du passage en mode 'Texte', cliquer directement sur la zone blanche réactivait la boîte de sélection du blanco (avec son contour bleu et ses poignées) au lieu d'ouvrir le champ de saisie texte.
+Cause identifiée : Le composant enfant 'PdfEditItemView' (pour le type 'whiteout') possédait son propre écouteur `<Pressable onPress={onSelect}>`. Lors d'un clic sur la zone blanche, cet événement local interceptait le clic avant le canvas parent et déclenchait obligatoirement la sélection du blanco.
+
+### 2. Implémentation de la Priorité Fonctionnelle ('Texte' prend le pas sur 'Gomme')
+Pour répondre exactement à l'exigence utilisateur sans rendre le blanco figé en dehors du mode texte :
+1. **Écouteur Contextuel ('handleWhiteoutPress') :**
+   Dans 'PdfEditItemView', le gestionnaire de clic de la surface blanche interroge l'état global 'activeTool' :
+   - Si 'activeTool === "text"' : Le bloc blanc refuse formellement d'être sélectionné (`onSelect` n'est pas appelé). Au lieu de cela, il capture les coordonnées géométriques exactes du clic de souris via le rectangle d'ancrage global (`document.getElementById('pdf-canvas-overlay').getBoundingClientRect()`) et déclenche directement la création d'un nouveau champ texte (`onAddText(coords.x, coords.y)`).
+   - Si 'activeTool !== "text"' (mode neutre ou gomme) : Le clic réactive normalement le cadre de blanco pour permettre de le déplacer ou de le supprimer.
+
+2. **Affichage du Curseur Texte :**
+   Dès que l'outil 'Texte' est actif dans la barre d'outils, le curseur au-dessus de n'importe quel bloc de blanco prend la forme du faisceau de saisie texte (`cursor: 'text'`).
+
+3. **Résultat Ergonomique :**
+   L'utilisateur n'a plus jamais besoin de cliquer à côté pour déplacer un texte. Il étale son blanco, clique sur 'Texte', clique directement dans le blanc, et tape instantanément son nouveau texte.
