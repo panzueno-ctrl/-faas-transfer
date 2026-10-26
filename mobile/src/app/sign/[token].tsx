@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator, Platform, Aler
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import PdfEditor from '../../features/convert/ui/PdfEditor';
+import { loadPdfJs } from '../../features/convert/hooks/usePdfEngine';
 import { Ionicons } from '@expo/vector-icons';
 import JSZip from 'jszip';
 
@@ -34,7 +35,12 @@ export default function SignTokenScreen() {
                 const errData = await res.json();
                 throw new Error(errData.error || "Demande introuvable");
             }
-            const { request } = await res.json();
+            const resData = await res.json();
+            const request = resData.request || resData;
+
+            if (!request) {
+                throw new Error("Données de la demande introuvables.");
+            }
             
             if (request.status === 'signed') {
                 if (request.signature_documents && request.signature_documents.final_file_url) {
@@ -47,8 +53,14 @@ export default function SignTokenScreen() {
 
             setRequestData(request);
             
+            const doc = request.signature_documents;
+            const pdfUrl = doc?.original_file_url;
+            if (!pdfUrl) {
+                throw new Error("URL du document original introuvable.");
+            }
+
             // Generate PDF images for PdfEditor
-            await loadPdfImages(request.signature_documents.original_file_url);
+            await loadPdfImages(pdfUrl);
             
         } catch (err: any) {
             console.error(err);
@@ -60,39 +72,66 @@ export default function SignTokenScreen() {
 
     const loadPdfImages = async (pdfUrl: string) => {
         try {
-            // 1. Download PDF
+            // 1. Download PDF arrayBuffer
             const pdfRes = await fetch(pdfUrl);
             if (!pdfRes.ok) throw new Error("Impossible de télécharger le PDF");
-            const pdfBlob = await pdfRes.blob();
-            
-            // 2. Convert to images via backend
-            const formData = new FormData();
-            formData.append('file', pdfBlob, 'document.pdf');
-            
-            const convRes = await fetch(`${SERVER_URL}/convert/pdf-to-image`, {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!convRes.ok) throw new Error("Erreur de conversion");
-            
-            const contentType = convRes.headers.get('content-type');
-            const blob = await convRes.blob();
-            const pages: string[] = [];
-            
-            if (contentType?.includes('zip')) {
-                const zip = new JSZip();
-                const unzipped = await zip.loadAsync(blob);
-                const fileNames = Object.keys(unzipped.files).sort();
-                for (const filename of fileNames) {
-                    const f = unzipped.files[filename];
-                    if (!f.dir) {
-                        const imgBlob = await f.async('blob');
-                        pages.push(URL.createObjectURL(imgBlob));
+            const arrayBuffer = await pdfRes.arrayBuffer();
+
+            let pages: string[] = [];
+
+            // Fast client-side rendering via pdf.js on web
+            if (Platform.OS === 'web') {
+                try {
+                    const pdfjsLib = await loadPdfJs();
+                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
+                    const pdf = await loadingTask.promise;
+                    for (let j = 1; j <= pdf.numPages; j++) {
+                        const page = await pdf.getPage(j);
+                        const viewport = page.getViewport({ scale: 1.5 });
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            canvas.width = viewport.width;
+                            canvas.height = viewport.height;
+                            await page.render({ canvasContext: ctx, viewport }).promise;
+                            pages.push(canvas.toDataURL('image/jpeg', 0.85));
+                        }
                     }
+                } catch (pdfJsErr) {
+                    console.warn("Client-side PDF.js rendering failed, falling back to server:", pdfJsErr);
                 }
-            } else {
-                pages.push(URL.createObjectURL(blob));
+            }
+
+            // Fallback to backend /convert/pdf-to-image if needed
+            if (pages.length === 0) {
+                const pdfBlob = new Blob([arrayBuffer], { type: 'application/pdf' });
+                const formData = new FormData();
+                formData.append('file', pdfBlob, 'document.pdf');
+                
+                const convRes = await fetch(`${SERVER_URL}/convert/pdf-to-image`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!convRes.ok) throw new Error("Erreur de conversion");
+                
+                const contentType = convRes.headers.get('content-type');
+                const blob = await convRes.blob();
+                
+                if (contentType?.includes('zip')) {
+                    const zip = new JSZip();
+                    const unzipped = await zip.loadAsync(blob);
+                    const fileNames = Object.keys(unzipped.files).sort();
+                    for (const filename of fileNames) {
+                        const f = unzipped.files[filename];
+                        if (!f.dir) {
+                            const imgBlob = await f.async('blob');
+                            pages.push(URL.createObjectURL(imgBlob));
+                        }
+                    }
+                } else {
+                    pages.push(URL.createObjectURL(blob));
+                }
             }
             
             setPdfPages(pages);
@@ -188,7 +227,7 @@ export default function SignTokenScreen() {
                 </View>
                 <Text style={{ color: colors.text, fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>C'est tout bon !</Text>
                 <Text style={{ color: colors.textMuted, fontSize: 16, textAlign: 'center', maxWidth: 400, marginBottom: 24 }}>
-                    Votre signature a été enregistrée avec succès.
+                    {finalFileUrl ? "Votre signature a été enregistrée avec succès. Le document complet est prêt !" : "Votre signature a été enregistrée avec succès. Vous recevrez le document final par e-mail dès que tous les destinataires auront signé."}
                 </Text>
                 {finalFileUrl && (
                     <a 

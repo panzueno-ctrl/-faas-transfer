@@ -260,6 +260,7 @@ router.get('/request/:token', async (req, res) => {
                 signature_documents (
                     id,
                     original_file_url,
+                    final_file_url,
                     status
                 )
             `)
@@ -270,11 +271,8 @@ router.get('/request/:token', async (req, res) => {
             return res.status(404).json({ error: "Demande introuvable ou invalide." });
         }
 
-        if (data.status === 'signed') {
-            return res.status(400).json({ error: "Ce document a déjà été signé par vos soins.", alreadySigned: true });
-        }
-
-        return res.json(data);
+        // Renvoyer les données à la fois sous la clé "request" et à la racine pour compatibilité totale
+        return res.json({ request: data, ...data });
 
     } catch (error) {
         console.error('SIGNATURE_ERROR:', error);

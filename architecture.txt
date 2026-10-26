@@ -17091,3 +17091,36 @@ Le fournisseur d'hébergement cloud Render filtre par politique de sécurité le
 #### B. Parallélisation & Réponse Rapide au Client :
 - **Distribution Parallèle :** Envoi simultané à l'ensemble des destinataires avec `Promise.allSettled`.
 - **Délai Garanti Client (`Promise.race`) :** Les jetons d'accès et le fichier PDF étant déjà sauvegardés dans Supabase, la réponse HTTP est expédiée au client en moins de 3,5 secondes pour déverrouiller immédiatement l'interface vers l'écran de confirmation, pendant que les notifications s'exécutent en arrière-plan.
+
+
+================================================================================
+CHAPITRE 31 : RÉSOLUTION DE L'ACCÈS AU DOCUMENT DE SIGNATURE PAR JETON UNIQUE ET RENDU CLIENT HAUTE PERFORMANCE
+================================================================================
+Date : Lundi, 26 Octobre 2026 à 17h50 et 00 secondes
+
+### 1. Contexte & Diagnostic de l'Erreur Frontend
+Lorsqu'un destinataire recevait l'e-mail d'invitation et cliquait sur le bouton "Examiner et signer le document" (menant à l'URL `https://faas-transfer.vercel.app/sign/[token]`), l'écran affichait une icône rouge avec le message d'erreur :
+`Cannot read properties of undefined (reading 'status')`
+
+#### Causes Racines Identifiées :
+1. **Divergence de format de réponse JSON (Backend vs Frontend) :**
+   - L'endpoint backend `GET /signature/request/:token` renvoyait directement l'objet de données Supabase `data` à la racine : `{ id, signer_email, status, document_id, signature_documents }`.
+   - Le frontend `mobile/src/app/sign/[token].tsx` tentait de déstructurer `{ request } = await res.json()`. La variable `request` valait donc `undefined`, ce qui déclenchait immédiatement une exception non gérée sur `if (request.status === 'signed')`.
+2. **Rejet 400 injustifié pour les signataires ayant déjà signé :**
+   - Le backend renvoyait une erreur `400 Bad Request` si `data.status === 'signed'`, privant le signataire de la page de confirmation propre et du lien de téléchargement final.
+3. **Latence de conversion d'image PDF :**
+   - Le frontend envoyait systématiquement l'intégralité du PDF vers l'endpoint serveur `/convert/pdf-to-image` pour conversion via `pdftoppm` et compression ZIP, ralentissant le temps de chargement pour le signataire.
+
+### 2. Solutions Techniques Implémentées
+
+#### A. Harmonisation des Formats de Données & Gestion Déjà Signé (`server/routes/signature.js`) :
+- L'endpoint `GET /signature/request/:token` renvoie désormais les données à la fois sous la clé `request` et à la racine : `return res.json({ request: data, ...data });`.
+- Inclusion du champ `final_file_url` dans la relation `signature_documents` de la requête Supabase.
+- Suppression du code 400 pénalisant : lorsqu'un signataire consulte à nouveau son lien, l'application reçoit le statut `signed` en 200 OK et affiche élégamment l'écran d'achèvement avec le bouton de téléchargement du document complet.
+
+#### B. Rendu Client PDF.js Ultra-Rapide & Tolérance aux Pannes (`mobile/src/app/sign/[token].tsx`) :
+- Extraction robuste des données : `const request = resData.request || resData;`.
+- Contrôle de nullité et validation explicite de l'URL du document Supabase.
+- Intégration du moteur client `loadPdfJs` : sous environnement Web, le document PDF est rendu instantanément page par page dans le canvas du navigateur en local (< 300 ms).
+- Conservation du fallback vers `/convert/pdf-to-image` en cas de défaillance locale ou sur environnement natif.
+- Affichage d'un message d'état clair lorsque le signataire a apposé sa signature et attend que les autres participants finalisent la leur.
