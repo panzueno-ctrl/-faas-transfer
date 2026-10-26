@@ -17124,3 +17124,45 @@ Lorsqu'un destinataire recevait l'e-mail d'invitation et cliquait sur le bouton 
 - Intégration du moteur client `loadPdfJs` : sous environnement Web, le document PDF est rendu instantanément page par page dans le canvas du navigateur en local (< 300 ms).
 - Conservation du fallback vers `/convert/pdf-to-image` en cas de défaillance locale ou sur environnement natif.
 - Affichage d'un message d'état clair lorsque le signataire a apposé sa signature et attend que les autres participants finalisent la leur.
+
+
+================================================================================
+CHAPITRE 32 : GESTION DYNAMIQUE DU WORKFLOW MULTI-SIGNATAIRES, TÉLÉCHARGEMENT IMMÉDIAT ET CLÔTURE ANTICIPÉE
+================================================================================
+Date : Lundi, 26 Octobre 2026 à 21h33 et 00 secondes
+
+### 1. Contexte & Problématique Métier
+Dans un processus de signature impliquant plusieurs destinataires (ex. 3 personnes) :
+- Si un signataire ne répond jamais, est en congé ou si son e-mail a été saisi avec une faute de frappe, l'ensemble du processus se retrouvait bloqué indéfiniment en attente d'une complétion à 100 %.
+- Les signataires ayant déjà validé leur signature ne pouvaient pas récupérer immédiatement leur document signé sans attendre les autres.
+
+### 2. Architecture & Solutions Techniques Déployées
+
+#### A. Générateur Universel de PDF Signé (`server/routes/signature.js`) :
+- Création de la fonction asynchrone `compileAndSaveSignedPdf(documentId, markCompleted)` :
+  - Télécharge le PDF original depuis Supabase Storage.
+  - Récupère toutes les signatures enregistrées à cet instant (`signatures_data`).
+  - Appose avec précision chaque signature (dessin vectoriel SVG, texte ou image) sur sa page et position respectives.
+  - Sauvegarde et uploade le document résultant sur Supabase Storage (`signed_<docId>_<timestamp>.pdf`).
+  - Met à jour `signature_documents.final_file_url`.
+
+#### B. Téléchargement Immédiat à Chaque Signature (`POST /signature/complete-request`) :
+- Dès qu'un signataire appose sa signature, `compileAndSaveSignedPdf` est invoqué en direct.
+- Le signataire reçoit immédiatement l'URL `finalFileUrl` et peut télécharger son document signé à la seconde même, sans attendre que les autres aient fini.
+
+#### C. Suivi Temps Réel de l'Avancement (`GET /signature/request/:token`) :
+- L'endpoint retourne la progression complète :
+  - `signedCount` : nombre de signataires ayant signé.
+  - `totalCount` : nombre total de destinataires.
+  - `allSigners` : liste détaillée des participants avec badge d'état (`signed` ou `pending`).
+
+#### D. Clôture Anticipée Débloquante (`POST /signature/finalize-early`) :
+- Ajout d'une action de clôture anticipée : si un destinataire est indisponible ou si son e-mail était erroné, n'importe quel signataire ou administrateur peut forcer la finalisation avec les signatures déjà recueillies.
+- Le document est validé comme complet (`status: 'completed'`) et les participants ayant signé reçoivent la version finale officielle par e-mail.
+
+#### E. Interface Utilisateur Enrichie (`mobile/src/app/sign/[token].tsx`) :
+- Écran de complétion moderne affichant :
+  - Le compteur d'avancement (ex. `1 / 3 signé(s)`).
+  - La liste interactive des signataires (icônes vertes et jaunes d'état).
+  - Le bouton vert de téléchargement direct du document avec les signatures actuelles.
+  - Le bouton secondaire « Clôturer le document maintenant (sans attendre) » avec confirmation de sécurité.

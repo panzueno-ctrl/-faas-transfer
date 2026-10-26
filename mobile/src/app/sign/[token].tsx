@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator, Platform, Alert, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '../../context/ThemeContext';
 import PdfEditor from '../../features/convert/ui/PdfEditor';
@@ -19,8 +19,14 @@ export default function SignTokenScreen() {
     const [pdfPages, setPdfPages] = useState<string[]>([]);
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
-        const [done, setDone] = useState(false);
+    const [done, setDone] = useState(false);
     const [finalFileUrl, setFinalFileUrl] = useState<string | null>(null);
+
+    // Multi-signers management
+    const [allSigners, setAllSigners] = useState<any[]>([]);
+    const [signedCount, setSignedCount] = useState<number>(1);
+    const [totalCount, setTotalCount] = useState<number>(1);
+    const [isFinalizing, setIsFinalizing] = useState<boolean>(false);
 
     useEffect(() => {
         if (!token) return;
@@ -41,17 +47,22 @@ export default function SignTokenScreen() {
             if (!request) {
                 throw new Error("Données de la demande introuvables.");
             }
+
+            if (resData.allSigners) setAllSigners(resData.allSigners);
+            if (resData.signedCount !== undefined) setSignedCount(resData.signedCount);
+            if (resData.totalCount !== undefined) setTotalCount(resData.totalCount);
+
+            if (request.signature_documents && request.signature_documents.final_file_url) {
+                setFinalFileUrl(request.signature_documents.final_file_url);
+            }
+
+            setRequestData(request);
             
             if (request.status === 'signed') {
-                if (request.signature_documents && request.signature_documents.final_file_url) {
-                    setFinalFileUrl(request.signature_documents.final_file_url);
-                }
                 setDone(true);
                 setLoading(false);
                 return;
             }
-
-            setRequestData(request);
             
             const doc = request.signature_documents;
             const pdfUrl = doc?.original_file_url;
@@ -153,7 +164,7 @@ export default function SignTokenScreen() {
 
         setSubmitting(true);
         try {
-            // Take the first signature (or send all if needed, but let's assume 1)
+            // Take the first signature
             const sig = signatures[0];
             
             // Inject box width and height into signatureData
@@ -184,18 +195,54 @@ export default function SignTokenScreen() {
             const resData = await res.json();
             if (resData.finalFileUrl) {
                 setFinalFileUrl(resData.finalFileUrl);
-                // Open automatically
-                if (Platform.OS === 'web') {
-                    window.open(resData.finalFileUrl, '_blank');
-                }
             }
+            if (resData.signedCount !== undefined) setSignedCount(resData.signedCount);
+            if (resData.totalCount !== undefined) setTotalCount(resData.totalCount);
+            
             setDone(true);
+            await fetchRequestData();
         } catch (err: any) {
             console.error(err);
             if (Platform.OS === 'web') window.alert(err.message);
             else Alert.alert("Erreur", err.message);
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleFinalizeEarly = async () => {
+        const confirmMsg = "Voulez-vous clôturer le document maintenant avec les signatures actuelles ? Un document final sera généré sans attendre les autres signataires.";
+        if (Platform.OS === 'web') {
+            if (!window.confirm(confirmMsg)) return;
+        }
+
+        try {
+            setIsFinalizing(true);
+            const res = await fetch(`${SERVER_URL}/signature/finalize-early`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token })
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Erreur lors de la clôture");
+            }
+
+            const data = await res.json();
+            if (data.finalFileUrl) {
+                setFinalFileUrl(data.finalFileUrl);
+                if (Platform.OS === 'web') {
+                    window.open(data.finalFileUrl, '_blank');
+                }
+            }
+            await fetchRequestData();
+        } catch (e: any) {
+            console.error(e);
+            if (Platform.OS === 'web') window.alert(e.message);
+            else Alert.alert("Erreur", e.message);
+        } finally {
+            setIsFinalizing(false);
         }
     };
 
@@ -220,35 +267,126 @@ export default function SignTokenScreen() {
     }
 
     if (done) {
+        const isCompleted = (signedCount > 0 && signedCount === totalCount) || (requestData?.signature_documents?.status === 'completed');
+
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
-                <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: colors.success + '20', alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
-                    <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+                <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: colors.success + '20', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                    <Ionicons name="checkmark-circle" size={44} color={colors.success} />
                 </View>
-                <Text style={{ color: colors.text, fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>C'est tout bon !</Text>
-                <Text style={{ color: colors.textMuted, fontSize: 16, textAlign: 'center', maxWidth: 400, marginBottom: 24 }}>
-                    {finalFileUrl ? "Votre signature a été enregistrée avec succès. Le document complet est prêt !" : "Votre signature a été enregistrée avec succès. Vous recevrez le document final par e-mail dès que tous les destinataires auront signé."}
+                
+                <Text style={{ color: colors.text, fontSize: 24, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' }}>
+                    {isCompleted ? "Document entièrement signé !" : "Votre signature est validée !"}
                 </Text>
+                
+                <Text style={{ color: colors.textMuted, fontSize: 14, textAlign: 'center', maxWidth: 460, marginBottom: 20, lineHeight: 20 }}>
+                    {isCompleted 
+                        ? "Tous les participants ont signé le document. Vous pouvez télécharger la version officielle ci-dessous." 
+                        : "Votre signature a été apposée sur le document avec succès. Vous pouvez télécharger dès maintenant la version signée disponible."}
+                </Text>
+
+                {/* Checklist des signataires */}
+                {totalCount > 1 && (
+                    <View style={{ width: '100%', maxWidth: 480, backgroundColor: colors.card, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: colors.border, marginBottom: 20 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="people-outline" size={18} color={colors.text} />
+                                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14 }}>
+                                    Signataires ({signedCount}/{totalCount})
+                                </Text>
+                            </View>
+                            <View style={{ backgroundColor: isCompleted ? colors.success + '20' : colors.primary + '20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                                <Text style={{ color: isCompleted ? colors.success : colors.primary, fontSize: 12, fontWeight: '700' }}>
+                                    {isCompleted ? "Complet" : `${signedCount} sur ${totalCount}`}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {allSigners && allSigners.map((s: any, idx: number) => {
+                            const isSigned = s.status === 'signed';
+                            return (
+                                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: colors.border + '40' }}>
+                                    <View style={{ flex: 1, marginRight: 8 }}>
+                                        <Text style={{ color: colors.text, fontWeight: '600', fontSize: 13 }}>
+                                            {s.signer_name || s.signer_email}
+                                        </Text>
+                                        <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+                                            {s.signer_email}
+                                        </Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: isSigned ? colors.success + '15' : '#f59e0b15', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                                        <Ionicons 
+                                            name={isSigned ? "checkmark-circle" : "time-outline"} 
+                                            size={14} 
+                                            color={isSigned ? colors.success : "#f59e0b"} 
+                                        />
+                                        <Text style={{ color: isSigned ? colors.success : "#f59e0b", fontSize: 11, fontWeight: '600' }}>
+                                            {isSigned ? "Signé" : "En attente"}
+                                        </Text>
+                                    </View>
+                                </View>
+                            );
+                        })}
+                    </View>
+                )}
+
+                {/* Téléchargement immédiat du PDF signé */}
                 {finalFileUrl && (
                     <a 
                         href={finalFileUrl} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         style={{
-                            backgroundColor: colors.primary,
-                            padding: '12px 24px',
+                            backgroundColor: '#10b981',
+                            padding: '14px 26px',
                             borderRadius: '12px',
                             color: 'white',
                             textDecoration: 'none',
                             fontWeight: 'bold',
+                            fontSize: '15px',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '8px'
+                            gap: '8px',
+                            marginBottom: 14,
+                            boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
                         }}
                     >
                         <Ionicons name="download-outline" size={20} color="white" />
-                        Télécharger le document final
+                        {isCompleted ? "Télécharger le document final" : "Télécharger la version signée actuelle"}
                     </a>
+                )}
+
+                {/* Option de clôture anticipée si des signataires sont en attente */}
+                {!isCompleted && totalCount > 1 && (
+                    <View style={{ alignItems: 'center', marginTop: 6, maxWidth: 460 }}>
+                        <Pressable 
+                            style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 6,
+                                paddingVertical: 10,
+                                paddingHorizontal: 16,
+                                borderRadius: 10,
+                                backgroundColor: colors.card,
+                                borderWidth: 1,
+                                borderColor: colors.border
+                            }}
+                            onPress={handleFinalizeEarly}
+                            disabled={isFinalizing}
+                        >
+                            {isFinalizing ? (
+                                <ActivityIndicator size="small" color={colors.primary} />
+                            ) : (
+                                <Ionicons name="flash-outline" size={16} color={colors.primary} />
+                            )}
+                            <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 13 }}>
+                                {isFinalizing ? "Clôture en cours..." : "Clôturer le document maintenant (sans attendre)"}
+                            </Text>
+                        </Pressable>
+                        <Text style={{ color: colors.textMuted, fontSize: 11, textAlign: 'center', marginTop: 6, lineHeight: 16 }}>
+                            Un participant tarde ou a une adresse e-mail erronée ? Vous pouvez clôturer le document maintenant avec les signatures déjà apposées.
+                        </Text>
+                    </View>
                 )}
             </SafeAreaView>
         );
