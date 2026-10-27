@@ -17328,3 +17328,18 @@ Date : Mardi, 27 Octobre 2026 à 17h29 et 30 secondes
   - Sitemap XML découvert (4/4 pages enregistrées par Googlebot).
   - Balises de transition de marque "Fast Transfer (anciennement FaaS Transfer)" et pré-rendu sémantique actif.
 - **Bilan Global :** 100 % des composants sont stables, opérationnels et prêts pour les utilisateurs.
+
+================================================================================
+CHAPITRE 40 : CORRECTION DE LA CONFIGURATION DE DÉPLOIEMENT VERCEL
+================================================================================
+Date : Mardi, 27 Octobre 2026 à 17h33 et 00 secondes
+
+### 1. Analyse de l Erreur de Déploiement Vercel
+- **Symptôme :** Les builds Vercel post-commit 9308fda ont affiché le statut 'Error'.
+- **Cause :** L ajout d une expression rationnelle avec negative lookahead dans vercel.json et mobile/vercel.json. Le routeur de Vercel (path-to-regexp) ne supporte pas cette syntaxe dans les rewrites et a invalidé la configuration.
+- **Rappel Architectural :** Sur Vercel, les fichiers statiques de public/ (google3cf30b6634371ac0.html, robots.txt, sitemap.xml) sont toujours servis en priorité avant la réécriture SPA.
+
+### 2. Résolution Appliquée
+- Restauration de la réécriture standard source: '/(.*)', destination: '/index.html' dans vercel.json et mobile/vercel.json.
+- Nettoyage des balises meta Google en conservant le code validé 3cf30b6634371ac0.
+- Déploiement rétabli au vert sur Vercel.

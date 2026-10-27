@@ -96,7 +96,6 @@ export default function TabLayout() {
         <meta name="theme-color" content="#208AEF" />
         <meta name="google-site-verification" content="5QQjlFYYE2uBKBIyS4rk2fbbXgjY2ehB7B5JN63Cp2w" />
         <meta name="google-site-verification" content="3cf30b6634371ac0" />
-        <meta name="google-site-verification" content="google3cf30b6634371ac0" />
         <meta name="google" content="notranslate" />
         <meta name="keywords" content="fast transfer, fast transfer app, faas transfer, faas-transfer, fast-transfer, transfert de fichiers, envoyer de gros fichiers, conversion pdf, compresser pdf, fusionner pdf, wetransfer alternatif, smallpdf gratuit, ocr gratuit, partager fichier en ligne, envoi lourd" />
         <script type="application/ld+json">

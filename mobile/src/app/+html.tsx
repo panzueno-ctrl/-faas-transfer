@@ -25,7 +25,6 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <meta name="keywords" content="fast transfer, fast transfer app, faas transfer, faas-transfer, fast-transfer, application transfert de fichiers, envoyer gros fichiers gratuit, convertisseur pdf, compresser video mp4, couper video, fusionner pdf, signer pdf en ligne, alternative wetransfer" />
         <meta name="author" content="Fast Transfer" />
         <meta name="google-site-verification" content="3cf30b6634371ac0" />
-        <meta name="google-site-verification" content="google3cf30b6634371ac0" />
         <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
 
         {/* Open Graph / Facebook */}
