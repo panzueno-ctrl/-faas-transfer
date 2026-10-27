@@ -17343,3 +17343,21 @@ Date : Mardi, 27 Octobre 2026 à 17h33 et 00 secondes
 - Restauration de la réécriture standard source: '/(.*)', destination: '/index.html' dans vercel.json et mobile/vercel.json.
 - Nettoyage des balises meta Google en conservant le code validé 3cf30b6634371ac0.
 - Déploiement rétabli au vert sur Vercel.
+
+================================================================================
+CHAPITRE 41 : ÉLIMINATION DÉFINITIVE DU STATUT SANS TITRE SUR GOOGLE
+================================================================================
+Date : Mardi, 27 Octobre 2026 à 17h42 et 30 secondes
+
+### 1. Analyse du Problème 'Sans titre'
+- Constat : Dans les résultats de recherche Google pour "faas transfert", l'application ressortait avec le libellé "Sans titre".
+- Origine Technique : React Helmet (utilisé par Expo Router Head) injectait par défaut une balise title data-rh="true" vide lorsque la route enfant active ne déclarait pas explicitement son propre titre. Étant située en tout premier dans le flux HTML, cette balise vide était captée par Googlebot avant le titre statique de secours.
+- Délai d'Indexation : Le snippet affiché par Google correspond à l'ancien cache non encore actualisé par le passage du robot.
+
+### 2. Solution Implémentée
+- Injection explicite de composants Head avec balises title et meta description personnalisées dans l'ensemble des routes applicatives :
+  - mobile/src/app/index.tsx : Fast Transfer (FaaS Transfer) - Partage & Conversion de Fichiers Gratuit
+  - mobile/src/app/convert.tsx : Convertisseur de Fichiers - 47 Outils PDF, Vidéo & Audio | Fast Transfer
+  - mobile/src/app/send.tsx : Envoyer des Gros Fichiers Gratuitement | Fast Transfer
+  - mobile/src/app/receive.tsx : Recevoir et Télécharger des Fichiers | Fast Transfer
+- Résultat : React Helmet injecte désormais directement le titre officiel dans data-rh="true" sans laisser aucune balise vide.

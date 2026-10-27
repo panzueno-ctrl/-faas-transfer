@@ -27,6 +27,7 @@ import JSZip from 'jszip';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Head from 'expo-router/head';
 import ActionCard from '../components/ActionCard';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';

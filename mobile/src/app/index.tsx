@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import Head from 'expo-router/head';
 import ActionCard from '../components/ActionCard';
 import LogoFaaS from '../components/LogoFaaS';
 import { useTheme } from '../context/ThemeContext';
@@ -77,6 +78,10 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Head>
+        <title>Fast Transfer (FaaS Transfer) - Partage & Conversion de Fichiers Gratuit</title>
+        <meta name="description" content="Fast Transfer (anciennement FaaS Transfer) est l'application gratuite et sécurisée pour envoyer de gros fichiers instantanément et convertir tous vos documents en ligne (47 outils PDF, compression vidéo FFmpeg, audio, images)." />
+      </Head>
       <View style={styles.layout}>
 
         {/* ── Sidebar gauche — visible sur tablette/desktop ── */}
