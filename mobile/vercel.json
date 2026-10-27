@@ -1,7 +1,11 @@
 {
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/google3cf30b6634371ac0.html",
+      "destination": "/google3cf30b6634371ac0.html"
+    },
+    {
+      "source": "/((?!google.*\.html).*)",
       "destination": "/index.html"
     }
   ]
