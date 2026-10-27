@@ -17267,3 +17267,20 @@ Date : Mardi, 27 Octobre 2026 à 16h23 et 00 secondes
   - Synchronisation du composant Head avec les nouvelles métadonnées de transition et le JSON-LD unifié.
 - Fichier mobile/public/sitemap.xml :
   - Ajout de la balise d'actualisation lastmod 2026-10-27 et ajustement des fréquences de mise à jour pour forcer le passage des robots.
+
+================================================================================
+CHAPITRE 36 : VALIDATION DE LA PROPRIÉTÉ DU DOMAINE SUR GOOGLE SEARCH CONSOLE
+================================================================================
+Date : Mardi, 27 Octobre 2026 à 16h43 et 00 secondes
+
+### 1. Contexte & Action Requise
+- Google Search Console nécessite la validation de la propriété du domaine https://faas-transfer.vercel.app/ afin d autoriser l indexation manuelle et le suivi analytique du moteur de recherche.
+- Méthode sélectionnée par l utilisateur : Fichier de vérification HTML dédié fourni par Google.
+
+### 2. Déploiement du Fichier de Vérification
+- Création du fichier : mobile/public/google3cf30b6634371ac0.html
+- Contenu exact validé par Google :
+  google-site-verification: google3cf30b6634371ac0.html
+- Copie de sécurité à la racine du dépôt : google3cf30b6634371ac0.html
+- Ce fichier est servi directement à l URL : https://faas-transfer.vercel.app/google3cf30b6634371ac0.html
+- Statut : Poussé sur la branche main pour déploiement automatique immédiat par Vercel.
