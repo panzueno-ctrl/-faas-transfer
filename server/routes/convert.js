@@ -1144,6 +1144,252 @@ router.post('/trim-audio', upload.single('file'), (req, res) => {
     });
 });
 
+// ─────────────────────────────────────────────
+// POST /convert/flatten-pdf
+// Aplatit les formulaires interactifs et annotations d'un PDF via pdf-lib
+// ─────────────────────────────────────────────
+router.post('/flatten-pdf', upload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    try {
+        const fileBytes = fs.readFileSync(req.file.path);
+        const pdfDoc = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
+        
+        try {
+            const form = pdfDoc.getForm();
+            if (form) form.flatten();
+        } catch (formErr) {
+            console.log("No form fields or already flat:", formErr.message);
+        }
+
+        const flattenedBytes = await pdfDoc.save();
+        const outputPath = `/tmp/${Date.now()}-flattened.pdf`;
+        fs.writeFileSync(outputPath, flattenedBytes);
+
+        const originalName = req.file.originalname ? req.file.originalname.replace(/\.[^/.]+$/, "") : "document";
+        res.setHeader('Content-Disposition', `attachment; filename="${originalName}-aplati.pdf"`);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.download(outputPath, (err) => {
+            if (fs.existsSync(req.file.path)) { try { fs.unlinkSync(req.file.path); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+        });
+    } catch (err) {
+        console.error('FLATTEN_PDF_ERROR:', err);
+        if (fs.existsSync(req.file.path)) { try { fs.unlinkSync(req.file.path); } catch(e) {} }
+        return res.status(500).json({ message: "L'aplatissement du PDF a échoué." });
+    }
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/repair-pdf
+// Répare un PDF corrompu ou réécrit sa table XREF via Ghostscript
+// ─────────────────────────────────────────────
+router.post('/repair-pdf', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const outputPath = `/tmp/${Date.now()}-repaired.pdf`;
+
+    const command = `gs -o "${outputPath}" -sDEVICE=pdfwrite -dPDFSETTINGS=/prepress "${inputPath}"`;
+
+    exec(command, (error, stdout, stderr) => {
+        if (error || !fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
+            console.error('REPAIR_PDF_ERROR:', error, stderr);
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+            return res.status(500).json({ message: "La réparation du PDF a échoué. Le fichier est peut-être irrécupérable." });
+        }
+
+        const originalName = req.file.originalname ? req.file.originalname.replace(/\.[^/.]+$/, "") : "document";
+        res.setHeader('Content-Disposition', `attachment; filename="${originalName}-repare.pdf"`);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.download(outputPath, (err) => {
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+        });
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/pdf-to-pdfa
+// Convertit un PDF standard en format d'archivage normé PDF/A-2b via Ghostscript
+// ─────────────────────────────────────────────
+router.post('/pdf-to-pdfa', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    const inputPath = req.file.path;
+    const outputPath = `/tmp/${Date.now()}-pdfa.pdf`;
+
+    const command = `gs -dPDFA=2 -dBATCH -dNOPAUSE -sColorConversionStrategy=UseDeviceIndependentColor -sDEVICE=pdfwrite -dPDFACompatibilityPolicy=1 -sOutputFile="${outputPath}" "${inputPath}"`;
+
+    exec(command, (error, stdout, stderr) => {
+        if (error || !fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
+            console.error('PDFA_ERROR:', error, stderr);
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+            return res.status(500).json({ message: "La conversion en PDF/A a échoué." });
+        }
+
+        const originalName = req.file.originalname ? req.file.originalname.replace(/\.[^/.]+$/, "") : "document";
+        res.setHeader('Content-Disposition', `attachment; filename="${originalName}-PDFA.pdf"`);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.download(outputPath, (err) => {
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+        });
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/crop-pdf
+// Rogne les marges extérieures d'un PDF via pdf-lib
+// ─────────────────────────────────────────────
+router.post('/crop-pdf', upload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier reçu.' });
+
+    try {
+        const fileBytes = fs.readFileSync(req.file.path);
+        const pdfDoc = await PDFDocument.load(fileBytes);
+        const pages = pdfDoc.getPages();
+
+        for (const page of pages) {
+            const { x, y, width, height } = page.getMediaBox();
+            const marginX = width * 0.05;
+            const marginY = height * 0.05;
+            page.setCropBox(x + marginX, y + marginY, width - marginX * 2, height - marginY * 2);
+        }
+
+        const croppedBytes = await pdfDoc.save();
+        const outputPath = `/tmp/${Date.now()}-cropped.pdf`;
+        fs.writeFileSync(outputPath, croppedBytes);
+
+        const originalName = req.file.originalname ? req.file.originalname.replace(/\.[^/.]+$/, "") : "document";
+        res.setHeader('Content-Disposition', `attachment; filename="${originalName}-rogne.pdf"`);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.download(outputPath, (err) => {
+            if (fs.existsSync(req.file.path)) { try { fs.unlinkSync(req.file.path); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+        });
+    } catch (err) {
+        console.error('CROP_PDF_ERROR:', err);
+        if (fs.existsSync(req.file.path)) { try { fs.unlinkSync(req.file.path); } catch(e) {} }
+        return res.status(500).json({ message: "Le rognage du PDF a échoué." });
+    }
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/html-to-pdf
+// Convertit un fichier HTML en document PDF via LibreOffice headless
+// ─────────────────────────────────────────────
+router.post('/html-to-pdf', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier HTML reçu.' });
+
+    const inputPath = req.file.path;
+    const outputDir = '/tmp';
+    const command = `libreoffice --headless --convert-to pdf --outdir "${outputDir}" "${inputPath}"`;
+
+    exec(command, (error, stdout, stderr) => {
+        const expectedPdf = path.join(outputDir, `${path.parse(inputPath).name}.pdf`);
+        if (error || !fs.existsSync(expectedPdf)) {
+            console.error('HTML_TO_PDF_ERROR:', error, stderr);
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            return res.status(500).json({ message: "La conversion HTML vers PDF a échoué." });
+        }
+
+        res.setHeader('Content-Disposition', 'attachment; filename="page.pdf"');
+        res.setHeader('Content-Type', 'application/pdf');
+        res.download(expectedPdf, (err) => {
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(expectedPdf)) { try { fs.unlinkSync(expectedPdf); } catch(e) {} }
+        });
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/merge-audio
+// Fusionne plusieurs fichiers audio en un seul fichier MP3 via FFmpeg
+// ─────────────────────────────────────────────
+router.post('/merge-audio', upload.array('files'), (req, res) => {
+    if (!req.files || req.files.length < 2) {
+        return res.status(400).json({ message: 'Veuillez fournir au moins 2 fichiers audio à fusionner.' });
+    }
+
+    const fileListPath = `/tmp/audio_list_${Date.now()}.txt`;
+    const outputPath = `/tmp/${Date.now()}-merged.mp3`;
+
+    const fileListContent = req.files.map(f => `file '${f.path}'`).join('\n');
+    fs.writeFileSync(fileListPath, fileListContent);
+
+    const command = `ffmpeg -threads 2 -y -f concat -safe 0 -i "${fileListPath}" -c:a libmp3lame -q:a 2 "${outputPath}"`;
+
+    exec(command, (error, stdout, stderr) => {
+        if (fs.existsSync(fileListPath)) { try { fs.unlinkSync(fileListPath); } catch(e) {} }
+
+        if (error || !fs.existsSync(outputPath)) {
+            console.error('MERGE_AUDIO_ERROR:', error, stderr);
+            req.files.forEach(f => { if (fs.existsSync(f.path)) { try { fs.unlinkSync(f.path); } catch(e) {} } });
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+            return res.status(500).json({ message: "La fusion audio a échoué." });
+        }
+
+        res.setHeader('Content-Disposition', 'attachment; filename="audio-fusionne.mp3"');
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.download(outputPath, (err) => {
+            req.files.forEach(f => { if (fs.existsSync(f.path)) { try { fs.unlinkSync(f.path); } catch(e) {} } });
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+        });
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/compare-pdf
+// Compare 2 documents PDF et produit un PDF avec les différences visuelles
+// ─────────────────────────────────────────────
+router.post('/compare-pdf', upload.array('files'), (req, res) => {
+    if (!req.files || req.files.length < 2) {
+        return res.status(400).json({ message: 'Veuillez sélectionner 2 fichiers PDF à comparer.' });
+    }
+
+    const file1 = req.files[0].path;
+    const file2 = req.files[1].path;
+    const prefix1 = `/tmp/cmp1_${Date.now()}`;
+    const prefix2 = `/tmp/cmp2_${Date.now()}`;
+    const diffImg = `/tmp/diff_${Date.now()}.png`;
+    const outputPath = `/tmp/${Date.now()}-comparaison.pdf`;
+
+    const cmd1 = `pdftoppm -png -r 150 -f 1 -l 1 "${file1}" "${prefix1}" && pdftoppm -png -r 150 -f 1 -l 1 "${file2}" "${prefix2}"`;
+
+    exec(cmd1, (err1) => {
+        const img1 = `${prefix1}-1.png`;
+        const img2 = `${prefix2}-1.png`;
+
+        if (err1 || !fs.existsSync(img1) || !fs.existsSync(img2)) {
+            req.files.forEach(f => { if (fs.existsSync(f.path)) { try { fs.unlinkSync(f.path); } catch(e) {} } });
+            return res.status(500).json({ message: "Erreur lors de la lecture des PDF." });
+        }
+
+        const cmdCompare = `compare "${img1}" "${img2}" -compose src "${diffImg}" || true`;
+        exec(cmdCompare, () => {
+            const cmdToPdf = `convert "${diffImg}" "${outputPath}"`;
+            exec(cmdToPdf, (err3) => {
+                [img1, img2, diffImg].forEach(p => { if (fs.existsSync(p)) { try { fs.unlinkSync(p); } catch(e) {} } });
+
+                if (err3 || !fs.existsSync(outputPath)) {
+                    req.files.forEach(f => { if (fs.existsSync(f.path)) { try { fs.unlinkSync(f.path); } catch(e) {} } });
+                    return res.status(500).json({ message: "Échec de la génération du rapport de comparaison." });
+                }
+
+                res.setHeader('Content-Disposition', 'attachment; filename="comparaison-diff.pdf"');
+                res.setHeader('Content-Type', 'application/pdf');
+                res.download(outputPath, () => {
+                    req.files.forEach(f => { if (fs.existsSync(f.path)) { try { fs.unlinkSync(f.path); } catch(e) {} } });
+                    if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+                });
+            });
+        });
+    });
+});
+
 // --- SYSTÈME DE TICKETS (ASYNC POLLING) ---
 const jobs = new Map();
 

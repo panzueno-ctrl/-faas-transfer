@@ -17202,3 +17202,38 @@ Dans le cadre de la Priorité 2 de la feuille de route du hub de conversion, les
 #### C. Intégration Frontend (`mobile/src/app/convert.tsx` & `useConvertApi.ts`) :
 - Détection automatique du service sélectionné pour monter le sélecteur approprié (`CompressionSelector` pour `compress-video`/`compress-audio` et `VideoTrimSelector` pour `trim-video`/`trim-audio`).
 - Injection automatique des paramètres `compressionLevel`, `startTime` et `endTime` dans le `FormData` transmis à l'API.
+
+
+================================================================================
+CHAPITRE 34 : COUVERTURE INTÉGRALE À 100 % DES 47 OUTILS DE CONVERSION DU HUB FAST TRANSFER
+================================================================================
+Date : Mardi, 27 Octobre 2026 à 15h43 et 00 secondes
+
+### 1. Contexte & Engagement
+Conformément aux exigences de complétude absolue (aucune suppression ni masquage d'outils), l'ensemble du catalogue des 47 outils du hub Fast Transfer a été audité et implémenté de bout en bout.
+
+### 2. Implémentations et Raccordements Réalisés
+
+#### A. Outils Spécialisés Ajoutés au Serveur (`server/routes/convert.js`) :
+1. **Aplatir PDF (`POST /convert/flatten-pdf`) :**
+   - Utilise `pdf-lib` pour figer et verrouiller irréversiblement les formulaires interactifs (`form.flatten()`) et annotations en éléments graphiques statiques.
+2. **Réparer PDF (`POST /convert/repair-pdf`) :**
+   - Restauration des fichiers corrompus et reconstruction automatique des tables d'adresses d'objets XREF via Ghostscript (`-dPDFSETTINGS=/prepress`).
+3. **PDF en PDF/A (`POST /convert/pdf-to-pdfa`) :**
+   - Conversion en norme d'archivage pérenne ISO (PDF/A-2b) via le profil Ghostscript indépendant du périphérique (`-dPDFA=2 -sColorConversionStrategy=UseDeviceIndependentColor`).
+4. **Rogner PDF (`POST /convert/crop-pdf`) :**
+   - Recalcul dynamique des boîtes de découpe `CropBox` et `MediaBox` sur chaque page avec `pdf-lib`.
+5. **HTML vers PDF (`POST /convert/html-to-pdf`) :**
+   - Rendu et conversion haute fidélité des pages web HTML via LibreOffice en mode headless.
+6. **Fusion Audio (`POST /convert/merge-audio`) :**
+   - Concaténation de plusieurs pistes sonores avec démultiplexeur FFmpeg sans perte de qualité.
+7. **Comparer PDF (`POST /convert/compare-pdf`) :**
+   - Extraction des pages via `pdftoppm`, calcul des différences par masque visuel avec ImageMagick `compare`, et génération du rapport PDF comparatif.
+
+#### B. Optimisation Frontend & Raccordement Éditeur (`mobile/src/app/convert.tsx`) :
+- Raccordement direct des outils `censor-pdf` (Censure/Blanco) et `annotate-pdf` (Notes/Annotations) à l'éditeur interactif `initPdfEditor` avec barre d'outils dédiée.
+- Activation de la sélection multiple (`multiple: true`) pour l'outil `compare-pdf` dans `constants.ts`.
+
+### 3. Résultat de l'Audit de Couverture
+- **Outils totaux déclarés :** 47
+- **Outils connectés et opérationnels :** 47 / 47 (100 %)

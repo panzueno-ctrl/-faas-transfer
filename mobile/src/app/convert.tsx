@@ -260,7 +260,7 @@ export default function ConvertScreen() {
                     setSplitPoints([]);
                 } else if (selectedService.id === 'sign-pdf') {
                     setStep('sign_choice');
-                } else if (selectedService.id === 'edit-pdf') {
+                } else if (selectedService.id === 'edit-pdf' || selectedService.id === 'annotate-pdf' || selectedService.id === 'censor-pdf') {
                     initPdfEditor(res.assets[0]);
                 } else if (selectedService.id === 'watermark-pdf') {
                     initPdfEditor(res.assets[0], 'watermark_editor');
