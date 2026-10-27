@@ -17237,3 +17237,33 @@ Conformément aux exigences de complétude absolue (aucune suppression ni masqua
 ### 3. Résultat de l'Audit de Couverture
 - **Outils totaux déclarés :** 47
 - **Outils connectés et opérationnels :** 47 / 47 (100 %)
+
+================================================================================
+CHAPITRE 35 : STRATÉGIE DE RÉFÉRENCEMENT SEO & TRANSITION DE MARQUE (FAST TRANSFER / FAAS TRANSFER)
+================================================================================
+Date : Mardi, 27 Octobre 2026 à 16h23 et 00 secondes
+
+### 1. Diagnostic du Référencement Google
+- Symptôme : La recherche du terme "fast transfer" sur Google ne retourne pas le site web, alors que l'ancien nom "faas transfer" ou l'URL directe permettent de le trouver.
+- Causes Identifiées :
+  1. Concurrence & Généricité du Terme : "Fast transfer" est une expression d'usage courant en anglais ("transfert rapide"). Les moteurs de recherche classent en priorité :
+     - En Italie (contexte réseau de l'utilisateur) : la procédure officielle d'État des douanes italiennes ("Agenzia delle Dogane e dei Monopoli - Procedura Fast Transfer").
+     - Sur les magasins d'applications : les apps à millions de téléchargements ("Fast File Transfer and Share" sur Google Play).
+     - Les mastodontes historiques du transfert de fichiers (WeTransfer, TransferNow) bénéficiant de 15 ans d'autorité de domaine (DA > 85).
+  2. Nom de Domaine Hébergé : Le domaine reste faas-transfer.vercel.app (présence du mot-clé "faas" et sous-domaine Vercel), créant un décalage entre la requête "fast transfer" et le nom d'hôte exact.
+  3. Bug du title dans l'export SSR : La balise headNodes était placée avant le title, ce qui injectait une balise title vide en première position dans le flux HTML pour les robots d'indexation.
+  4. Absence de passerelle de transition de marque (Rebranding Link) : Aucun signal explicite n'indiquait à Googlebot que "Fast Transfer" et "FaaS Transfer" désignent exactement la même entité.
+  5. Contenu Initial Non Hydraté : Le corps HTML brut body n'exposait aucun contenu sémantique statique pour les robots avant l'exécution du bundle JavaScript.
+
+### 2. Actions Correctives Réalisées
+- Fichier mobile/src/app/+html.tsx :
+  - Repositionnement prioritaire de la balise title et de la balise canonique link rel="canonical" avant headNodes.
+  - Titre renforcé : Fast Transfer (FaaS Transfer) - Partage & Conversion de Fichiers Gratuit.
+  - Intégration explicite du mot-clé de transition "anciennement FaaS Transfer" dans la meta description et les mots-clés.
+  - Données structurées JSON-LD WebApplication enrichies avec la liste des noms alternatifs (alternateName: ["Fast Transfer App", "FaaS Transfer", "faas-transfer", "FastTransfer"]).
+  - Ajout d'un bloc de contenu sémantique accessible et indexable (titre h1, paragraphe descriptif, liens internes /send, /receive, /convert) dans le body pour garantir la lisibilité textuelle par Googlebot dès le crawl initial.
+  - Ajout d'une section noscript optimisée.
+- Fichier mobile/src/app/_layout.tsx :
+  - Synchronisation du composant Head avec les nouvelles métadonnées de transition et le JSON-LD unifié.
+- Fichier mobile/public/sitemap.xml :
+  - Ajout de la balise d'actualisation lastmod 2026-10-27 et ajustement des fréquences de mise à jour pour forcer le passage des robots.

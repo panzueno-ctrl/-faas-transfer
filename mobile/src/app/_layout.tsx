@@ -86,22 +86,23 @@ export default function TabLayout() {
   return (
     <ThemeProvider>
       <Head>
-        <title>Fast Transfer - Partage & Conversion de Fichiers Instantané</title>
-        <meta name="description" content="Envoyez, recevez et convertissez vos fichiers (PDF, Vidéos, Audio, Images) instantanément et gratuitement. La solution tout-en-un pour vos transferts et traitements de documents." />
-        <meta property="og:title" content="Fast Transfer - Partage & Conversion de Fichiers Instantané" />
-        <meta property="og:description" content="Envoyez, recevez et convertissez vos fichiers (PDF, Vidéos, Audio, Images) instantanément et gratuitement. La solution tout-en-un pour vos transferts et traitements de documents." />
+        <title>Fast Transfer (FaaS Transfer) - Partage &amp; Conversion de Fichiers Gratuit</title>
+        <meta name="description" content="Fast Transfer (anciennement FaaS Transfer) : envoyez, recevez et convertissez vos fichiers (47 outils PDF, vidéos, audio, images) instantanément et gratuitement. Alternative rapide à WeTransfer." />
+        <meta property="og:title" content="Fast Transfer (FaaS Transfer) - Partage &amp; Conversion de Fichiers" />
+        <meta property="og:description" content="Fast Transfer (anciennement FaaS Transfer) : envoyez, recevez et convertissez vos fichiers instantanément et gratuitement." />
         <meta property="og:image" content="https://faas-transfer.vercel.app/og-image.png" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
         <meta name="theme-color" content="#208AEF" />
         <meta name="google-site-verification" content="5QQjlFYYE2uBKBIyS4rk2fbbXgjY2ehB7B5JN63Cp2w" />
         <meta name="google" content="notranslate" />
-        <meta name="keywords" content="fast transfer, fast transfers, fast transfer, we transfer, application pour transférer des fichiers, application pour envoyer des fichiers, application pour envoyer un fichier d'un téléphone vers un autre, application pour convertir des fichiers, convertisseur de fichier, app to transfer files, app to send files, app to send files from phone to phone, app to convert files, file converter app, app per trasferire file, app per inviare file, app per convertire file, convertitore di file, transfert de fichier, envoyer gros fichiers gratuit, wetransfer alternatif" />
+        <meta name="keywords" content="fast transfer, fast transfer app, faas transfer, faas-transfer, fast-transfer, transfert de fichiers, envoyer de gros fichiers, conversion pdf, compresser pdf, fusionner pdf, wetransfer alternatif, smallpdf gratuit, ocr gratuit, partager fichier en ligne, envoi lourd" />
         <script type="application/ld+json">
           {JSON.stringify({
             "@context": "https://schema.org",
             "@type": "WebApplication",
             "name": "Fast Transfer",
+            "alternateName": ["Fast Transfer App", "FaaS Transfer", "faas-transfer", "FastTransfer"],
             "url": "https://faas-transfer.vercel.app/",
             "description": "Envoyez, recevez et convertissez vos fichiers (PDF, Vidéos, Audio, Images) instantanément, gratuitement et sans création de compte.",
             "applicationCategory": "UtilitiesApplication",
