@@ -985,6 +985,165 @@ router.post('/mp4-to-gif', upload.single('file'), (req, res) => {
     });
 });
 
+// ─────────────────────────────────────────────
+// POST /convert/compress-video
+// Compresse et optimise une vidéo MP4/WebM/MOV via FFmpeg (H.264 + AAC)
+// Body params: compressionLevel ('low' | 'recommended' | 'extreme')
+// ─────────────────────────────────────────────
+router.post('/compress-video', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier vidéo reçu.' });
+
+    const inputPath = req.file.path;
+    const outputPath = `/tmp/${Date.now()}-compressed.mp4`;
+    const level = req.body.compressionLevel || 'recommended';
+
+    let videoFilter = "scale='min(1280,iw)':-2";
+    let crf = '28';
+    let audioBitrate = '96k';
+    let preset = 'fast';
+
+    if (level === 'low') {
+        videoFilter = "scale='min(1920,iw)':-2";
+        crf = '23';
+        audioBitrate = '128k';
+        preset = 'medium';
+    } else if (level === 'extreme') {
+        videoFilter = "scale='min(854,iw)':-2";
+        crf = '32';
+        audioBitrate = '64k';
+        preset = 'veryfast';
+    }
+
+    const command = `ffmpeg -threads 2 -y -i "${inputPath}" -vf "${videoFilter}" -c:v libx264 -crf ${crf} -preset ${preset} -c:a aac -b:a ${audioBitrate} -movflags +faststart "${outputPath}"`;
+
+    exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+        if (error) {
+            console.error('COMPRESS_VIDEO_ERROR:', error, stderr);
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+            return res.status(500).json({ message: "La compression de la vidéo a échoué. Veuillez vérifier le fichier." });
+        }
+
+        const originalName = req.file.originalname ? req.file.originalname.replace(/\.[^/.]+$/, "") : "video";
+        res.setHeader('Content-Disposition', `attachment; filename="${originalName}-compressed.mp4"`);
+        res.setHeader('Content-Type', 'video/mp4');
+        res.download(outputPath, (err) => {
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+        });
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/trim-video
+// Découpe un extrait vidéo via FFmpeg
+// Body params: startTime ('00:00:10' ou secondes), endTime ('00:00:30' ou secondes)
+// ─────────────────────────────────────────────
+router.post('/trim-video', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier vidéo reçu.' });
+
+    const inputPath = req.file.path;
+    const outputPath = `/tmp/${Date.now()}-trimmed.mp4`;
+
+    const rawStart = (req.body.startTime || '00:00:00').trim();
+    const rawEnd = (req.body.endTime || '').trim();
+
+    const safeStart = rawStart.replace(/[^0-9:.]/g, '') || '00:00:00';
+    const toClause = rawEnd ? `-to ${rawEnd.replace(/[^0-9:.]/g, '')}` : '';
+
+    const command = `ffmpeg -threads 2 -y -ss ${safeStart} ${toClause} -i "${inputPath}" -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k -avoid_negative_ts make_zero -movflags +faststart "${outputPath}"`;
+
+    exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+        if (error) {
+            console.error('TRIM_VIDEO_ERROR:', error, stderr);
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+            return res.status(500).json({ message: "Le découpage de la vidéo a échoué. Vérifiez les repères de temps." });
+        }
+
+        const originalName = req.file.originalname ? req.file.originalname.replace(/\.[^/.]+$/, "") : "video";
+        res.setHeader('Content-Disposition', `attachment; filename="${originalName}-extrait.mp4"`);
+        res.setHeader('Content-Type', 'video/mp4');
+        res.download(outputPath, (err) => {
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+        });
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/compress-audio
+// Compresse un fichier audio via FFmpeg
+// Body params: compressionLevel ('low' | 'recommended' | 'extreme')
+// ─────────────────────────────────────────────
+router.post('/compress-audio', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier audio reçu.' });
+
+    const inputPath = req.file.path;
+    const outputPath = `/tmp/${Date.now()}-compressed.mp3`;
+    const level = req.body.compressionLevel || 'recommended';
+
+    let bitrate = '96k';
+    if (level === 'low') bitrate = '128k';
+    else if (level === 'extreme') bitrate = '48k';
+
+    const command = `ffmpeg -threads 2 -y -i "${inputPath}" -c:a libmp3lame -b:a ${bitrate} "${outputPath}"`;
+
+    exec(command, (error, stdout, stderr) => {
+        if (error) {
+            console.error('COMPRESS_AUDIO_ERROR:', error, stderr);
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+            return res.status(500).json({ message: "La compression audio a échoué." });
+        }
+
+        const originalName = req.file.originalname ? req.file.originalname.replace(/\.[^/.]+$/, "") : "audio";
+        res.setHeader('Content-Disposition', `attachment; filename="${originalName}-compressed.mp3"`);
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.download(outputPath, (err) => {
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+        });
+    });
+});
+
+// ─────────────────────────────────────────────
+// POST /convert/trim-audio
+// Découpe un extrait audio sans perte
+// Body params: startTime, endTime
+// ─────────────────────────────────────────────
+router.post('/trim-audio', upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Aucun fichier audio reçu.' });
+
+    const inputPath = req.file.path;
+    const outputPath = `/tmp/${Date.now()}-trimmed.mp3`;
+
+    const rawStart = (req.body.startTime || '00:00:00').trim();
+    const rawEnd = (req.body.endTime || '').trim();
+
+    const safeStart = rawStart.replace(/[^0-9:.]/g, '') || '00:00:00';
+    const toClause = rawEnd ? `-to ${rawEnd.replace(/[^0-9:.]/g, '')}` : '';
+
+    const command = `ffmpeg -threads 2 -y -ss ${safeStart} ${toClause} -i "${inputPath}" -c:a libmp3lame -q:a 2 "${outputPath}"`;
+
+    exec(command, (error, stdout, stderr) => {
+        if (error) {
+            console.error('TRIM_AUDIO_ERROR:', error, stderr);
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+            return res.status(500).json({ message: "Le découpage audio a échoué." });
+        }
+
+        const originalName = req.file.originalname ? req.file.originalname.replace(/\.[^/.]+$/, "") : "audio";
+        res.setHeader('Content-Disposition', `attachment; filename="${originalName}-extrait.mp3"`);
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.download(outputPath, (err) => {
+            if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch(e) {} }
+            if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch(e) {} }
+        });
+    });
+});
+
 // --- SYSTÈME DE TICKETS (ASYNC POLLING) ---
 const jobs = new Map();
 

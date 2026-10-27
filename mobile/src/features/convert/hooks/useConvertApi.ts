@@ -51,8 +51,14 @@ export function useConvertApi({
             if (selectedService?.id === 'unlock-pdf') {
                 formData.append('password', passwordOverride || options?.unlockPassword || '');
             }
-            if (selectedService?.id === 'compress-pdf' || selectedService?.id === 'compress-image') {
+            if (selectedService?.id === 'compress-pdf' || selectedService?.id === 'compress-image' || selectedService?.id === 'compress-video' || selectedService?.id === 'compress-audio') {
                 formData.append('compressionLevel', compressionLevelOverride || options?.compressionLevel || 'recommended');
+            }
+            if (selectedService?.id === 'trim-video' || selectedService?.id === 'trim-audio') {
+                formData.append('startTime', options?.startTime || '00:00:00');
+                if (options?.endTime) {
+                    formData.append('endTime', options.endTime);
+                }
             }
             if (selectedService?.id === 'number-pdf') {
                 formData.append('position', options?.numberingConfig?.position || 'bottom-center');

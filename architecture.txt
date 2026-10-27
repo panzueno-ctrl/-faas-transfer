@@ -17166,3 +17166,39 @@ Dans un processus de signature impliquant plusieurs destinataires (ex. 3 personn
   - La liste interactive des signataires (icônes vertes et jaunes d'état).
   - Le bouton vert de téléchargement direct du document avec les signatures actuelles.
   - Le bouton secondaire « Clôturer le document maintenant (sans attendre) » avec confirmation de sécurité.
+
+
+================================================================================
+CHAPITRE 33 : IMPLÉMENTATION DES OUTILS MULTIMÉDIA AVANCÉS (COMPRESSION ET DÉCOUPAGE VIDÉO & AUDIO VIA FFMPEG)
+================================================================================
+Date : Mardi, 27 Octobre 2026 à 15h26 et 00 secondes
+
+### 1. Contexte & Objectif
+Dans le cadre de la Priorité 2 de la feuille de route du hub de conversion, les outils de traitement multimédia vidéo et audio étaient déclarés dans l'interface mais non implémentés sur le backend et dépourvus de contrôles interactifs dédiés dans la zone de staging.
+
+### 2. Architecture & Composants Développés
+
+#### A. Moteur de Traitement Multimédia Backend (`server/routes/convert.js`) :
+1. **Compresser Vidéo (`POST /convert/compress-video`) :**
+   - Transcodage haute performance via FFmpeg (`libx264` + `aac`) avec lissage `faststart` pour lecture web instantanée.
+   - Niveaux adaptatifs :
+     - *Simple (low)* : CRF 23, échelle max 1080p, audio 128k (qualité studio).
+     - *Modéré (recommended)* : CRF 28, mise à l'échelle max 720p (720px max de largeur), audio 96k (rapport poids/clarté optimal).
+     - *Fort (extreme)* : CRF 32, mise à l'échelle max 480p, audio 64k (poids minimal pour messageries).
+2. **Couper Vidéo (`POST /convert/trim-video`) :**
+   - Extraction temporelle précise avec recalcul des timestamps (`-avoid_negative_ts make_zero`).
+   - Prise en charge des formats de temps en secondes ou `HH:MM:SS` / `MM:SS`.
+3. **Compresser Audio (`POST /convert/compress-audio`) :**
+   - Réduction du débit binaire MP3 via `libmp3lame` (48k, 96k, 128k).
+4. **Couper Audio (`POST /convert/trim-audio`) :**
+   - Découpage rapide et propre du signal audio.
+
+#### B. Composant Dédié de Découpage (`mobile/src/features/convert/ui/VideoTrimSelector.tsx`) :
+- Panneau visuel moderne avec design soigné et contrastes optimisés.
+- Double saisie temporelle (Début & Fin) avec boutons incrémentaux pas-à-pas (-5s, +1s, +5s).
+- Badge dynamique calculant en temps réel la durée de l'extrait en secondes et minutes.
+- Raccourcis prédéfinis en 1 clic (15s, 30s, 1 min, 2 min).
+
+#### C. Intégration Frontend (`mobile/src/app/convert.tsx` & `useConvertApi.ts`) :
+- Détection automatique du service sélectionné pour monter le sélecteur approprié (`CompressionSelector` pour `compress-video`/`compress-audio` et `VideoTrimSelector` pour `trim-video`/`trim-audio`).
+- Injection automatique des paramètres `compressionLevel`, `startTime` et `endTime` dans le `FormData` transmis à l'API.

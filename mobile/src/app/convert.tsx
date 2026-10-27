@@ -34,6 +34,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import PdfThumbnail from '../features/convert/ui/PdfThumbnail';
 import CompressionSelector, { CompressionLevel } from '../features/convert/ui/CompressionSelector';
+import VideoTrimSelector from '../features/convert/ui/VideoTrimSelector';
 import PasswordProtector from '../features/convert/ui/PasswordProtector';
 import WatermarkEditor from '../features/convert/ui/WatermarkEditor';
 import ProtectEditor from '../features/convert/ui/ProtectEditor';
@@ -93,6 +94,8 @@ export default function ConvertScreen() {
     const [conversionQuality, setConversionQuality] = useState<ConversionQuality>('standard');
     const [numberingConfig, setNumberingConfig] = useState<NumberingConfig>({ position: 'bottom-center', format: 'total' });
     const [ocrLang, setOcrLang] = useState<OcrLanguage>('fra');
+    const [trimStartTime, setTrimStartTime] = useState('00:00:00');
+    const [trimEndTime, setTrimEndTime] = useState('00:00:30');
 
     // E-signature states
     const [signers, setSigners] = useState<{name: string, email: string}[]>([{ name: '', email: '' }]);
@@ -145,7 +148,7 @@ export default function ConvertScreen() {
 
 
     const { apiProcessingTime: apiProcessingTime, processFiles } = useConvertApi({
-        setStep, setResultUrl, setLocalError, t, selectedService, selectedFiles, options: { pdfPassword, compressionLevel, numberingConfig, ocrLang, conversionQuality }
+        setStep, setResultUrl, setLocalError, t, selectedService, selectedFiles, options: { pdfPassword, unlockPassword, compressionLevel, numberingConfig, ocrLang, conversionQuality, startTime: trimStartTime, endTime: trimEndTime }
     });
 
     const cancelTool = (targetStep: string = 'tool_intro') => {
@@ -617,7 +620,7 @@ export default function ConvertScreen() {
                             </View>
                         )}
 
-                        {selectedService.id === 'compress-image' && (
+                        {(selectedService.id === 'compress-image' || selectedService.id === 'compress-video' || selectedService.id === 'compress-audio') && (
                             <View style={{ width: '100%', maxWidth: 400, marginBottom: 24, padding: 20, backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.border }}>
                                 <CompressionSelector 
                                     value={compressionLevel} 
@@ -625,6 +628,16 @@ export default function ConvertScreen() {
                                     fileSize={selectedFiles[0]?.size || 0}
                                 />
                             </View>
+                        )}
+
+                        {(selectedService.id === 'trim-video' || selectedService.id === 'trim-audio') && (
+                            <VideoTrimSelector
+                                startTime={trimStartTime}
+                                endTime={trimEndTime}
+                                onStartTimeChange={setTrimStartTime}
+                                onEndTimeChange={setTrimEndTime}
+                                isVideo={selectedService.id === 'trim-video'}
+                            />
                         )}
 
                         {selectedService.id === 'ocr-pdf' && (
