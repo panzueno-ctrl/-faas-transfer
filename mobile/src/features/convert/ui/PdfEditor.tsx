@@ -864,7 +864,7 @@ export default function PdfEditor({
                                 />
                             )}
 
-                            {/* IN 'MODIFIER' MODE: UNIFIED WORD-LIKE LIVE TEXT BLOCKS */}
+                            {/* IN 'MODIFIER' MODE: TRUE ILOVEPDF INTERACTIVE IN-PLACE TEXT BLOCKS */}
                             {masterMode === 'modify' &&
                                 currentPageBlocks.map(block => {
                                     const isSelected = selectedBlockId === block.id;
@@ -872,6 +872,7 @@ export default function PdfEditor({
                                         ? (sheetDimensions.width / block.pageWidth)
                                         : (sheetDimensions.width / 620);
                                     const effectiveFontSize = Math.max(9, Math.round(block.fontSize * scale));
+                                    const lineCount = Math.max(1, (block.currentText || '').split('\n').length);
 
                                     // Deleted block: whiteout patch
                                     if (block.isDeleted) {
@@ -901,86 +902,164 @@ export default function PdfEditor({
                                         );
                                     }
 
-                                    // Unified Word-like Live In-Place Text Block
-                                    return (
-                                        <View
-                                            key={block.id}
-                                            onStartShouldSetResponder={() => true}
-                                            {...(Platform.OS === 'web'
-                                                ? {
-                                                      onClick: (e: any) => e.stopPropagation(),
-                                                      onMouseDown: (e: any) => e.stopPropagation(),
-                                                      onTouchStart: (e: any) => e.stopPropagation()
-                                                  }
-                                                : {})}
-                                            style={{
-                                                position: 'absolute',
-                                                left: `${block.x}%`,
-                                                top: `${block.y}%`,
-                                                width: `${Math.max(block.width, 10)}%`,
-                                                minHeight: `${Math.max(block.height, 3.5)}%`,
-                                                borderWidth: isSelected ? 1.5 : 1,
-                                                borderColor: isSelected
-                                                    ? '#00D2FF'
-                                                    : block.isEdited
-                                                    ? '#00D2FF'
-                                                    : 'rgba(0, 180, 255, 0.45)',
-                                                borderStyle: isSelected || block.isEdited ? 'solid' : 'dashed',
-                                                borderRadius: 2,
-                                                backgroundColor: '#FFFFFF',
-                                                boxShadow: isSelected ? '0 0 14px rgba(0, 210, 255, 0.4)' : 'none',
-                                                zIndex: isSelected ? 100 : 30,
-                                                paddingHorizontal: 4,
-                                                paddingVertical: 2
-                                            }}
-                                        >
-                                            {/* 8 Selection Handles visible when selected */}
-                                            {isSelected && render8Handles()}
+                                    // 1. ACTIVE EDITING BLOCK (When clicked - Word/iLovePDF in-place editor)
+                                    if (isSelected) {
+                                        return (
+                                            <View
+                                                key={block.id}
+                                                onStartShouldSetResponder={() => true}
+                                                {...(Platform.OS === 'web'
+                                                    ? {
+                                                          onClick: (e: any) => e.stopPropagation(),
+                                                          onMouseDown: (e: any) => e.stopPropagation(),
+                                                          onTouchStart: (e: any) => e.stopPropagation()
+                                                      }
+                                                    : {})}
+                                                style={{
+                                                    position: 'absolute',
+                                                    left: `${block.x}%`,
+                                                    top: `${block.y}%`,
+                                                    minWidth: `${block.width}%`,
+                                                    minHeight: `${block.height}%`,
+                                                    backgroundColor: '#FFFFFF',
+                                                    borderWidth: 1.5,
+                                                    borderColor: '#00D2FF',
+                                                    borderStyle: 'solid',
+                                                    borderRadius: 2,
+                                                    boxShadow: '0 0 14px rgba(0, 210, 255, 0.4)',
+                                                    zIndex: 100,
+                                                    paddingHorizontal: 4,
+                                                    paddingVertical: 2
+                                                }}
+                                            >
+                                                {/* 8 Selection Handles */}
+                                                {render8Handles()}
 
-                                            <TextInput
-                                                value={block.currentText}
-                                                onChangeText={txt =>
-                                                    updateTextBlock(block.id, { currentText: txt, isEdited: true })
-                                                }
-                                                onFocus={() => {
+                                                <TextInput
+                                                    value={block.currentText}
+                                                    onChangeText={txt =>
+                                                        updateTextBlock(block.id, { currentText: txt, isEdited: true })
+                                                    }
+                                                    multiline={true}
+                                                    autoFocus={true}
+                                                    scrollEnabled={false}
+                                                    {...(Platform.OS === 'web'
+                                                        ? ({
+                                                              rows: lineCount
+                                                          } as any)
+                                                        : {})}
+                                                    style={{
+                                                        fontSize: effectiveFontSize,
+                                                        lineHeight: effectiveFontSize * 1.30,
+                                                        fontFamily:
+                                                            block.fontFamily === 'TimesRoman'
+                                                                ? Platform.OS === 'web' ? 'Times New Roman, serif' : 'serif'
+                                                                : block.fontFamily === 'Courier'
+                                                                ? 'Courier, monospace'
+                                                                : 'Arial, sans-serif',
+                                                        fontWeight: block.fontWeight,
+                                                        fontStyle: block.fontStyle,
+                                                        textDecorationLine: block.isUnderline ? 'underline' : 'none',
+                                                        color: block.color,
+                                                        textAlign: block.textAlign,
+                                                        padding: 0,
+                                                        margin: 0,
+                                                        backgroundColor: 'transparent',
+                                                        outline: 'none',
+                                                        minWidth: '100%',
+                                                        cursor: 'text',
+                                                        ...(Platform.OS === 'web'
+                                                            ? {
+                                                                  resize: 'none',
+                                                                  scrollbarWidth: 'none',
+                                                                  msOverflowStyle: 'none',
+                                                                  whiteSpace: 'pre-wrap',
+                                                                  wordBreak: 'break-word',
+                                                                  height: 'auto'
+                                                              }
+                                                            : {})
+                                                    } as any}
+                                                />
+                                            </View>
+                                        );
+                                    }
+
+                                    // 2. EDITED BLOCK (When modified and saved in-place)
+                                    if (block.isEdited) {
+                                        return (
+                                            <Pressable
+                                                key={block.id}
+                                                onPress={(e: any) => {
+                                                    if (e && e.stopPropagation) e.stopPropagation();
                                                     setSelectedBlockId(block.id);
                                                     setSelectedEditId(null);
                                                 }}
-                                                multiline={true}
-                                                scrollEnabled={false}
-                                                style={{
-                                                    fontSize: effectiveFontSize,
-                                                    lineHeight: effectiveFontSize * 1.30,
-                                                    fontFamily:
-                                                        block.fontFamily === 'TimesRoman'
-                                                            ? Platform.OS === 'web' ? 'Times New Roman, serif' : 'serif'
-                                                            : block.fontFamily === 'Courier'
-                                                            ? 'Courier, monospace'
-                                                            : 'Arial, sans-serif',
-                                                    fontWeight: block.fontWeight,
-                                                    fontStyle: block.fontStyle,
-                                                    textDecorationLine: block.isUnderline ? 'underline' : 'none',
-                                                    color: block.color,
-                                                    textAlign: block.textAlign,
-                                                    padding: 0,
-                                                    margin: 0,
-                                                    backgroundColor: 'transparent',
-                                                    outline: 'none',
-                                                    minWidth: '100%',
-                                                    cursor: 'text',
-                                                    ...(Platform.OS === 'web'
-                                                        ? {
-                                                              overflow: 'hidden',
-                                                              resize: 'none',
-                                                              scrollbarWidth: 'none',
-                                                              msOverflowStyle: 'none',
-                                                              whiteSpace: 'pre-wrap',
-                                                              wordBreak: 'break-word'
-                                                          }
-                                                        : {})
-                                                } as any}
-                                            />
-                                        </View>
+                                                style={({ hovered }: any) => ({
+                                                    position: 'absolute',
+                                                    left: `${block.x}%`,
+                                                    top: `${block.y}%`,
+                                                    minWidth: `${block.width}%`,
+                                                    minHeight: `${block.height}%`,
+                                                    backgroundColor: '#FFFFFF',
+                                                    borderWidth: 1,
+                                                    borderColor: hovered ? '#00D2FF' : 'rgba(0, 180, 255, 0.45)',
+                                                    borderStyle: 'solid',
+                                                    borderRadius: 2,
+                                                    zIndex: 35,
+                                                    paddingHorizontal: 4,
+                                                    paddingVertical: 2,
+                                                    cursor: (Platform.OS === 'web' ? 'text' : undefined) as any
+                                                })}
+                                            >
+                                                <Text
+                                                    style={{
+                                                        fontSize: effectiveFontSize,
+                                                        lineHeight: effectiveFontSize * 1.30,
+                                                        fontFamily:
+                                                            block.fontFamily === 'TimesRoman'
+                                                                ? Platform.OS === 'web' ? 'Times New Roman, serif' : 'serif'
+                                                                : block.fontFamily === 'Courier'
+                                                                ? 'Courier, monospace'
+                                                                : 'Arial, sans-serif',
+                                                        fontWeight: block.fontWeight,
+                                                        fontStyle: block.fontStyle,
+                                                        textDecorationLine: block.isUnderline ? 'underline' : 'none',
+                                                        color: block.color,
+                                                        textAlign: block.textAlign,
+                                                        whiteSpace: (Platform.OS === 'web' ? 'pre-wrap' : undefined) as any
+                                                    }}
+                                                >
+                                                    {block.currentText}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    }
+
+                                    // 3. UNEDITED BLOCK: 100% TRANSPARENT - NEVER MASKS ORIGINAL PDF TEXT!
+                                    // Displays exact PDF original text with subtle dashed border on hover (like iLovePDF)
+                                    return (
+                                        <Pressable
+                                            key={block.id}
+                                            onPress={(e: any) => {
+                                                if (e && e.stopPropagation) e.stopPropagation();
+                                                setSelectedBlockId(block.id);
+                                                setSelectedEditId(null);
+                                            }}
+                                            style={({ hovered }: any) => ({
+                                                position: 'absolute',
+                                                left: `${block.x}%`,
+                                                top: `${block.y}%`,
+                                                width: `${block.width}%`,
+                                                height: `${block.height}%`,
+                                                backgroundColor: hovered ? 'rgba(0, 210, 255, 0.05)' : 'transparent',
+                                                borderWidth: 1,
+                                                borderColor: hovered ? '#00D2FF' : 'rgba(0, 180, 255, 0.35)',
+                                                borderStyle: 'dashed',
+                                                borderRadius: 2,
+                                                zIndex: 30,
+                                                cursor: (Platform.OS === 'web' ? 'text' : undefined) as any
+                                            })}
+                                        />
                                     );
                                 })}
 

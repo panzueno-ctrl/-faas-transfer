@@ -17609,3 +17609,31 @@ Date : Mercredi, 28 Octobre 2026 à 17h05 et 00 secondes
 - **3. Prise en Charge Totale de l'Insertion d'Image (PdfEditItemView.tsx & usePdfEngine.ts) :**
   - Rendu dynamique de l'élément `image` avec déplacement et redimensionnement proportionnel.
   - Intégration dans le moteur d'exportation `pdf-lib` : encodage et incrustation via `embedPng` / `embedJpg` aux coordonnées exactes de la page.
+
+================================================================================
+Date : Mercredi, 28 Octobre 2026 à 17h30 et 00 secondes
+
+### 1. Contexte & Demande Utilisateur
+- **Constat :** L'utilisateur a constaté qu'une partie du texte du document était masquée (rectangle blanc couvrant les lignes inférieures sur la diapositive 5 et rognant le mot "diffusione" dans le titre).
+- **Diagnostic Technique Approfondi :**
+  - Dans la version précédente, un fond blanc opaque (`backgroundColor: '#FFFFFF'`) était appliqué aveuglément sur tous les blocs de texte non modifiés.
+  - Le champ `TextInput` multiline sous React Native Web sans spécification de `rows` adoptait par défaut une hauteur fixe équivalente à 2 lignes avec `overflow: 'hidden'`.
+  - Résultat : le champ n'affichait que les 2 premières lignes, tandis que le conteneur parent blanc s'étendait sur 53% de la hauteur de la page, recouvrant et masquant entièrement les 5 lignes sous-jacentes du PDF original.
+
+### 2. Architecture & Réalisations Techniques
+- **1. Transparence Totale des Blocs Non Modifiés (PdfEditor.tsx) :**
+  - Alignement strict sur le fonctionnement de référence iLovePDF :
+    - Tout bloc non sélectionné et non modifié (`isEdited === false`) possède un fond 100% transparent (`backgroundColor: 'transparent'`).
+    - Zéro masquage, zéro boîte blanche inopportune : 100% du texte du PDF d'origine reste parfaitement visible dans sa fidélité typographique native.
+    - Au survol de la souris, un fin cadre pointillé cyan (`rgba(0, 180, 255, 0.35)`) et le curseur `text` signalent instantanément la zone éditable.
+
+- **2. Édition In-Situ Dépliée Sans Tronquature (PdfEditor.tsx) :**
+  - Au clic, le bloc bascule dans l'état éditeur actif (`isSelected === true`) :
+    - Application du fond blanc pur (`#FFFFFF`) pour masquer le texte d'origine sous-jacent uniquement pendant l'édition.
+    - Activation des 8 poignées de redimensionnement et contour bleu solide (`#00D2FF`).
+    - Dimensionnement dynamique avec `rows={lineCount}`, `height: 'auto'`, `minWidth: block.width%`, `whiteSpace: 'pre-wrap'` et suppression de tout `overflow: 'hidden'`.
+    - L'intégralité des lignes (les 7 lignes du paragraphe de la page 5) est immédiatement accessible et visible sans coupure.
+
+- **3. Persistance du Rendu Après Modification :**
+  - Si l'utilisateur a modifié le texte (`isEdited === true`), le bloc conserve son fond blanc couvrant et affiche le nouveau texte vectoriel.
+  - Si l'utilisateur clique en dehors sans avoir rien modifié, le bloc repasse instantanément en transparence sans altérer le document.
