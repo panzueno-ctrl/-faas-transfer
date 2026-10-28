@@ -112,7 +112,37 @@ export default function PdfEditor({
     const [isSaving, setIsSaving] = useState(false);
 
     // Canvas layout dimensions
-    const [canvasDimensions, setCanvasDimensions] = useState({ width: 620, height: 870 });
+    const [sheetDimensions, setSheetDimensions] = useState<{ width: number; height: number }>({ width: 780, height: 551 });
+    const [canvasDimensions, setCanvasDimensions] = useState<{ width: number; height: number }>({ width: 780, height: 551 });
+
+    useEffect(() => {
+        const currentUri = pages[currentPage];
+        if (!currentUri) return;
+
+        const updateDimensions = (nw: number, nh: number) => {
+            if (nw <= 0 || nh <= 0) return;
+            const aspect = nw / nh;
+            // Landscape slide presentation (e.g. 16:9, 4:3, or A4 landscape) vs portrait document (A4 portrait)
+            const targetW = aspect > 1.05 ? 780 : 620;
+            const targetH = Math.round(targetW / aspect);
+            setSheetDimensions({ width: targetW, height: targetH });
+            setCanvasDimensions({ width: targetW, height: targetH });
+        };
+
+        if (Platform.OS === 'web') {
+            const img = new (window as any).Image();
+            img.onload = () => {
+                updateDimensions(img.naturalWidth, img.naturalHeight);
+            };
+            img.src = currentUri;
+        } else {
+            Image.getSize(
+                currentUri,
+                (w, h) => updateDimensions(w, h),
+                () => updateDimensions(620, 870)
+            );
+        }
+    }, [currentPage, pages]);
 
     // Initialize textBlocks from props or extract from pdfOriginalBuffer
     useEffect(() => {
@@ -751,7 +781,13 @@ export default function PdfEditor({
                                 if (selectedBlockId !== null) setSelectedBlockId(null);
                                 if (selectedEditId !== null) setSelectedEditId(null);
                             }}
-                            style={styles.pageSheet}
+                            style={[
+                                styles.pageSheet,
+                                {
+                                    width: sheetDimensions.width,
+                                    height: sheetDimensions.height
+                                }
+                            ]}
                             {...(Platform.OS === 'web' && masterMode === 'annotate'
                                 ? {
                                       onPointerDown: handlePointerDown,
@@ -765,7 +801,7 @@ export default function PdfEditor({
                                 <Image
                                     source={{ uri: pages[currentPage] }}
                                     style={styles.pageBackground}
-                                    resizeMode="contain"
+                                    resizeMode="cover"
                                 />
                             )}
 
@@ -773,6 +809,10 @@ export default function PdfEditor({
                             {masterMode === 'modify' &&
                                 currentPageBlocks.map(block => {
                                     const isSelected = selectedBlockId === block.id;
+                                    const scale = (block.pageWidth && sheetDimensions.width > 0)
+                                        ? (sheetDimensions.width / block.pageWidth)
+                                        : (sheetDimensions.width / 620);
+                                    const effectiveFontSize = Math.max(9, Math.round(block.fontSize * scale));
 
                                     // Deleted block: whiteout patch
                                     if (block.isDeleted) {
@@ -842,7 +882,8 @@ export default function PdfEditor({
                                                     autoFocus
                                                     scrollEnabled={false}
                                                     style={{
-                                                        fontSize: block.fontSize,
+                                                        fontSize: effectiveFontSize,
+                                                        lineHeight: effectiveFontSize * 1.32,
                                                         fontFamily:
                                                             block.fontFamily === 'TimesRoman'
                                                                 ? Platform.OS === 'web'
@@ -858,8 +899,7 @@ export default function PdfEditor({
                                                         textAlign: block.textAlign,
                                                         padding: 0,
                                                         margin: 0,
-                                                        lineHeight: block.fontSize * 1.35,
-                                                        backgroundColor: 'transparent',
+                                                                                                                backgroundColor: 'transparent',
                                                         outline: 'none',
                                                         minWidth: '100%',
                                                         ...(Platform.OS === 'web'
@@ -914,7 +954,8 @@ export default function PdfEditor({
                                             {block.isEdited && (
                                                 <Text
                                                     style={{
-                                                        fontSize: block.fontSize,
+                                                        fontSize: effectiveFontSize,
+                                                        lineHeight: effectiveFontSize * 1.32,
                                                         fontFamily:
                                                             block.fontFamily === 'TimesRoman'
                                                                 ? Platform.OS === 'web'
@@ -928,8 +969,7 @@ export default function PdfEditor({
                                                         textDecorationLine: block.isUnderline ? 'underline' : 'none',
                                                         color: block.color,
                                                         textAlign: block.textAlign,
-                                                        lineHeight: block.fontSize * 1.35
-                                                    }}
+                                                                                                            }}
                                                 >
                                                     {block.currentText}
                                                 </Text>
@@ -1691,8 +1731,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center'
     },
     pageSheet: {
-        width: 620,
-        height: 870,
+        width: 780,
+        height: 551,
         backgroundColor: '#FFFFFF',
         borderRadius: 4,
         overflow: 'hidden',

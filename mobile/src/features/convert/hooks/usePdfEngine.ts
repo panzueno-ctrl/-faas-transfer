@@ -58,6 +58,8 @@ export interface PdfTextBlock {
     isUnderline?: boolean;
     isEdited?: boolean;
     isDeleted?: boolean;
+    pageWidth?: number;
+    pageHeight?: number;
 }
 
 export function extractBlocksFromTextContent(
@@ -203,16 +205,16 @@ export function extractBlocksFromTextContent(
         const vGap = line.y - (last.y + last.height);
 
         // Lines in the same column/text block share horizontal overlap
-        const horizOverlap = Math.max(last.x, line.x) < Math.min(last.x + last.width, line.x + line.width) + 80;
+        const horizOverlap = (line.x >= last.x - 40 && line.x <= last.x + last.width + 40) ||
+                             (last.x >= line.x - 40 && last.x <= line.x + line.width + 40);
 
-        // Allow normal paragraph & bullet spacing up to 2.8 * fontSize
-        const maxGap = Math.max(last.fontSize, line.fontSize) * 2.8;
+        // Allow normal paragraph & bullet spacing up to 2.2 * fontSize
+        const maxGap = Math.max(last.fontSize, line.fontSize) * 2.2;
 
-        // Font compatibility within same section/block (title + body or bullet + subtext)
-        const fontRatio = Math.max(last.fontSize, line.fontSize) / Math.min(last.fontSize, line.fontSize);
-        const fontCompatible = fontRatio <= 2.2 || Math.abs(last.fontSize - line.fontSize) <= 16;
+        // Font compatibility within same section/block (within 6pt)
+        const fontCompatible = Math.abs(last.fontSize - line.fontSize) <= 6;
 
-        const shouldMerge = horizOverlap && vGap >= -10 && vGap <= maxGap && fontCompatible;
+        const shouldMerge = horizOverlap && vGap >= -15 && vGap <= maxGap && fontCompatible;
 
         if (shouldMerge) {
             last.text += '\n' + line.text;
@@ -279,6 +281,8 @@ export function extractBlocksFromTextContent(
             isUnderline: false,
             isEdited: false,
             isDeleted: false,
+            pageWidth: viewport.width,
+            pageHeight: viewport.height,
         };
     });
 }

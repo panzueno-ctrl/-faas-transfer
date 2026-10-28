@@ -17549,3 +17549,30 @@ Date : Mercredi, 28 Octobre 2026 à 15h05 et 00 secondes
     - Ajout de stopPropagation() sur le bloc de texte actif et les clics d'édition pour isoler la frappe et la sélection textuelle.
   - **Affichage Naturel & Intégré Post-Édition :**
     - Dès la désélection, les 8 poignées disparaissent et le texte modifié reste parfaitement gravé sur fond blanc opaque aux coordonnées exactes, prêt pour l'exportation finale pdf-lib.
+
+================================================================================
+Date : Mercredi, 28 Octobre 2026 à 15h50 et 00 secondes
+
+### 1. Contexte & Demande Utilisateur
+- **Constat :** L'utilisateur a fourni deux enregistrements vidéo comparatifs précis (`Registrazione 2026-10-28 151807.mp4` sous iLovePDF et `Registrazione 2026-10-28 152405.mp4` sous Fast Transfer) démontrant l'écart d'ergonomie et la cause du mécontentement :
+  1. **Décalage vertical massif de 190px :** Dans la vidéo Fast Transfer (`v2/f30s.jpg`), lorsqu'on cliquait pour modifier un paragraphe, la boîte d'édition cyan s'ouvrait tout en haut de la page dans une marge blanche vide, à près de 200 pixels au-dessus du vrai texte visible au milieu de l'écran.
+  2. **Cause racine identifiée sur les vidéos :** La feuille `pageSheet` de l'éditeur était figée en dimensions fixes portrait A4 (`620x870px`). Or, le document testé est une présentation en diapositives paysage (`842x595pt`, ratio 1.415). Avec `resizeMode="contain"`, l'image était centrée avec plus de 216px de vide au-dessus et en-dessous, tandis que les coordonnées absolues en pourcentage appliquées sur 870px décalaient les boîtes d'édition de 190px dans le vide !
+  3. **Expérience iLovePDF (`v1/f30s.jpg`, `v1/f50s.jpg`) :** La feuille s'adapte strictement au ratio paysage de la page (`targetW = 780px`, `targetH = 551px`), l'image couvre 100% de la surface sans bandes noires ni bandes blanches parasites, et les encadrés d'édition tombent au millimètre près sur les mots originaux. Lors du clic, l'encadré masque le fond par un rectangle blanc opaque et permet de taper/effacer directement en place comme sous Word.
+
+### 2. Architecture & Réalisations Techniques
+- **1. Dimensions Dynamiques de Feuille selon le Ratio d'Aspect (PdfEditor.tsx) :**
+  - Mesure en temps réel du ratio naturel (`naturalWidth / naturalHeight` via `Image.onload` sur le web et `Image.getSize` sur mobile/native).
+  - Adaptation automatique du format :
+    - Format Diapositive / Paysage (`ratio > 1.05`) : `width: 780px`, `height: Math.round(780 / ratio)` (ex. 551px pour A4 paysage).
+    - Format Document / Portrait (`ratio <= 1.05`) : `width: 620px`, `height: Math.round(620 / ratio)` (ex. 877px pour A4 portrait).
+  - Éradication intégrale du letterboxing : `pageBackground` passe en `resizeMode="cover"`, garantissant une correspondance géométrique 1:1 absolue entre le canevas de frappe et l'image du PDF.
+
+- **2. Segmentation & Regroupement Calqués sur iLovePDF (usePdfEngine.ts) :**
+  - Distinction nette entre le bloc Titre (46pt, 2 lignes : `esperimento – CBC rispetto ad ECB` et `(preparazione)`) et le corps de liste (33pt, 5 lignes regroupées de `• scrivete...` jusqu'à `elefanteelegante...`).
+  - Tolérance typographique `Math.abs(last.fontSize - line.fontSize) <= 6` et interlignage `maxGap = 2.2 * fontSize` avec recouvrement horizontal assoupli (`±40px`).
+  - Stockage des dimensions de référence `pageWidth` et `pageHeight` sur chaque bloc extrait.
+
+- **3. Rendu & Frappe Fluide En Place (PdfEditor.tsx) :**
+  - Facteur d'échelle automatique `scale = sheetDimensions.width / block.pageWidth`.
+  - Calcul de la taille de police et d'interlignage à l'écran (`effectiveFontSize = Math.round(block.fontSize * scale)`, `lineHeight: effectiveFontSize * 1.32`).
+  - Saisie directe in-situ masquant l'arrière-plan sans dédoublement visuel, désélection fluide sans blocage au clic extérieur, et enregistrement fidèle via `pdf-lib`.
