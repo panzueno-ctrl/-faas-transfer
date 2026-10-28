@@ -17424,3 +17424,32 @@ Date : Mercredi, 28 Octobre 2026 à 11h06 et 00 secondes
   - Matrice 3x3 assombrie (`rgba(0,0,0,0.3)`) avec bordures fines, conservant le point rouge dynamique iLovePDF et la surbrillance active.
   - Sélecteurs de mode, de marges et de formats typographiques stylisés avec les micro-interactions natives Fast Transfer (surbrillance en bleu électrique `colors.primary`, textes `colors.text` et `colors.textMuted`).
   - Bouton d'action principal CTA harmonisé avec la charte graphique de Fast Transfer (`colors.primary`).
+
+================================================================================
+CHAPITRE 44 : REFONTE TOTALE DU STUDIO « MODIFIER PDF » (ERGONOMIE ILOVEPDF & DESIGN FAST TRANSFER)
+================================================================================
+Date : Mercredi, 28 Octobre 2026 à 11h47 et 30 secondes
+
+### 1. Contexte & Demande Utilisateur
+- **Constat :** L'utilisateur a vivement apprécié la réussite de la numérotation des pages et a demandé de moderniser l'outil « Modifier PDF » (`edit-pdf`). L'ancien affichage présentait des outils rudimentaires (barre de formatage textuelle plate au sommet, absence de volet latéral d'options, manipulation d'encre peu intuitive qualifiée de « jeu »).
+- **Objectif :** Reproduire la puissance ergonomique du studio iLovePDF (`ilovepdf.com/fr/modifier_pdf`) — notamment le mode Annoter/Dessin, l'inspecteur latéral "Styles de texte" et les boîtes d'édition manipulables — tout en préservant à 100 % l'ADN graphique de Fast Transfer (fond bleu sombre `#0B0C10`, lueur néon circulaire `backgroundGlow`, cartes et volets en glassmorphism sombre).
+
+### 2. Architecture & Réalisations Techniques
+- **1. Refonte Complète de `PdfEditor.tsx` :**
+  - **Structure en 3 colonnes de studio :**
+    - *Barre supérieure (TopBar) :* Sélecteur d'outils segmenté (`Texte`, `Annoter`, `Formes`, `Gomme`, `Signer`), boutons d'historique Undo / Redo réactifs avec pile d'états, et stepper de zoom dynamique (`[-] 100% [+]`).
+    - *Volet gauche (Navigateur de pages) :* Liste verticale des miniatures de pages avec indicateur de page active en bleu électrique et navigation instantanée.
+    - *Zone de travail centrale (Canvas Document) :* Feuillet blanc réaliste avec ombre portée profonde, flottant sur le canvas sombre bleuté de Fast Transfer.
+    - *Volet droit (Inspecteur de propriétés) :* Panneau dédié "Styles de texte" avec choix de polices (Arial, Times, Courier), taille, graisse, italique, souligné, alignement, boîte de masquage opaque et palette de couleurs. Ce volet bascule dynamiquement selon l'outil sélectionné (modes stylo/surligneur pour le dessin, formes géométriques, gomme blanche).
+    - *Bouton CTA :* Bouton principal "Enregistrer les modifications" aux couleurs de Fast Transfer (`colors.primary`).
+
+- **2. Modernisation des Boîtes d'Édition (`PdfEditItemView.tsx`) :**
+  - Cadre de sélection pro avec bordure tiretée bleue (`colors.primary`).
+  - 4 poignées de coin interactives pour le redimensionnement.
+  - Barre d'action flottante au-dessus de l'élément sélectionné avec poignée de déplacement (drag handle), bouton de duplication instantanée et bouton de suppression (corbeille rouge).
+  - Support unifié des textes, tracés SVG, masquages gomme, formes géométriques et signatures.
+
+- **3. Moteur de Rendu Vectoriel `usePdfEngine.ts` :**
+  - Prise en charge native du dessin libre vectoriel (`page.drawSvgPath` avec échelle et opacité pour le surlignage).
+  - Prise en charge des formes géométriques vectorielles (`page.drawEllipse`, `page.drawRectangle`, `page.drawLine`).
+  - Ajout du soulignement vectoriel direct sur les blocs de texte.

@@ -214,6 +214,16 @@ export function usePdfEngine({ setStep, setResultUrl }: { setStep: (step: string
                         font: fontToUse,
                         color: rgb(r, g, b),
                     });
+
+                    if ((edit as any).isUnderline) {
+                        const textW = fontToUse.widthOfTextAtSize(edit.text, fontSize);
+                        page.drawLine({
+                            start: { x: x + xOffset, y: y - 2 },
+                            end: { x: x + xOffset + textW, y: y - 2 },
+                            thickness: 1,
+                            color: rgb(r, g, b),
+                        });
+                    }
                 }
 
                                 if (edit.type === 'whiteout') {
@@ -269,6 +279,76 @@ export function usePdfEngine({ setStep, setResultUrl }: { setStep: (step: string
                         } catch (e) {
                             console.error("Failed to embed signature image", e);
                         }
+                    }
+                }
+
+                if (edit.type === 'draw' && (edit.signatureData as any)?.data) {
+                    const sig = edit.signatureData as any;
+                    const scaleX = width / (sig.width || width);
+                    const scaleY = height / (sig.height || height);
+                    const scale = Math.min(scaleX, scaleY);
+
+                    let r = 0, g = 0, b = 0;
+                    if (edit.color && edit.color.startsWith('#')) {
+                        const hex = edit.color.replace('#', '');
+                        r = parseInt(hex.substring(0, 2), 16) / 255;
+                        g = parseInt(hex.substring(2, 4), 16) / 255;
+                        b = parseInt(hex.substring(4, 6), 16) / 255;
+                    }
+
+                    try {
+                        page.drawSvgPath(sig.data, {
+                            x: 0,
+                            y: height,
+                            scale,
+                            borderColor: rgb(r, g, b),
+                            borderWidth: (edit.size || 3) * scale,
+                            opacity: (edit as any).opacity !== undefined ? (edit as any).opacity : 1,
+                        });
+                    } catch (e) {
+                        console.warn("Failed to draw SVG path:", e);
+                    }
+                }
+
+                if (edit.type === 'shape') {
+                    const x = (edit.x / 100) * width;
+                    const rectWidth = ((edit.width || 20) / 100) * width;
+                    const rectHeight = ((edit.height || 10) / 100) * height;
+                    const rectY = height - ((edit.y / 100) * height) - rectHeight;
+
+                    let r = 0, g = 0, b = 0;
+                    if (edit.color && edit.color.startsWith('#')) {
+                        const hex = edit.color.replace('#', '');
+                        r = parseInt(hex.substring(0, 2), 16) / 255;
+                        g = parseInt(hex.substring(2, 4), 16) / 255;
+                        b = parseInt(hex.substring(4, 6), 16) / 255;
+                    }
+
+                    if ((edit as any).shapeType === 'circle') {
+                        page.drawEllipse({
+                            x: x + rectWidth / 2,
+                            y: rectY + rectHeight / 2,
+                            xScale: rectWidth / 2,
+                            yScale: rectHeight / 2,
+                            borderColor: rgb(r, g, b),
+                            borderWidth: edit.size || 2,
+                        });
+                    } else if ((edit as any).shapeType === 'line') {
+                        page.drawLine({
+                            start: { x, y: rectY + rectHeight },
+                            end: { x: x + rectWidth, y: rectY },
+                            color: rgb(r, g, b),
+                            thickness: edit.size || 2,
+                        });
+                    } else {
+                        page.drawRectangle({
+                            x,
+                            y: rectY,
+                            width: rectWidth,
+                            height: rectHeight,
+                            borderColor: rgb(r, g, b),
+                            borderWidth: edit.size || 2,
+                        });
                     }
                 }
             }
