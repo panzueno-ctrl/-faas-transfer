@@ -84,20 +84,23 @@ export function extractBlocksFromTextContent(
 
     for (const item of textContent.items) {
         if (!('str' in item) || !item.str) continue;
+        const trimmed = item.str.trim();
+        // Skip empty or whitespace-only items
+        if (trimmed.length === 0) continue;
         if (!item.transform || item.transform.length < 6) continue;
 
         const scaleX = item.transform[0];
         const skewY = item.transform[1];
-        const fontSize = Math.sqrt(scaleX * scaleX + skewY * skewY) || 12;
+        const fontSize = Math.round((Math.sqrt(scaleX * scaleX + skewY * skewY) || 12) * 10) / 10;
 
         const tx = item.transform[4];
         const ty = item.transform[5];
 
         const itemX = tx;
         const baselineY = viewport.height - ty;
-        const itemY = baselineY - (fontSize * 0.85);
-        const itemWidth = item.width || (fontSize * item.str.length * 0.5);
-        const itemHeight = fontSize * 1.2;
+        const itemY = baselineY - (fontSize * 0.88);
+        const itemWidth = item.width || (fontSize * item.str.length * 0.52);
+        const itemHeight = fontSize * 1.25;
 
         rawItems.push({
             str: item.str,
@@ -113,14 +116,16 @@ export function extractBlocksFromTextContent(
 
     if (rawItems.length === 0) return [];
 
+    // Sort items top-to-bottom (baselineY), then left-to-right (x)
     rawItems.sort((a, b) => {
         const yDiff = a.baselineY - b.baselineY;
-        if (Math.abs(yDiff) < Math.min(a.fontSize, b.fontSize) * 0.45) {
+        if (Math.abs(yDiff) < Math.min(a.fontSize, b.fontSize) * 0.4) {
             return a.x - b.x;
         }
         return yDiff;
     });
 
+    // 1. Group into clean single lines
     interface ClusteredLine {
         text: string;
         x: number;
@@ -135,18 +140,16 @@ export function extractBlocksFromTextContent(
     const lines: ClusteredLine[] = [];
 
     for (const it of rawItems) {
-        if (!it.str.trim()) continue;
-
         const lastLine = lines[lines.length - 1];
         const isSameLine = lastLine &&
             Math.abs(it.baselineY - lastLine.baselineY) < Math.min(it.fontSize, lastLine.fontSize) * 0.45 &&
             (it.x - (lastLine.x + lastLine.width)) < it.fontSize * 1.8 &&
-            it.x >= (lastLine.x - 2);
+            it.x >= (lastLine.x - 4); // allow small kerning overlap
 
         if (isSameLine) {
-            const needsSpace = !lastLine.text.endsWith(' ') && !it.str.startsWith(' ');
+            const needsSpace = !lastLine.text.endsWith(' ') && !it.str.startsWith(' ') && !it.str.startsWith(',') && !it.str.startsWith('.');
             lastLine.text += (needsSpace ? ' ' : '') + it.str;
-            lastLine.width = (it.x + it.width) - lastLine.x;
+            lastLine.width = Math.max(lastLine.width, (it.x + it.width) - lastLine.x);
             lastLine.height = Math.max(lastLine.height, it.height);
             lastLine.y = Math.min(lastLine.y, it.y);
             lastLine.fontSize = Math.max(lastLine.fontSize, it.fontSize);
@@ -164,13 +167,52 @@ export function extractBlocksFromTextContent(
         }
     }
 
-    return lines.map((line, idx) => {
-        const xPct = Math.max(0, Math.min(100, (line.x / viewport.width) * 100));
-        const yPct = Math.max(0, Math.min(100, (line.y / viewport.height) * 100));
-        const wPct = Math.max(2, Math.min(100 - xPct, (line.width / viewport.width) * 100));
-        const hPct = Math.max(1.5, Math.min(100 - yPct, (line.height / viewport.height) * 100));
+    const validLines = lines.filter(l => l.text.trim().length > 0);
+    if (validLines.length === 0) return [];
 
-        const fn = (line.fontName || '').toLowerCase();
+    // 2. Group lines into Paragraphs / Blocks (Word & iLovePDF behavior)
+    interface Paragraph {
+        text: string;
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        fontSize: number;
+        fontName: string;
+    }
+
+    const paragraphs: Paragraph[] = [];
+
+    for (const line of validLines) {
+        if (paragraphs.length === 0) {
+            paragraphs.push({ ...line });
+            continue;
+        }
+
+        const last = paragraphs[paragraphs.length - 1];
+        const vGap = line.y - (last.y + last.height);
+        const sameFont = Math.abs(line.fontSize - last.fontSize) <= 4;
+
+        // Merge adjacent lines in normal paragraph spacing
+        if (vGap >= -6 && vGap <= (line.fontSize * 1.6) && sameFont) {
+            last.text += '\n' + line.text;
+            const newX = Math.min(last.x, line.x);
+            const newRight = Math.max(last.x + last.width, line.x + line.width);
+            last.x = newX;
+            last.width = newRight - newX;
+            last.height = (line.y + line.height) - last.y;
+        } else {
+            paragraphs.push({ ...line });
+        }
+    }
+
+    return paragraphs.map((para, idx) => {
+        const xPct = Math.max(0, Math.min(100, (para.x / viewport.width) * 100));
+        const yPct = Math.max(0, Math.min(100, (para.y / viewport.height) * 100));
+        const wPct = Math.max(3, Math.min(100 - xPct, (para.width / viewport.width) * 100));
+        const hPct = Math.max(2, Math.min(100 - yPct, (para.height / viewport.height) * 100));
+
+        const fn = (para.fontName || '').toLowerCase();
         let fontFamily: 'Helvetica' | 'TimesRoman' | 'Courier' = 'Helvetica';
         if (fn.includes('times') || fn.includes('roman') || fn.includes('serif')) {
             fontFamily = 'TimesRoman';
@@ -182,15 +224,15 @@ export function extractBlocksFromTextContent(
         const isItalic = fn.includes('italic') || fn.includes('oblique');
 
         return {
-            id: `text-block-p${pageIndex}-${idx}`,
+            id: `para-p${pageIndex}-${idx}`,
             pageIndex,
-            originalText: line.text,
-            currentText: line.text,
+            originalText: para.text,
+            currentText: para.text,
             x: xPct,
             y: yPct,
             width: wPct,
             height: hPct,
-            fontSize: Math.round(line.fontSize * 10) / 10,
+            fontSize: Math.round(para.fontSize * 10) / 10,
             fontFamily,
             fontWeight: isBold ? 'bold' : 'normal',
             fontStyle: isItalic ? 'italic' : 'normal',

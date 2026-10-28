@@ -17487,3 +17487,36 @@ Date : Mercredi, 28 Octobre 2026 à 13h48 et 30 secondes
     - Liste verticale des pages avec indicateur de page courante et pastille bleue sur les pages modifiées.
   - **Bouton CTA Fast Transfer :**
     - Bouton cyan électrique éclatant « Enregistrer les modifications » au bas du volet droit.
+
+
+================================================================================
+CHAPITRE 46 : ÉDITION TEXTUELLE PARAGRAPHE ULTRA-FLUIDE « FAÇON WORD » & FIDÉLITÉ ILOVEPDF
+================================================================================
+Date : Mercredi, 28 Octobre 2026 à 14h20 et 00 secondes
+
+### 1. Contexte & Analyse de la Vidéo Utilisateur
+- **Constat & Examen Vidéo :** L'utilisateur a fourni une capture vidéo de référence (Registrazione 2026-10-28 140240.mp4) montrant l'utilisation réelle d'iLovePDF sur un document universitaire dense (« esperimento - CBC rispetto ad ECB »).
+- **Problèmes relevés sur la première version :**
+  1. Boîtes fantômes vides : Présence d'encadrés tiretés vides en haut de page générés par des items d'espaces blancs purs ou de saut de ligne dans le flux PDF.js.
+  2. Mots scindés : Des mots uniques comme « esempi: » se retrouvaient découpés en plusieurs petits fragments (« ese » et « mpi ») à cause d'une tolérance de crénage trop stricte.
+  3. Barres de défilement inesthétiques : Le clic sur un texte ouvrait un textarea avec ascenceurs verticaux au lieu d'une frappe continue naturelle.
+  4. Fragmentation ligne par ligne : Contrairement à un traitement de texte moderne, chaque ligne était isolée plutôt que regroupée en un paragraphe éditable d'un seul bloc.
+- **Objectif :** Atteindre l'extrême fluidité d'un document Word : regroupement automatique des lignes en paragraphes cohérents, élimination totale des barres de défilement, cadre de sélection bleu à 8 poignées circulaires (4 coins + 4 milieux) et masquage parfait à l'enregistrement.
+
+### 2. Architecture & Réalisations Techniques
+- **1. Algorithme de Regroupement en Paragraphes & Filtrage d'Espaces (usePdfEngine.ts) :**
+  - **Éradication des boîtes fantômes :** Filtrage strict et immédiat de tous les items de texte vides (trimmed.length === 0) avant injection dans le pipeline de calcul.
+  - **Tolérance de crénage & Ponctuation :** Ajustement de la détection de ligne avec seuil d'espacement négatif pour le crénage (it.x >= lastLine.x - 4) et suppression des espaces erronés devant les signes de ponctuation (virgules, deux-points, points).
+  - **Clustering de Paragraphes Multi-lignes :**
+    - Fusion des lignes consécutives partageant une taille typographique similaire (Math.abs(line.fontSize - last.fontSize) <= 4) et un interlignage standard (vGap <= line.fontSize * 1.6).
+    - Fusion en texte multi-lignes fluide (\n) avec recalcul dynamique de la boîte englobante (largeur maximale et hauteur cumulée).
+
+- **2. Expérience de Frappe « Façon Microsoft Word » & 8 Poignées (PdfEditor.tsx) :**
+  - **Élimination complète des barres de défilement :**
+    - Configuration du TextInput avec scrollEnabled={false}, overflow: 'hidden', resize: 'none', scrollbarWidth: 'none' et msOverflowStyle: 'none'.
+    - Auto-expansion de la boîte de texte selon la longueur saisie avec retour à la ligne automatique (whiteSpace: 'pre-wrap', wordBreak: 'break-word').
+  - **8 Poignées Circulaires iLovePDF :**
+    - Intégration du composant render8Handles affichant les 8 pastilles blanches bordées de cyan (#00D2FF) aux 4 coins et aux 4 points médians.
+  - **Masquage Blanc Opaque Instantané :**
+    - Dès qu'un paragraphe est sélectionné pour édition, un fond blanc opaque avec halo cyan #00D2FF recouvre intégralement les glyphes originaux du PDF sans bavure.
+    - Lors de la validation ou de la perte de focus, le texte personnalisé reste net et affiché en place jusqu'à l'export vectoriel final avec pdf-lib.

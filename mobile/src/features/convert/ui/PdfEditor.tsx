@@ -9,8 +9,7 @@ import {
     TextInput,
     Platform,
     useWindowDimensions,
-    ActivityIndicator,
-    Modal
+    ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
@@ -76,10 +75,10 @@ export default function PdfEditor({
     pdfOriginalBuffer,
     initialTextBlocks = []
 }: PdfEditorProps) {
-    const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+    const { width: windowWidth } = useWindowDimensions();
     const isMobile = windowWidth < 768;
 
-    // Master Mode: 'modify' (Modifier le texte existant) vs 'annotate' (Annoter / Dessiner / Signer)
+    // Master Mode: 'modify' (Modifier le texte existant comme dans Word/iLovePDF) vs 'annotate'
     const [masterMode, setMasterMode] = useState<'modify' | 'annotate'>('modify');
     const [activeModifyTool, setActiveModifyTool] = useState<'text_edit' | 'add_text' | 'whiteout'>('text_edit');
     const [activeAnnotateTool, setActiveAnnotateTool] = useState<'draw' | 'highlighter' | 'shape' | 'whiteout' | 'signature'>('draw');
@@ -88,9 +87,8 @@ export default function PdfEditor({
     const [currentPage, setCurrentPage] = useState(0);
     const [zoom, setZoom] = useState(1.0);
 
-    // Text Blocks extracted from PDF (for Modifier mode)
+    // Text Paragraphs extracted from PDF
     const [textBlocks, setTextBlocks] = useState<PdfTextBlock[]>(initialTextBlocks || []);
-    const [isExtractingText, setIsExtractingText] = useState(false);
     const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
 
     // Custom Edits (shapes, drawings, signatures, added text)
@@ -113,9 +111,8 @@ export default function PdfEditor({
     const [shapeType, setShapeType] = useState<'rectangle' | 'circle' | 'line'>('rectangle');
     const [isSaving, setIsSaving] = useState(false);
 
-    // Refs
-    const canvasRef = useRef<View>(null);
-    const [canvasDimensions, setCanvasDimensions] = useState({ width: 600, height: 840 });
+    // Canvas layout dimensions
+    const [canvasDimensions, setCanvasDimensions] = useState({ width: 620, height: 870 });
 
     // Initialize textBlocks from props or extract from pdfOriginalBuffer
     useEffect(() => {
@@ -129,7 +126,6 @@ export default function PdfEditor({
 
     const extractTextDirectly = async () => {
         if (!pdfOriginalBuffer) return;
-        setIsExtractingText(true);
         try {
             const pdfjsLib = await loadPdfJs();
             const loadingTask = pdfjsLib.getDocument({ data: pdfOriginalBuffer.slice(0) });
@@ -148,8 +144,6 @@ export default function PdfEditor({
             pushHistory(extracted, edits);
         } catch (e) {
             console.warn("Direct text extraction failed:", e);
-        } finally {
-            setIsExtractingText(false);
         }
     };
 
@@ -235,12 +229,12 @@ export default function PdfEditor({
             id: `new-text-${Date.now()}`,
             pageIndex: currentPage,
             originalText: '',
-            currentText: 'Nouveau texte',
-            x: 25,
-            y: 35,
-            width: 50,
+            currentText: 'Nouveau paragraphe de texte',
+            x: 20,
+            y: 30,
+            width: 60,
             height: 6,
-            fontSize: 20,
+            fontSize: 16,
             fontFamily: 'Helvetica',
             fontWeight: 'normal',
             fontStyle: 'normal',
@@ -264,7 +258,7 @@ export default function PdfEditor({
             type: 'whiteout',
             x: 25,
             y: 35,
-            width: 40,
+            width: 35,
             height: 8,
             backgroundColor: '#ffffff'
         };
@@ -363,7 +357,6 @@ export default function PdfEditor({
     // Finish and Save
     const handleSave = () => {
         setIsSaving(true);
-        // Convert all modified / deleted text blocks into 'replace' PdfEditItems
         const replaceEdits: PdfEditItem[] = textBlocks
             .filter(b => b.isEdited || b.isDeleted)
             .map(b => ({
@@ -390,6 +383,34 @@ export default function PdfEditor({
         onComplete(finalEdits);
     };
 
+    // Helper: 8 selection handles (iLovePDF visual style)
+    const render8Handles = () => {
+        const hSize = 8;
+        const hOffset = -4;
+        const hStyle = {
+            position: 'absolute' as const,
+            width: hSize,
+            height: hSize,
+            borderRadius: hSize / 2,
+            backgroundColor: '#FFFFFF',
+            borderColor: '#00D2FF',
+            borderWidth: 1.5,
+            zIndex: 120
+        };
+        return (
+            <>
+                <View style={[hStyle, { top: hOffset, left: hOffset }]} />
+                <View style={[hStyle, { top: hOffset, left: '50%', marginLeft: hOffset }]} />
+                <View style={[hStyle, { top: hOffset, right: hOffset }]} />
+                <View style={[hStyle, { top: '50%', left: hOffset, marginTop: hOffset }]} />
+                <View style={[hStyle, { top: '50%', right: hOffset, marginTop: hOffset }]} />
+                <View style={[hStyle, { bottom: hOffset, left: hOffset }]} />
+                <View style={[hStyle, { bottom: hOffset, left: '50%', marginLeft: hOffset }]} />
+                <View style={[hStyle, { bottom: hOffset, right: hOffset }]} />
+            </>
+        );
+    };
+
     // Active selected items
     const selectedBlock = textBlocks.find(b => b.id === selectedBlockId);
     const selectedEdit = edits.find(e => e.id === selectedEditId);
@@ -412,7 +433,7 @@ export default function PdfEditor({
                         </Text>
                     </View>
 
-                    {/* iLovePDF-style Master Mode Switcher: Modifier vs Annoter */}
+                    {/* Master Mode Switcher: Modifier vs Annoter */}
                     <View style={styles.masterPill}>
                         <Pressable
                             style={[
@@ -706,7 +727,6 @@ export default function PdfEditor({
                     >
                         {/* Realistic White Sheet Document with drop shadow */}
                         <View
-                            ref={canvasRef}
                             onLayout={e => {
                                 const { width, height } = e.nativeEvent.layout;
                                 if (width > 0 && height > 0) {
@@ -731,11 +751,12 @@ export default function PdfEditor({
                                 />
                             )}
 
-                            {/* IN 'MODIFIER' MODE: RENDER ALL DETECTED TEXT BLOCKS */}
+                            {/* IN 'MODIFIER' MODE: RENDER ALL PARAGRAPHS */}
                             {masterMode === 'modify' &&
                                 currentPageBlocks.map(block => {
                                     const isSelected = selectedBlockId === block.id;
 
+                                    // Deleted block: whiteout patch
                                     if (block.isDeleted) {
                                         return (
                                             <View
@@ -757,31 +778,35 @@ export default function PdfEditor({
                                                 }}
                                             >
                                                 <Text style={{ fontSize: 9, color: '#EF4444', fontStyle: 'italic' }}>
-                                                    [Texte masqué]
+                                                    [Texte supprimé]
                                                 </Text>
                                             </View>
                                         );
                                     }
 
+                                    // SELECTED BLOCK: Word-like inline editing with 8 handles and ZERO scrollbars
                                     if (isSelected) {
                                         return (
                                             <View
                                                 key={block.id}
                                                 style={{
                                                     position: 'absolute',
-                                                    left: `${block.x}%`,
-                                                    top: `${block.y}%`,
-                                                    minWidth: `${block.width}%`,
+                                                    left: `${Math.max(0, block.x - 0.5)}%`,
+                                                    top: `${Math.max(0, block.y - 0.5)}%`,
+                                                    minWidth: `${block.width + 1}%`,
                                                     borderWidth: 1.5,
                                                     borderColor: '#00D2FF',
                                                     borderStyle: 'solid',
-                                                    borderRadius: 3,
+                                                    borderRadius: 2,
                                                     backgroundColor: '#FFFFFF',
-                                                    boxShadow: '0 0 12px rgba(0, 210, 255, 0.5)',
+                                                    boxShadow: '0 0 14px rgba(0, 210, 255, 0.4)',
                                                     zIndex: 100,
-                                                    padding: 2
+                                                    padding: 4
                                                 }}
                                             >
+                                                {/* 8 Selection Handles */}
+                                                {render8Handles()}
+
                                                 <TextInput
                                                     value={block.currentText}
                                                     onChangeText={txt =>
@@ -789,8 +814,9 @@ export default function PdfEditor({
                                                     }
                                                     multiline
                                                     autoFocus
+                                                    scrollEnabled={false}
                                                     style={{
-                                                        fontSize: Math.max(10, block.fontSize),
+                                                        fontSize: block.fontSize,
                                                         fontFamily:
                                                             block.fontFamily === 'TimesRoman'
                                                                 ? Platform.OS === 'web'
@@ -806,14 +832,27 @@ export default function PdfEditor({
                                                         textAlign: block.textAlign,
                                                         padding: 0,
                                                         margin: 0,
+                                                        lineHeight: block.fontSize * 1.35,
+                                                        backgroundColor: 'transparent',
                                                         outline: 'none',
-                                                        backgroundColor: 'transparent'
+                                                        minWidth: '100%',
+                                                        ...(Platform.OS === 'web'
+                                                            ? {
+                                                                  overflow: 'hidden',
+                                                                  resize: 'none',
+                                                                  scrollbarWidth: 'none',
+                                                                  msOverflowStyle: 'none',
+                                                                  whiteSpace: 'pre-wrap',
+                                                                  wordBreak: 'break-word'
+                                                              }
+                                                            : {})
                                                     } as any}
                                                 />
                                             </View>
                                         );
                                     }
 
+                                    // UNSELECTED BLOCK: Clean presentation
                                     return (
                                         <Pressable
                                             key={block.id}
@@ -826,30 +865,29 @@ export default function PdfEditor({
                                                 left: `${block.x}%`,
                                                 top: `${block.y}%`,
                                                 width: `${block.width}%`,
-                                                height: `${block.height}%`,
+                                                minHeight: `${block.height}%`,
                                                 borderWidth: 1,
                                                 borderColor: hovered
                                                     ? '#00D2FF'
                                                     : block.isEdited
                                                     ? '#00D2FF'
-                                                    : 'rgba(0, 180, 255, 0.45)',
+                                                    : 'rgba(0, 180, 255, 0.4)',
                                                 borderStyle: block.isEdited ? 'solid' : 'dashed',
                                                 borderRadius: 2,
                                                 backgroundColor: block.isEdited
                                                     ? '#FFFFFF'
                                                     : hovered
-                                                    ? 'rgba(0, 210, 255, 0.08)'
+                                                    ? 'rgba(0, 210, 255, 0.05)'
                                                     : 'transparent',
                                                 cursor: (Platform.OS === 'web' ? 'text' : undefined) as any,
-                                                justifyContent: 'center',
-                                                paddingHorizontal: 2,
+                                                padding: 2,
                                                 zIndex: 30
                                             })}
                                         >
-                                            {block.isEdited ? (
+                                            {block.isEdited && (
                                                 <Text
                                                     style={{
-                                                        fontSize: Math.max(10, block.fontSize),
+                                                        fontSize: block.fontSize,
                                                         fontFamily:
                                                             block.fontFamily === 'TimesRoman'
                                                                 ? Platform.OS === 'web'
@@ -862,12 +900,13 @@ export default function PdfEditor({
                                                         fontStyle: block.fontStyle,
                                                         textDecorationLine: block.isUnderline ? 'underline' : 'none',
                                                         color: block.color,
-                                                        textAlign: block.textAlign
+                                                        textAlign: block.textAlign,
+                                                        lineHeight: block.fontSize * 1.35
                                                     }}
                                                 >
                                                     {block.currentText}
                                                 </Text>
-                                            ) : null}
+                                            )}
                                         </Pressable>
                                     );
                                 })}
@@ -1046,7 +1085,7 @@ export default function PdfEditor({
                         {masterMode === 'modify' && selectedBlock && (
                             <View style={styles.inspectorSection}>
                                 <Text style={styles.sectionSubtitle}>
-                                    Page {currentPage + 1} • Ligne sélectionnée
+                                    Page {currentPage + 1} • Paragraphe sélectionné
                                 </Text>
 
                                 {/* Police (Font Family) */}
@@ -1243,7 +1282,7 @@ export default function PdfEditor({
                                 <View style={styles.infoBox}>
                                     <Ionicons name="information-circle-outline" size={20} color="#00D2FF" />
                                     <Text style={styles.infoBoxText}>
-                                        Cliquez sur n'importe quel texte encadré dans la page pour le modifier directement, ou ajoutez de nouveaux blocs ci-dessous.
+                                        Cliquez sur n'importe quel paragraphe dans la page pour le modifier directement comme dans Word, ou ajoutez de nouveaux éléments ci-dessous.
                                     </Text>
                                 </View>
 
@@ -1625,8 +1664,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center'
     },
     pageSheet: {
-        width: 600,
-        height: 840,
+        width: 620,
+        height: 870,
         backgroundColor: '#FFFFFF',
         borderRadius: 4,
         overflow: 'hidden',
@@ -1919,30 +1958,5 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '700',
         color: '#0B0C10'
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20
-    },
-    modalContent: {
-        width: '100%',
-        maxWidth: 500,
-        borderRadius: 16,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)'
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 16
-    },
-    modalTitle: {
-        fontSize: 16,
-        fontWeight: 'bold'
     }
 });
