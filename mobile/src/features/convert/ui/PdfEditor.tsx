@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import SignaturePad, { SignatureData } from './SignaturePad';
 import PdfEditItemView from './PdfEditItemView';
+import { PdfTextBlock, extractBlocksFromTextContent, loadPdfJs } from '../hooks/usePdfEngine';
 
 export type PdfEditType = 'text' | 'image' | 'draw' | 'replace' | 'signature' | 'whiteout' | 'shape';
 
@@ -36,18 +37,22 @@ export interface PdfEditItem {
     fontStyle?: 'normal' | 'italic';
     textAlign?: 'left' | 'center' | 'right';
     isUnderline?: boolean;
+    isReplace?: boolean;
+    isDeleted?: boolean;
     signatureData?: SignatureData;
     shapeType?: 'rectangle' | 'circle' | 'line';
     opacity?: number;
 }
 
 interface PdfEditorProps {
-    pages: string[]; // Blob URLs of images
+    pages: string[];
     onComplete: (edits: PdfEditItem[]) => void;
     onCancel: () => void;
     colors: any;
     autoOpenSignTool?: boolean;
     restrictedMode?: boolean;
+    pdfOriginalBuffer?: ArrayBuffer | null;
+    initialTextBlocks?: PdfTextBlock[];
 }
 
 const PRESET_COLORS = [
@@ -58,7 +63,7 @@ const PRESET_COLORS = [
     '#10b981',
     '#f59e0b',
     '#8b5cf6',
-    '#475569'
+    '#64748b'
 ];
 
 export default function PdfEditor({
@@ -66,504 +71,566 @@ export default function PdfEditor({
     onComplete,
     onCancel,
     colors,
-    autoOpenSignTool,
-    restrictedMode
+    autoOpenSignTool = false,
+    restrictedMode = false,
+    pdfOriginalBuffer,
+    initialTextBlocks = []
 }: PdfEditorProps) {
-    const { width: windowWidth } = useWindowDimensions();
-    const isDesktop = windowWidth >= 980;
+    const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+    const isMobile = windowWidth < 768;
 
-    const [currentPageIndex, setCurrentPageIndex] = useState(0);
+    // Master Mode: 'modify' (Modifier le texte existant) vs 'annotate' (Annoter / Dessiner / Signer)
+    const [masterMode, setMasterMode] = useState<'modify' | 'annotate'>('modify');
+    const [activeModifyTool, setActiveModifyTool] = useState<'text_edit' | 'add_text' | 'whiteout'>('text_edit');
+    const [activeAnnotateTool, setActiveAnnotateTool] = useState<'draw' | 'highlighter' | 'shape' | 'whiteout' | 'signature'>('draw');
+
+    // Page & Navigation
+    const [currentPage, setCurrentPage] = useState(0);
+    const [zoom, setZoom] = useState(1.0);
+
+    // Text Blocks extracted from PDF (for Modifier mode)
+    const [textBlocks, setTextBlocks] = useState<PdfTextBlock[]>(initialTextBlocks || []);
+    const [isExtractingText, setIsExtractingText] = useState(false);
+    const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+
+    // Custom Edits (shapes, drawings, signatures, added text)
     const [edits, setEdits] = useState<PdfEditItem[]>([]);
-    const [activeTool, setActiveTool] = useState<PdfEditType | null>(autoOpenSignTool ? 'signature' : 'text');
     const [selectedEditId, setSelectedEditId] = useState<string | null>(null);
 
-    // Zoom state
-    const [zoom, setZoom] = useState<number>(100);
+    // History for Undo / Redo
+    const [history, setHistory] = useState<Array<{ blocks: PdfTextBlock[]; edits: PdfEditItem[] }>>([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
 
-    // Canvas size
-    const [canvasSize, setCanvasSize] = useState({ width: 700, height: 990 });
-
-    // History stack for Undo / Redo
-    const [history, setHistory] = useState<PdfEditItem[][]>([[]]);
-    const [historyIndex, setHistoryIndex] = useState(0);
-
-    // Text formatting state
-    const [fontFamily, setFontFamily] = useState<'Helvetica' | 'TimesRoman' | 'Courier'>('Helvetica');
-    const [selectedSize, setSelectedSize] = useState(20);
-    const [selectedWeight, setSelectedWeight] = useState<'normal' | 'bold'>('normal');
-    const [selectedStyle, setSelectedStyle] = useState<'normal' | 'italic'>('normal');
-    const [isUnderline, setIsUnderline] = useState(false);
-    const [selectedAlign, setSelectedAlign] = useState<'left' | 'center' | 'right'>('left');
-    const [selectedColor, setSelectedColor] = useState('#000000');
-    const [hasTextBg, setHasTextBg] = useState(false);
-
-    // Draw / Ink (Annoter) state
-    const [drawMode, setDrawMode] = useState<'pen' | 'highlighter'>('pen');
-    const [drawStrokeWidth, setDrawStrokeWidth] = useState(3);
+    // Drawing state
     const [isDrawing, setIsDrawing] = useState(false);
-    const [currentPathPoints, setCurrentPathPoints] = useState<{ x: number; y: number }[]>([]);
+    const [currentPath, setCurrentPath] = useState('');
+    const [drawColor, setDrawColor] = useState('#000000');
+    const [drawStrokeWidth, setDrawStrokeWidth] = useState(3);
+    const [isHighlighter, setIsHighlighter] = useState(false);
 
-    // Shape state
+    // Modals & Panels
+    const [signatureModalOpen, setSignatureModalOpen] = useState(autoOpenSignTool);
     const [shapeType, setShapeType] = useState<'rectangle' | 'circle' | 'line'>('rectangle');
-    const [shapeStrokeWidth, setShapeStrokeWidth] = useState(3);
+    const [isSaving, setIsSaving] = useState(false);
 
-    // Whiteout drag state
-    const [drawingWhiteout, setDrawingWhiteout] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+    // Refs
+    const canvasRef = useRef<View>(null);
+    const [canvasDimensions, setCanvasDimensions] = useState({ width: 600, height: 840 });
 
-    // Signature Pad modal
-    const [isSignaturePadOpen, setIsSignaturePadOpen] = useState(false);
-
+    // Initialize textBlocks from props or extract from pdfOriginalBuffer
     useEffect(() => {
-        if (autoOpenSignTool) {
-            setActiveTool('signature');
-            setIsSignaturePadOpen(true);
+        if (initialTextBlocks && initialTextBlocks.length > 0) {
+            setTextBlocks(initialTextBlocks);
+            pushHistory(initialTextBlocks, edits);
+        } else if (pdfOriginalBuffer && Platform.OS === 'web') {
+            extractTextDirectly();
         }
-    }, [autoOpenSignTool]);
+    }, [initialTextBlocks, pdfOriginalBuffer]);
 
-    // Push state to history
-    const pushHistory = (newEdits: PdfEditItem[]) => {
+    const extractTextDirectly = async () => {
+        if (!pdfOriginalBuffer) return;
+        setIsExtractingText(true);
+        try {
+            const pdfjsLib = await loadPdfJs();
+            const loadingTask = pdfjsLib.getDocument({ data: pdfOriginalBuffer.slice(0) });
+            const pdf = await loadingTask.promise;
+            const extracted: PdfTextBlock[] = [];
+            const maxP = Math.min(pdf.numPages, pages.length || 50);
+
+            for (let j = 1; j <= maxP; j++) {
+                const page = await pdf.getPage(j);
+                const viewport = page.getViewport({ scale: 1.0 });
+                const textContent = await page.getTextContent();
+                const blocks = extractBlocksFromTextContent(textContent, viewport, j - 1);
+                extracted.push(...blocks);
+            }
+            setTextBlocks(extracted);
+            pushHistory(extracted, edits);
+        } catch (e) {
+            console.warn("Direct text extraction failed:", e);
+        } finally {
+            setIsExtractingText(false);
+        }
+    };
+
+    // Save snapshot to history
+    const pushHistory = (newBlocks: PdfTextBlock[], newEdits: PdfEditItem[]) => {
         const nextHistory = history.slice(0, historyIndex + 1);
-        nextHistory.push(newEdits);
+        nextHistory.push({
+            blocks: JSON.parse(JSON.stringify(newBlocks)),
+            edits: JSON.parse(JSON.stringify(newEdits))
+        });
+        if (nextHistory.length > 30) nextHistory.shift();
         setHistory(nextHistory);
         setHistoryIndex(nextHistory.length - 1);
-        setEdits(newEdits);
     };
 
     const handleUndo = () => {
         if (historyIndex > 0) {
-            const newIndex = historyIndex - 1;
-            setHistoryIndex(newIndex);
-            setEdits(history[newIndex]);
+            const prev = history[historyIndex - 1];
+            setTextBlocks(JSON.parse(JSON.stringify(prev.blocks)));
+            setEdits(JSON.parse(JSON.stringify(prev.edits)));
+            setHistoryIndex(historyIndex - 1);
+            setSelectedBlockId(null);
             setSelectedEditId(null);
         }
     };
 
     const handleRedo = () => {
         if (historyIndex < history.length - 1) {
-            const newIndex = historyIndex + 1;
-            setHistoryIndex(newIndex);
-            setEdits(history[newIndex]);
-            setSelectedEditId(null);
+            const next = history[historyIndex + 1];
+            setTextBlocks(JSON.parse(JSON.stringify(next.blocks)));
+            setEdits(JSON.parse(JSON.stringify(next.edits)));
+            setHistoryIndex(historyIndex + 1);
         }
     };
 
-    // Synchronize properties when an edit is selected
-    useEffect(() => {
-        if (selectedEditId) {
-            const item = edits.find(e => e.id === selectedEditId);
-            if (item) {
-                if (item.type === 'text') {
-                    if (item.color) setSelectedColor(item.color);
-                    if (item.size) setSelectedSize(item.size);
-                    if (item.fontWeight) setSelectedWeight(item.fontWeight);
-                    if (item.fontStyle) setSelectedStyle(item.fontStyle);
-                    if (item.textAlign) setSelectedAlign(item.textAlign);
-                    if (item.fontFamily) setFontFamily(item.fontFamily);
-                    setIsUnderline(!!item.isUnderline);
-                    setHasTextBg(!!item.backgroundColor);
-                    setActiveTool('text');
-                } else if (item.type === 'draw') {
-                    if (item.color) setSelectedColor(item.color);
-                    if (item.size) setDrawStrokeWidth(item.size);
-                    setActiveTool('draw');
-                } else if (item.type === 'shape') {
-                    if (item.color) setSelectedColor(item.color);
-                    if (item.size) setShapeStrokeWidth(item.size);
-                    if (item.shapeType) setShapeType(item.shapeType);
-                    setActiveTool('shape');
-                } else if (item.type === 'whiteout') {
-                    setActiveTool('whiteout');
-                }
+    // Text Block updates
+    const updateTextBlock = (id: string, updates: Partial<PdfTextBlock>) => {
+        const updated = textBlocks.map(b => {
+            if (b.id === id) {
+                return { ...b, ...updates, isEdited: true };
             }
-        }
-    }, [selectedEditId]);
-
-    // Update formatting for currently selected edit item
-    const updateActiveItem = (updates: Partial<PdfEditItem>) => {
-        if (selectedEditId) {
-            const updated = edits.map(e => (e.id === selectedEditId ? { ...e, ...updates } : e));
-            pushHistory(updated);
-        }
+            return b;
+        });
+        setTextBlocks(updated);
+        pushHistory(updated, edits);
     };
 
-    // Add a new Text Box
-    const addTextEdit = (xPercent: number, yPercent: number) => {
-        const newEdit: PdfEditItem = {
-            id: Date.now().toString(),
-            pageIndex: currentPageIndex,
-            type: 'text',
-            x: Math.max(2, Math.min(80, xPercent)),
-            y: Math.max(2, Math.min(90, yPercent)),
-            width: 30,
+    const handleDeleteTextBlock = (id: string) => {
+        const updated = textBlocks.map(b => {
+            if (b.id === id) {
+                return { ...b, isDeleted: true, isEdited: true };
+            }
+            return b;
+        });
+        setTextBlocks(updated);
+        pushHistory(updated, edits);
+        setSelectedBlockId(null);
+    };
+
+    const handleResetTextBlock = (id: string) => {
+        const updated = textBlocks.map(b => {
+            if (b.id === id) {
+                return {
+                    ...b,
+                    currentText: b.originalText,
+                    isEdited: false,
+                    isDeleted: false,
+                    color: '#000000',
+                    isUnderline: false,
+                    fontWeight: 'normal' as const,
+                    fontStyle: 'normal' as const
+                };
+            }
+            return b;
+        });
+        setTextBlocks(updated);
+        pushHistory(updated, edits);
+    };
+
+    // Add new text element
+    const handleAddNewText = () => {
+        const newBlock: PdfTextBlock = {
+            id: `new-text-${Date.now()}`,
+            pageIndex: currentPage,
+            originalText: '',
+            currentText: 'Nouveau texte',
+            x: 25,
+            y: 35,
+            width: 50,
             height: 6,
-            text: '',
-            color: selectedColor,
-            size: selectedSize,
-            fontFamily,
-            fontWeight: selectedWeight,
-            fontStyle: selectedStyle,
-            textAlign: selectedAlign,
-            isUnderline,
-            backgroundColor: hasTextBg ? '#ffffff' : undefined
+            fontSize: 20,
+            fontFamily: 'Helvetica',
+            fontWeight: 'normal',
+            fontStyle: 'normal',
+            color: '#000000',
+            textAlign: 'left',
+            isUnderline: false,
+            isEdited: true,
+            isDeleted: false
         };
-        const updated = [...edits, newEdit];
-        pushHistory(updated);
-        setSelectedEditId(newEdit.id);
+        const updated = [...textBlocks, newBlock];
+        setTextBlocks(updated);
+        setSelectedBlockId(newBlock.id);
+        pushHistory(updated, edits);
     };
 
-    // Add a Shape
-    const addShape = (type: 'rectangle' | 'circle' | 'line', xPercent = 35, yPercent = 35) => {
+    // Add whiteout box (masquage opaque)
+    const handleAddWhiteout = () => {
         const newEdit: PdfEditItem = {
-            id: Date.now().toString(),
-            pageIndex: currentPageIndex,
+            id: `whiteout-${Date.now()}`,
+            pageIndex: currentPage,
+            type: 'whiteout',
+            x: 25,
+            y: 35,
+            width: 40,
+            height: 8,
+            backgroundColor: '#ffffff'
+        };
+        const nextEdits = [...edits, newEdit];
+        setEdits(nextEdits);
+        setSelectedEditId(newEdit.id);
+        pushHistory(textBlocks, nextEdits);
+    };
+
+    // Add shape
+    const handleAddShape = (type: 'rectangle' | 'circle' | 'line') => {
+        const newEdit: PdfEditItem = {
+            id: `shape-${Date.now()}`,
+            pageIndex: currentPage,
             type: 'shape',
             shapeType: type,
-            x: xPercent,
-            y: yPercent,
-            width: type === 'line' ? 30 : 22,
-            height: type === 'line' ? 2 : 14,
-            color: selectedColor,
-            size: shapeStrokeWidth
+            x: 30,
+            y: 35,
+            width: type === 'line' ? 35 : 30,
+            height: type === 'line' ? 4 : 20,
+            color: drawColor,
+            size: drawStrokeWidth
         };
-        const updated = [...edits, newEdit];
-        pushHistory(updated);
+        const nextEdits = [...edits, newEdit];
+        setEdits(nextEdits);
         setSelectedEditId(newEdit.id);
+        pushHistory(textBlocks, nextEdits);
     };
 
-    // Add a Whiteout Box
-    const addWhiteoutBox = (xPercent = 30, yPercent = 40, width = 25, height = 5) => {
+    // Handle signature completion
+    const handleSignatureSave = (sigData: SignatureData) => {
+        setSignatureModalOpen(false);
         const newEdit: PdfEditItem = {
-            id: Date.now().toString(),
-            pageIndex: currentPageIndex,
-            type: 'whiteout',
-            x: xPercent,
-            y: yPercent,
-            width,
-            height,
-            backgroundColor: '#ffffff',
-            color: '#ffffff'
-        };
-        const updated = [...edits, newEdit];
-        pushHistory(updated);
-        setSelectedEditId(newEdit.id);
-    };
-
-    // Signature Save
-    const handleSignatureSave = (signature: SignatureData) => {
-        const newEdit: PdfEditItem = {
-            id: Date.now().toString(),
-            pageIndex: currentPageIndex,
+            id: `sig-${Date.now()}`,
+            pageIndex: currentPage,
             type: 'signature',
+            signatureData: sigData,
             x: 35,
-            y: 45,
-            width: 25,
-            height: 12,
-            signatureData: signature
+            y: 50,
+            width: 28,
+            height: 12
         };
-        const updated = [...edits, newEdit];
-        pushHistory(updated);
+        const nextEdits = [...edits, newEdit];
+        setEdits(nextEdits);
         setSelectedEditId(newEdit.id);
+        pushHistory(textBlocks, nextEdits);
     };
 
-    // Duplicate an item
-    const duplicateEdit = (id: string) => {
-        const item = edits.find(e => e.id === id);
-        if (!item) return;
-        const newItem: PdfEditItem = {
-            ...item,
-            id: Date.now().toString(),
-            x: Math.min(85, item.x + 4),
-            y: Math.min(90, item.y + 4)
-        };
-        const updated = [...edits, newItem];
-        pushHistory(updated);
-        setSelectedEditId(newItem.id);
-    };
-
-    // Remove an item
-    const removeEdit = (id: string) => {
-        const updated = edits.filter(e => e.id !== id);
-        pushHistory(updated);
-        if (selectedEditId === id) setSelectedEditId(null);
-    };
-
-    // Clear drawings for current page
-    const clearDrawingsForCurrentPage = () => {
-        const updated = edits.filter(e => !(e.pageIndex === currentPageIndex && e.type === 'draw'));
-        pushHistory(updated);
-    };
-
-    // Helper to calculate percentages from mouse/touch event
-    const getCoordinates = (e: any) => {
-        let x = 0;
-        let y = 0;
-        try {
-            if (Platform.OS === 'web') {
-                const nativeEvent = e.nativeEvent || e;
-                const overlay = document.getElementById('pdf-canvas-overlay');
-                if (overlay) {
-                    const rect = overlay.getBoundingClientRect();
-                    const clientX = nativeEvent.clientX ?? (nativeEvent.touches && nativeEvent.touches[0] ? nativeEvent.touches[0].clientX : 0);
-                    const clientY = nativeEvent.clientY ?? (nativeEvent.touches && nativeEvent.touches[0] ? nativeEvent.touches[0].clientY : 0);
-                    x = ((clientX - rect.left) / rect.width) * 100;
-                    y = ((clientY - rect.top) / rect.height) * 100;
-                }
-            } else {
-                x = (e.nativeEvent.locationX / canvasSize.width) * 100;
-                y = (e.nativeEvent.locationY / canvasSize.height) * 100;
-            }
-        } catch (err) {
-            console.warn("Coords error", err);
-        }
-        return { x: Math.max(0, Math.min(100, x)), y: Math.max(0, Math.min(100, y)) };
-    };
-
-    // Freehand drawing mouse handlers (Annoter / Encre)
-    const handleDrawStart = (e: any) => {
-        if (activeTool !== 'draw') return;
-        const nativeEvent = e.nativeEvent || e;
-        const overlay = document.getElementById('pdf-canvas-overlay');
-        if (!overlay) return;
-        const rect = overlay.getBoundingClientRect();
-        const clientX = nativeEvent.clientX ?? (nativeEvent.touches && nativeEvent.touches[0] ? nativeEvent.touches[0].clientX : 0);
-        const clientY = nativeEvent.clientY ?? (nativeEvent.touches && nativeEvent.touches[0] ? nativeEvent.touches[0].clientY : 0);
-        const px = clientX - rect.left;
-        const py = clientY - rect.top;
-
+    // Drawing handlers (web pointer events)
+    const handlePointerDown = (e: any) => {
+        if (masterMode !== 'annotate' || (activeAnnotateTool !== 'draw' && activeAnnotateTool !== 'highlighter')) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
         setIsDrawing(true);
-        setCurrentPathPoints([{ x: px, y: py }]);
+        setCurrentPath(`M ${x} ${y}`);
     };
 
-    const handleDrawMove = (e: any) => {
-        if (!isDrawing || activeTool !== 'draw') return;
-        const nativeEvent = e.nativeEvent || e;
-        const overlay = document.getElementById('pdf-canvas-overlay');
-        if (!overlay) return;
-        const rect = overlay.getBoundingClientRect();
-        const clientX = nativeEvent.clientX ?? (nativeEvent.touches && nativeEvent.touches[0] ? nativeEvent.touches[0].clientX : 0);
-        const clientY = nativeEvent.clientY ?? (nativeEvent.touches && nativeEvent.touches[0] ? nativeEvent.touches[0].clientY : 0);
-        const px = clientX - rect.left;
-        const py = clientY - rect.top;
-
-        setCurrentPathPoints(prev => [...prev, { x: px, y: py }]);
+    const handlePointerMove = (e: any) => {
+        if (!isDrawing) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        setCurrentPath(prev => `${prev} L ${x} ${y}`);
     };
 
-    const handleDrawEnd = () => {
-        if (!isDrawing || activeTool !== 'draw') return;
+    const handlePointerUp = () => {
+        if (!isDrawing) return;
         setIsDrawing(false);
-
-        if (currentPathPoints.length > 1) {
-            let svgPath = `M ${currentPathPoints[0].x.toFixed(1)} ${currentPathPoints[0].y.toFixed(1)}`;
-            for (let i = 1; i < currentPathPoints.length; i++) {
-                svgPath += ` L ${currentPathPoints[i].x.toFixed(1)} ${currentPathPoints[i].y.toFixed(1)}`;
-            }
-
-            const newDrawEdit: PdfEditItem = {
-                id: Date.now().toString(),
-                pageIndex: currentPageIndex,
+        if (currentPath.length > 5) {
+            const newEdit: PdfEditItem = {
+                id: `draw-${Date.now()}`,
+                pageIndex: currentPage,
                 type: 'draw',
                 x: 0,
                 y: 0,
                 width: 100,
                 height: 100,
-                color: selectedColor,
-                size: drawStrokeWidth,
-                opacity: drawMode === 'highlighter' ? 0.35 : 1,
                 signatureData: {
                     type: 'path',
-                    data: svgPath,
-                    width: canvasSize.width,
-                    height: canvasSize.height
-                }
+                    data: currentPath,
+                    width: canvasDimensions.width,
+                    height: canvasDimensions.height
+                },
+                color: drawColor,
+                size: isHighlighter ? Math.max(12, drawStrokeWidth * 3) : drawStrokeWidth,
+                opacity: isHighlighter ? 0.35 : 1
             };
-            const updated = [...edits, newDrawEdit];
-            pushHistory(updated);
+            const nextEdits = [...edits, newEdit];
+            setEdits(nextEdits);
+            pushHistory(textBlocks, nextEdits);
         }
-        setCurrentPathPoints([]);
+        setCurrentPath('');
     };
 
-    // Canvas click
-    const handleCanvasPress = (e: any) => {
-        if (selectedEditId) {
-            setSelectedEditId(null);
-        }
-        if (activeTool === 'text') {
-            const coords = getCoordinates(e);
-            addTextEdit(coords.x, coords.y);
-        } else if (activeTool === 'whiteout') {
-            const coords = getCoordinates(e);
-            addWhiteoutBox(coords.x, coords.y, 20, 5);
-        } else if (activeTool === 'shape') {
-            const coords = getCoordinates(e);
-            addShape(shapeType, coords.x, coords.y);
-        }
+    // Finish and Save
+    const handleSave = () => {
+        setIsSaving(true);
+        // Convert all modified / deleted text blocks into 'replace' PdfEditItems
+        const replaceEdits: PdfEditItem[] = textBlocks
+            .filter(b => b.isEdited || b.isDeleted)
+            .map(b => ({
+                id: b.id,
+                pageIndex: b.pageIndex,
+                type: 'replace',
+                isReplace: true,
+                isDeleted: b.isDeleted,
+                x: b.x,
+                y: b.y,
+                width: b.width,
+                height: b.height,
+                text: b.currentText,
+                size: b.fontSize,
+                fontFamily: b.fontFamily,
+                fontWeight: b.fontWeight,
+                fontStyle: b.fontStyle,
+                textAlign: b.textAlign,
+                color: b.color,
+                isUnderline: b.isUnderline
+            }));
+
+        const finalEdits = [...replaceEdits, ...edits];
+        onComplete(finalEdits);
     };
 
-    // Active item being inspected
-    const activeEdit = edits.find(e => e.id === selectedEditId);
+    // Active selected items
+    const selectedBlock = textBlocks.find(b => b.id === selectedBlockId);
+    const selectedEdit = edits.find(e => e.id === selectedEditId);
+    const currentPageBlocks = textBlocks.filter(b => b.pageIndex === currentPage);
+    const currentPageEdits = edits.filter(e => e.pageIndex === currentPage);
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Signature Fast Transfer Glowing Halo */}
-            <View
-                style={[
-                    styles.backgroundGlow,
-                    {
-                        backgroundColor: colors.glow || 'rgba(59, 130, 246, 0.03)',
-                        shadowColor: colors.primary
-                    }
-                ]}
-                pointerEvents="none"
-            />
-
-            {/* TOP BAR */}
+        <View style={styles.container}>
+            {/* 1. TOP BAR */}
             <View style={[styles.topBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-                {/* Left: Back & Title */}
+                {/* Left section: Back + Title & Page Info + Master Mode Toggle */}
                 <View style={styles.topBarLeft}>
-                    <Pressable
-                        style={({ pressed }: any) => [
-                            styles.iconButton,
-                            { backgroundColor: pressed ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.06)' }
-                        ]}
-                        onPress={onCancel}
-                    >
-                        <Ionicons name="close" size={20} color={colors.text} />
+                    <Pressable style={styles.iconButton} onPress={onCancel}>
+                        <Ionicons name="arrow-back" size={20} color={colors.text} />
                     </Pressable>
-                    <View>
-                        <Text style={[styles.topBarTitle, { color: colors.text }]}>
-                            {autoOpenSignTool ? 'Signer PDF' : 'Modifier PDF'}
-                        </Text>
-                        <Text style={[styles.topBarSubtitle, { color: colors.textMuted }]}>
-                            Page {currentPageIndex + 1} sur {pages.length}
+                    <View style={styles.titleContainer}>
+                        <Text style={[styles.title, { color: colors.text }]}>Modifier PDF</Text>
+                        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+                            Page {currentPage + 1} sur {pages.length}
                         </Text>
                     </View>
-                </View>
 
-                {/* Center: Tools Switcher (iLovePDF Style) */}
-                <View style={[styles.toolsSwitcher, { backgroundColor: 'rgba(0, 0, 0, 0.3)', borderColor: colors.border }]}>
-                    {!restrictedMode && (
+                    {/* iLovePDF-style Master Mode Switcher: Modifier vs Annoter */}
+                    <View style={styles.masterPill}>
                         <Pressable
                             style={[
-                                styles.toolPill,
-                                activeTool === 'text' && [styles.toolPillActive, { backgroundColor: colors.primary }]
+                                styles.masterPillOption,
+                                masterMode === 'modify' && styles.masterPillOptionActive
                             ]}
                             onPress={() => {
-                                setActiveTool(activeTool === 'text' ? null : 'text');
+                                setMasterMode('modify');
                                 setSelectedEditId(null);
                             }}
                         >
-                            <Ionicons name="text" size={17} color={activeTool === 'text' ? '#ffffff' : colors.textMuted} />
-                            <Text style={[styles.toolPillText, { color: activeTool === 'text' ? '#ffffff' : colors.textMuted }]}>
-                                Texte
+                            <Ionicons
+                                name="create"
+                                size={14}
+                                color={masterMode === 'modify' ? '#00D2FF' : '#94A3B8'}
+                            />
+                            <Text
+                                style={[
+                                    styles.masterPillText,
+                                    masterMode === 'modify' && styles.masterPillTextActive
+                                ]}
+                            >
+                                Modifier
                             </Text>
                         </Pressable>
-                    )}
-
-                    {!restrictedMode && (
                         <Pressable
                             style={[
-                                styles.toolPill,
-                                activeTool === 'draw' && [styles.toolPillActive, { backgroundColor: colors.primary }]
+                                styles.masterPillOption,
+                                masterMode === 'annotate' && styles.masterPillOptionActive
                             ]}
                             onPress={() => {
-                                setActiveTool(activeTool === 'draw' ? null : 'draw');
-                                setSelectedEditId(null);
+                                setMasterMode('annotate');
+                                setSelectedBlockId(null);
                             }}
                         >
-                            <Ionicons name="brush" size={17} color={activeTool === 'draw' ? '#ffffff' : colors.textMuted} />
-                            <Text style={[styles.toolPillText, { color: activeTool === 'draw' ? '#ffffff' : colors.textMuted }]}>
+                            <Ionicons
+                                name="brush"
+                                size={14}
+                                color={masterMode === 'annotate' ? '#00D2FF' : '#94A3B8'}
+                            />
+                            <Text
+                                style={[
+                                    styles.masterPillText,
+                                    masterMode === 'annotate' && styles.masterPillTextActive
+                                ]}
+                            >
                                 Annoter
                             </Text>
                         </Pressable>
-                    )}
-
-                    {!restrictedMode && (
-                        <Pressable
-                            style={[
-                                styles.toolPill,
-                                activeTool === 'shape' && [styles.toolPillActive, { backgroundColor: colors.primary }]
-                            ]}
-                            onPress={() => {
-                                setActiveTool(activeTool === 'shape' ? null : 'shape');
-                                setSelectedEditId(null);
-                            }}
-                        >
-                            <Ionicons name="shapes" size={17} color={activeTool === 'shape' ? '#ffffff' : colors.textMuted} />
-                            <Text style={[styles.toolPillText, { color: activeTool === 'shape' ? '#ffffff' : colors.textMuted }]}>
-                                Formes
-                            </Text>
-                        </Pressable>
-                    )}
-
-                    {!restrictedMode && (
-                        <Pressable
-                            style={[
-                                styles.toolPill,
-                                activeTool === 'whiteout' && [styles.toolPillActive, { backgroundColor: colors.primary }]
-                            ]}
-                            onPress={() => {
-                                setActiveTool(activeTool === 'whiteout' ? null : 'whiteout');
-                                setSelectedEditId(null);
-                            }}
-                        >
-                            <Ionicons name="square" size={17} color={activeTool === 'whiteout' ? '#ffffff' : colors.textMuted} />
-                            <Text style={[styles.toolPillText, { color: activeTool === 'whiteout' ? '#ffffff' : colors.textMuted }]}>
-                                Gomme
-                            </Text>
-                        </Pressable>
-                    )}
-
-                    <Pressable
-                        style={[
-                            styles.toolPill,
-                            activeTool === 'signature' && [styles.toolPillActive, { backgroundColor: colors.primary }]
-                        ]}
-                        onPress={() => {
-                            setActiveTool('signature');
-                            setIsSignaturePadOpen(true);
-                        }}
-                    >
-                        <Ionicons name="create" size={17} color={activeTool === 'signature' ? '#ffffff' : colors.textMuted} />
-                        <Text style={[styles.toolPillText, { color: activeTool === 'signature' ? '#ffffff' : colors.textMuted }]}>
-                            Signer
-                        </Text>
-                    </Pressable>
+                    </View>
                 </View>
 
-                {/* Right: History & Zoom */}
-                <View style={styles.topBarRight}>
-                    {/* Undo / Redo */}
-                    <View style={styles.historyGroup}>
-                        <Pressable
-                            onPress={handleUndo}
-                            disabled={historyIndex === 0}
-                            style={[styles.historyBtn, historyIndex === 0 && { opacity: 0.3 }]}
-                            accessibilityLabel="Annuler"
-                        >
-                            <Ionicons name="arrow-undo" size={18} color={colors.text} />
-                        </Pressable>
-                        <Pressable
-                            onPress={handleRedo}
-                            disabled={historyIndex === history.length - 1}
-                            style={[styles.historyBtn, historyIndex === history.length - 1 && { opacity: 0.3 }]}
-                            accessibilityLabel="Rétablir"
-                        >
-                            <Ionicons name="arrow-redo" size={18} color={colors.text} />
-                        </Pressable>
-                    </View>
+                {/* Center section: Sub-tool Switcher based on Master Mode */}
+                <View style={styles.topBarCenter}>
+                    {masterMode === 'modify' ? (
+                        <View style={styles.toolSegment}>
+                            <Pressable
+                                style={[
+                                    styles.subToolBtn,
+                                    activeModifyTool === 'text_edit' && styles.subToolBtnActive
+                                ]}
+                                onPress={() => setActiveModifyTool('text_edit')}
+                            >
+                                <Ionicons
+                                    name="text"
+                                    size={15}
+                                    color={activeModifyTool === 'text_edit' ? '#00D2FF' : '#94A3B8'}
+                                />
+                                <Text
+                                    style={[
+                                        styles.subToolText,
+                                        activeModifyTool === 'text_edit' && styles.subToolTextActive
+                                    ]}
+                                >
+                                    Éditer le texte
+                                </Text>
+                            </Pressable>
+                            <Pressable
+                                style={[styles.subToolBtn]}
+                                onPress={handleAddNewText}
+                            >
+                                <Ionicons name="add-circle-outline" size={15} color="#94A3B8" />
+                                <Text style={styles.subToolText}>Ajouter texte</Text>
+                            </Pressable>
+                            <Pressable
+                                style={[styles.subToolBtn]}
+                                onPress={handleAddWhiteout}
+                            >
+                                <Ionicons name="square-outline" size={15} color="#94A3B8" />
+                                <Text style={styles.subToolText}>Masquer zone</Text>
+                            </Pressable>
+                        </View>
+                    ) : (
+                        <View style={styles.toolSegment}>
+                            <Pressable
+                                style={[
+                                    styles.subToolBtn,
+                                    activeAnnotateTool === 'draw' && !isHighlighter && styles.subToolBtnActive
+                                ]}
+                                onPress={() => {
+                                    setActiveAnnotateTool('draw');
+                                    setIsHighlighter(false);
+                                }}
+                            >
+                                <Ionicons
+                                    name="pencil"
+                                    size={15}
+                                    color={activeAnnotateTool === 'draw' && !isHighlighter ? '#00D2FF' : '#94A3B8'}
+                                />
+                                <Text
+                                    style={[
+                                        styles.subToolText,
+                                        activeAnnotateTool === 'draw' && !isHighlighter && styles.subToolTextActive
+                                    ]}
+                                >
+                                    Crayon
+                                </Text>
+                            </Pressable>
+                            <Pressable
+                                style={[
+                                    styles.subToolBtn,
+                                    activeAnnotateTool === 'highlighter' && styles.subToolBtnActive
+                                ]}
+                                onPress={() => {
+                                    setActiveAnnotateTool('highlighter');
+                                    setIsHighlighter(true);
+                                }}
+                            >
+                                <Ionicons
+                                    name="color-wand-outline"
+                                    size={15}
+                                    color={activeAnnotateTool === 'highlighter' ? '#00D2FF' : '#94A3B8'}
+                                />
+                                <Text
+                                    style={[
+                                        styles.subToolText,
+                                        activeAnnotateTool === 'highlighter' && styles.subToolTextActive
+                                    ]}
+                                >
+                                    Surligneur
+                                </Text>
+                            </Pressable>
+                            <Pressable
+                                style={[
+                                    styles.subToolBtn,
+                                    activeAnnotateTool === 'shape' && styles.subToolBtnActive
+                                ]}
+                                onPress={() => {
+                                    setActiveAnnotateTool('shape');
+                                    handleAddShape(shapeType);
+                                }}
+                            >
+                                <Ionicons
+                                    name="shapes-outline"
+                                    size={15}
+                                    color={activeAnnotateTool === 'shape' ? '#00D2FF' : '#94A3B8'}
+                                />
+                                <Text
+                                    style={[
+                                        styles.subToolText,
+                                        activeAnnotateTool === 'shape' && styles.subToolTextActive
+                                    ]}
+                                >
+                                    Formes
+                                </Text>
+                            </Pressable>
+                            <Pressable
+                                style={[styles.subToolBtn]}
+                                onPress={() => setSignatureModalOpen(true)}
+                            >
+                                <Ionicons name="finger-print-outline" size={15} color="#94A3B8" />
+                                <Text style={styles.subToolText}>Signer</Text>
+                            </Pressable>
+                        </View>
+                    )}
+                </View>
 
-                    {/* Zoom Stepper */}
-                    <View style={[styles.zoomStepper, { backgroundColor: 'rgba(0,0,0,0.3)', borderColor: colors.border }]}>
+                {/* Right section: History Undo/Redo & Zoom controls */}
+                <View style={styles.topBarRight}>
+                    <Pressable
+                        style={[styles.historyBtn, historyIndex <= 0 && styles.historyBtnDisabled]}
+                        onPress={handleUndo}
+                        disabled={historyIndex <= 0}
+                    >
+                        <Ionicons
+                            name="arrow-undo"
+                            size={16}
+                            color={historyIndex > 0 ? colors.text : colors.textMuted}
+                        />
+                    </Pressable>
+                    <Pressable
+                        style={[
+                            styles.historyBtn,
+                            historyIndex >= history.length - 1 && styles.historyBtnDisabled
+                        ]}
+                        onPress={handleRedo}
+                        disabled={historyIndex >= history.length - 1}
+                    >
+                        <Ionicons
+                            name="arrow-redo"
+                            size={16}
+                            color={historyIndex < history.length - 1 ? colors.text : colors.textMuted}
+                        />
+                    </Pressable>
+
+                    <View style={styles.zoomControls}>
                         <Pressable
-                            onPress={() => setZoom(Math.max(60, zoom - 15))}
                             style={styles.zoomBtn}
+                            onPress={() => setZoom(prev => Math.max(0.5, prev - 0.1))}
                         >
                             <Ionicons name="remove" size={14} color={colors.text} />
                         </Pressable>
-                        <Text style={[styles.zoomText, { color: colors.text }]}>{zoom}%</Text>
+                        <Text style={[styles.zoomText, { color: colors.text }]}>
+                            {Math.round(zoom * 100)}%
+                        </Text>
                         <Pressable
-                            onPress={() => setZoom(Math.min(160, zoom + 15))}
                             style={styles.zoomBtn}
+                            onPress={() => setZoom(prev => Math.min(2.0, prev + 0.1))}
                         >
                             <Ionicons name="add" size={14} color={colors.text} />
                         </Pressable>
@@ -571,566 +638,753 @@ export default function PdfEditor({
                 </View>
             </View>
 
-            {/* MAIN 3-PANEL LAYOUT */}
-            <View style={styles.mainLayout}>
-                {/* 1. LEFT PANEL: PAGE THUMBNAILS NAVIGATOR */}
-                <View style={[styles.leftNav, { backgroundColor: colors.card, borderRightColor: colors.border }]}>
-                    <Text style={[styles.leftNavTitle, { color: colors.textMuted }]}>PAGES</Text>
-                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.leftNavScroll}>
-                        {pages.map((pageUrl, index) => {
-                            const isCurrent = currentPageIndex === index;
+            {/* 2. MAIN 3-COLUMN STUDIO BODY */}
+            <View style={styles.mainStudio}>
+                {/* 2A. LEFT PANEL: PAGE THUMBNAILS NAVIGATOR */}
+                <View
+                    style={[
+                        styles.leftThumbnailsPanel,
+                        { backgroundColor: colors.card, borderRightColor: colors.border }
+                    ]}
+                >
+                    <View style={styles.thumbHeader}>
+                        <Ionicons name="documents-outline" size={15} color="#00D2FF" />
+                        <Text style={styles.thumbHeaderText}>PAGES ({pages.length})</Text>
+                    </View>
+                    <ScrollView
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={styles.thumbList}
+                    >
+                        {pages.map((pageUri, idx) => {
+                            const isCurrent = currentPage === idx;
+                            const hasEdits =
+                                textBlocks.some(b => b.pageIndex === idx && (b.isEdited || b.isDeleted)) ||
+                                edits.some(e => e.pageIndex === idx);
+
                             return (
                                 <Pressable
-                                    key={`thumb-${index}`}
+                                    key={`thumb-${idx}`}
                                     style={[
                                         styles.thumbCard,
-                                        { borderColor: colors.border, backgroundColor: 'rgba(255,255,255,0.02)' },
-                                        isCurrent && { borderColor: colors.primary, borderWidth: 2 }
+                                        isCurrent && styles.thumbCardActive
                                     ]}
                                     onPress={() => {
-                                        setCurrentPageIndex(index);
+                                        setCurrentPage(idx);
+                                        setSelectedBlockId(null);
                                         setSelectedEditId(null);
                                     }}
                                 >
-                                    <View style={[styles.thumbBadge, isCurrent && { backgroundColor: colors.primary }]}>
-                                        <Text style={styles.thumbBadgeText}>{index + 1}</Text>
+                                    <View style={styles.thumbBadge}>
+                                        <Text style={styles.thumbBadgeText}>{idx + 1}</Text>
+                                        {hasEdits && <View style={styles.thumbEditDot} />}
                                     </View>
-                                    <Image source={{ uri: pageUrl }} style={styles.thumbImage} resizeMode="contain" />
+                                    <Image
+                                        source={{ uri: pageUri }}
+                                        style={styles.thumbImage}
+                                        resizeMode="contain"
+                                    />
                                 </Pressable>
                             );
                         })}
                     </ScrollView>
                 </View>
 
-                {/* 2. CENTER AREA: SCROLLABLE DOCUMENT CANVAS */}
+                {/* 2B. CENTER WORKSPACE: REALISTIC PDF PAGE CANVAS */}
                 <ScrollView
-                    style={styles.centerCanvasScroll}
-                    contentContainerStyle={styles.centerCanvasContent}
-                    showsVerticalScrollIndicator={true}
-                    showsHorizontalScrollIndicator={true}
+                    style={styles.centerWorkspace}
+                    contentContainerStyle={styles.centerWorkspaceContent}
+                    maximumZoomScale={2.5}
+                    minimumZoomScale={0.5}
                 >
                     <View
                         style={[
-                            styles.pageSheetWrapper,
+                            styles.canvasWrapper,
                             {
-                                transform: [{ scale: zoom / 100 }],
-                                width: canvasSize.width,
-                                height: canvasSize.height
+                                transform: [{ scale: zoom }]
                             }
                         ]}
                     >
-                        {/* Realistic white paper sheet with drop shadow */}
-                        <Image
-                            source={{ uri: pages[currentPageIndex] }}
-                            style={styles.pageSheetImage}
-                            resizeMode="contain"
-                        />
-
-                        {/* Interactive Overlay */}
-                        <Pressable
-                            nativeID="pdf-canvas-overlay"
-                            style={styles.interactionOverlay}
+                        {/* Realistic White Sheet Document with drop shadow */}
+                        <View
+                            ref={canvasRef}
                             onLayout={e => {
-                                setCanvasSize({
-                                    width: e.nativeEvent.layout.width,
-                                    height: e.nativeEvent.layout.height
-                                });
+                                const { width, height } = e.nativeEvent.layout;
+                                if (width > 0 && height > 0) {
+                                    setCanvasDimensions({ width, height });
+                                }
                             }}
-                            onPress={handleCanvasPress}
+                            style={styles.pageSheet}
+                            {...(Platform.OS === 'web' && masterMode === 'annotate'
+                                ? {
+                                      onPointerDown: handlePointerDown,
+                                      onPointerMove: handlePointerMove,
+                                      onPointerUp: handlePointerUp
+                                  }
+                                : {})}
                         >
-                            {/* Render all existing edits on this page */}
-                            {edits
-                                .filter(e => e.pageIndex === currentPageIndex)
-                                .map(edit => {
-                                    const isSelected = edit.id === selectedEditId;
+                            {/* Base rendered PDF page image */}
+                            {pages[currentPage] && (
+                                <Image
+                                    source={{ uri: pages[currentPage] }}
+                                    style={styles.pageBackground}
+                                    resizeMode="contain"
+                                />
+                            )}
 
-                                    // Special render for SVG freehand drawings
-                                    if (edit.type === 'draw' && edit.signatureData?.data) {
+                            {/* IN 'MODIFIER' MODE: RENDER ALL DETECTED TEXT BLOCKS */}
+                            {masterMode === 'modify' &&
+                                currentPageBlocks.map(block => {
+                                    const isSelected = selectedBlockId === block.id;
+
+                                    if (block.isDeleted) {
                                         return (
-                                            <Pressable
-                                                key={edit.id}
-                                                style={[styles.drawItemWrapper, isSelected && styles.drawItemSelected]}
-                                                onPress={() => setSelectedEditId(edit.id)}
+                                            <View
+                                                key={block.id}
+                                                style={{
+                                                    position: 'absolute',
+                                                    left: `${block.x}%`,
+                                                    top: `${block.y}%`,
+                                                    width: `${block.width}%`,
+                                                    height: `${block.height}%`,
+                                                    backgroundColor: '#FFFFFF',
+                                                    borderWidth: 1,
+                                                    borderColor: 'rgba(239, 68, 68, 0.4)',
+                                                    borderStyle: 'dashed',
+                                                    borderRadius: 2,
+                                                    justifyContent: 'center',
+                                                    alignItems: 'center',
+                                                    zIndex: 20
+                                                }}
                                             >
-                                                <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
-                                                    <Path
-                                                        d={edit.signatureData.data}
-                                                        stroke={edit.color || '#000000'}
-                                                        strokeWidth={edit.size || 3}
-                                                        fill="none"
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        opacity={edit.opacity || 1}
-                                                    />
-                                                </Svg>
-                                                {isSelected && (
-                                                    <Pressable
-                                                        onPress={() => removeEdit(edit.id)}
-                                                        style={styles.drawDeleteBtn}
-                                                    >
-                                                        <Ionicons name="trash" size={14} color="#ffffff" />
-                                                    </Pressable>
-                                                )}
-                                            </Pressable>
+                                                <Text style={{ fontSize: 9, color: '#EF4444', fontStyle: 'italic' }}>
+                                                    [Texte masqué]
+                                                </Text>
+                                            </View>
+                                        );
+                                    }
+
+                                    if (isSelected) {
+                                        return (
+                                            <View
+                                                key={block.id}
+                                                style={{
+                                                    position: 'absolute',
+                                                    left: `${block.x}%`,
+                                                    top: `${block.y}%`,
+                                                    minWidth: `${block.width}%`,
+                                                    borderWidth: 1.5,
+                                                    borderColor: '#00D2FF',
+                                                    borderStyle: 'solid',
+                                                    borderRadius: 3,
+                                                    backgroundColor: '#FFFFFF',
+                                                    boxShadow: '0 0 12px rgba(0, 210, 255, 0.5)',
+                                                    zIndex: 100,
+                                                    padding: 2
+                                                }}
+                                            >
+                                                <TextInput
+                                                    value={block.currentText}
+                                                    onChangeText={txt =>
+                                                        updateTextBlock(block.id, { currentText: txt, isEdited: true })
+                                                    }
+                                                    multiline
+                                                    autoFocus
+                                                    style={{
+                                                        fontSize: Math.max(10, block.fontSize),
+                                                        fontFamily:
+                                                            block.fontFamily === 'TimesRoman'
+                                                                ? Platform.OS === 'web'
+                                                                    ? 'Times New Roman, serif'
+                                                                    : 'serif'
+                                                                : block.fontFamily === 'Courier'
+                                                                ? 'Courier, monospace'
+                                                                : 'Arial, sans-serif',
+                                                        fontWeight: block.fontWeight,
+                                                        fontStyle: block.fontStyle,
+                                                        textDecorationLine: block.isUnderline ? 'underline' : 'none',
+                                                        color: block.color,
+                                                        textAlign: block.textAlign,
+                                                        padding: 0,
+                                                        margin: 0,
+                                                        outline: 'none',
+                                                        backgroundColor: 'transparent'
+                                                    } as any}
+                                                />
+                                            </View>
                                         );
                                     }
 
                                     return (
-                                        <View
-                                            key={edit.id}
-                                            style={{
-                                                position: 'absolute',
-                                                left: `${edit.x}%`,
-                                                top: `${edit.y}%`,
-                                                width: edit.width ? `${edit.width}%` : undefined,
-                                                height: edit.height ? `${edit.height}%` : undefined,
-                                                zIndex: isSelected ? 100 : 10
+                                        <Pressable
+                                            key={block.id}
+                                            onPress={() => {
+                                                setSelectedBlockId(block.id);
+                                                setSelectedEditId(null);
                                             }}
+                                            style={({ hovered }: any) => ({
+                                                position: 'absolute',
+                                                left: `${block.x}%`,
+                                                top: `${block.y}%`,
+                                                width: `${block.width}%`,
+                                                height: `${block.height}%`,
+                                                borderWidth: 1,
+                                                borderColor: hovered
+                                                    ? '#00D2FF'
+                                                    : block.isEdited
+                                                    ? '#00D2FF'
+                                                    : 'rgba(0, 180, 255, 0.45)',
+                                                borderStyle: block.isEdited ? 'solid' : 'dashed',
+                                                borderRadius: 2,
+                                                backgroundColor: block.isEdited
+                                                    ? '#FFFFFF'
+                                                    : hovered
+                                                    ? 'rgba(0, 210, 255, 0.08)'
+                                                    : 'transparent',
+                                                cursor: (Platform.OS === 'web' ? 'text' : undefined) as any,
+                                                justifyContent: 'center',
+                                                paddingHorizontal: 2,
+                                                zIndex: 30
+                                            })}
                                         >
-                                            <PdfEditItemView
-                                                edit={edit}
-                                                isSelected={isSelected}
-                                                canvasSize={canvasSize}
-                                                onSelect={() => setSelectedEditId(edit.id)}
-                                                onRemove={() => removeEdit(edit.id)}
-                                                onDuplicate={() => duplicateEdit(edit.id)}
-                                                onChangeText={t => {
-                                                    const updated = edits.map(item =>
-                                                        item.id === edit.id ? { ...item, text: t } : item
-                                                    );
-                                                    setEdits(updated);
-                                                }}
-                                                onResize={(w, h) => {
-                                                    const updated = edits.map(item =>
-                                                        item.id === edit.id ? { ...item, width: w, height: h } : item
-                                                    );
-                                                    setEdits(updated);
-                                                }}
-                                                panHandlers={{
-                                                    onStartShouldSetResponder: () => true,
-                                                    onMoveShouldSetResponder: () => true,
-                                                    onResponderMove: (e: any) => {
-                                                        const coords = getCoordinates(e);
-                                                        setEdits(prev =>
-                                                            prev.map(item =>
-                                                                item.id === edit.id
-                                                                    ? { ...item, x: coords.x, y: coords.y }
-                                                                    : item
-                                                            )
-                                                        );
-                                                    }
-                                                }}
-                                            />
-                                        </View>
+                                            {block.isEdited ? (
+                                                <Text
+                                                    style={{
+                                                        fontSize: Math.max(10, block.fontSize),
+                                                        fontFamily:
+                                                            block.fontFamily === 'TimesRoman'
+                                                                ? Platform.OS === 'web'
+                                                                    ? 'Times New Roman, serif'
+                                                                    : 'serif'
+                                                                : block.fontFamily === 'Courier'
+                                                                ? 'Courier, monospace'
+                                                                : 'Arial, sans-serif',
+                                                        fontWeight: block.fontWeight,
+                                                        fontStyle: block.fontStyle,
+                                                        textDecorationLine: block.isUnderline ? 'underline' : 'none',
+                                                        color: block.color,
+                                                        textAlign: block.textAlign
+                                                    }}
+                                                >
+                                                    {block.currentText}
+                                                </Text>
+                                            ) : null}
+                                        </Pressable>
                                     );
                                 })}
 
-                            {/* Live Freehand Drawing Preview Layer (Annoter) */}
-                            {activeTool === 'draw' && (
-                                <View
-                                    style={[styles.interactionOverlay, { zIndex: 120, cursor: 'crosshair' as any }]}
-                                    onStartShouldSetResponder={() => true}
-                                    onMoveShouldSetResponder={() => true}
-                                    onResponderGrant={handleDrawStart}
-                                    onResponderMove={handleDrawMove}
-                                    onResponderRelease={handleDrawEnd}
-                                    onResponderTerminate={handleDrawEnd}
-                                >
-                                    {currentPathPoints.length > 1 && (
-                                        <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
-                                            <Path
-                                                d={`M ${currentPathPoints.map(p => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L ')}`}
-                                                stroke={selectedColor}
-                                                strokeWidth={drawStrokeWidth}
-                                                fill="none"
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                opacity={drawMode === 'highlighter' ? 0.35 : 1}
-                                            />
-                                        </Svg>
-                                    )}
+                            {/* CUSTOM ADDED ITEMS & ANNOTATIONS */}
+                            {currentPageEdits.map(edit => {
+                                if (edit.type === 'draw' && edit.signatureData?.data) {
+                                    return (
+                                        <View
+                                            key={edit.id}
+                                            style={StyleSheet.absoluteFill}
+                                            pointerEvents="none"
+                                        >
+                                            <Svg width="100%" height="100%">
+                                                <Path
+                                                    d={edit.signatureData.data}
+                                                    stroke={edit.color || '#000000'}
+                                                    strokeWidth={edit.size || 3}
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    fill="none"
+                                                    opacity={edit.opacity !== undefined ? edit.opacity : 1}
+                                                />
+                                            </Svg>
+                                        </View>
+                                    );
+                                }
+
+                                return (
+                                    <PdfEditItemView
+                                        key={edit.id}
+                                        edit={edit}
+                                        isSelected={selectedEditId === edit.id}
+                                        canvasSize={canvasDimensions}
+                                        onSelect={() => {
+                                            setSelectedEditId(edit.id);
+                                            setSelectedBlockId(null);
+                                        }}
+                                        onRemove={() => {
+                                            const updated = edits.filter(e => e.id !== edit.id);
+                                            setEdits(updated);
+                                            pushHistory(textBlocks, updated);
+                                            setSelectedEditId(null);
+                                        }}
+                                        onChangeText={txt => {
+                                            const updated = edits.map(e =>
+                                                e.id === edit.id ? { ...e, text: txt } : e
+                                            );
+                                            setEdits(updated);
+                                            pushHistory(textBlocks, updated);
+                                        }}
+                                        onResize={(w, h) => {
+                                            const updated = edits.map(e =>
+                                                e.id === edit.id ? { ...e, width: w, height: h } : e
+                                            );
+                                            setEdits(updated);
+                                            pushHistory(textBlocks, updated);
+                                        }}
+                                        onDuplicate={() => {
+                                            const dup: PdfEditItem = {
+                                                ...edit,
+                                                id: `edit-dup-${Date.now()}`,
+                                                x: Math.min(80, (edit.x || 0) + 5),
+                                                y: Math.min(80, (edit.y || 0) + 5)
+                                            };
+                                            const updated = [...edits, dup];
+                                            setEdits(updated);
+                                            setSelectedEditId(dup.id);
+                                            pushHistory(textBlocks, updated);
+                                        }}
+                                        panHandlers={{}}
+                                    />
+                                );
+                            })}
+
+                            {/* Active SVG Drawing Path while dragging */}
+                            {isDrawing && currentPath.length > 0 && (
+                                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                                    <Svg width="100%" height="100%">
+                                        <Path
+                                            d={currentPath}
+                                            stroke={drawColor}
+                                            strokeWidth={isHighlighter ? Math.max(12, drawStrokeWidth * 3) : drawStrokeWidth}
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            fill="none"
+                                            opacity={isHighlighter ? 0.35 : 1}
+                                        />
+                                    </Svg>
                                 </View>
                             )}
+                        </View>
+                    </View>
+
+                    {/* FLOATING BOTTOM TOOLBAR (iLovePDF Ergonomics) */}
+                    <View style={styles.floatingBottomPill}>
+                        <Pressable
+                            style={styles.floatingNavBtn}
+                            onPress={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                            disabled={currentPage === 0}
+                        >
+                            <Ionicons
+                                name="chevron-back"
+                                size={16}
+                                color={currentPage === 0 ? '#475569' : '#00D2FF'}
+                            />
+                        </Pressable>
+
+                        <Text style={styles.floatingPageText}>
+                            Page {currentPage + 1} / {pages.length}
+                        </Text>
+
+                        <Pressable
+                            style={styles.floatingNavBtn}
+                            onPress={() => setCurrentPage(prev => Math.min(pages.length - 1, prev + 1))}
+                            disabled={currentPage === pages.length - 1}
+                        >
+                            <Ionicons
+                                name="chevron-forward"
+                                size={16}
+                                color={currentPage === pages.length - 1 ? '#475569' : '#00D2FF'}
+                            />
+                        </Pressable>
+
+                        <View style={styles.floatingDivider} />
+
+                        <Pressable
+                            style={styles.floatingNavBtn}
+                            onPress={() => setZoom(prev => Math.max(0.5, prev - 0.1))}
+                        >
+                            <Ionicons name="remove" size={14} color="#CBD5E1" />
+                        </Pressable>
+
+                        <Text style={styles.floatingZoomText}>{Math.round(zoom * 100)}%</Text>
+
+                        <Pressable
+                            style={styles.floatingNavBtn}
+                            onPress={() => setZoom(prev => Math.min(2.0, prev + 0.1))}
+                        >
+                            <Ionicons name="add" size={14} color="#CBD5E1" />
+                        </Pressable>
+
+                        <View style={styles.floatingDivider} />
+
+                        <Pressable style={styles.floatingNavBtn} onPress={() => setZoom(1.0)}>
+                            <Ionicons name="scan-outline" size={15} color="#00D2FF" />
                         </Pressable>
                     </View>
                 </ScrollView>
 
-                {/* 3. RIGHT PANEL: PROPERTIES INSPECTOR (Styles de texte / Outils) */}
-                <View style={[styles.rightSidebar, { backgroundColor: colors.card, borderLeftColor: colors.border }]}>
-                    <ScrollView
-                        style={styles.sidebarScroll}
-                        contentContainerStyle={styles.sidebarContent}
-                        showsVerticalScrollIndicator={false}
-                    >
-                        {/* A. TEXT PROPERTIES PANEL */}
-                        {(activeTool === 'text' || activeEdit?.type === 'text') && (
-                            <View style={styles.sectionBlock}>
-                                <View style={[styles.sidebarHeader, { borderBottomColor: colors.border }]}>
-                                    <Ionicons name="text" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-                                    <Text style={[styles.sidebarTitle, { color: colors.text }]}>Styles de texte</Text>
+                {/* 2C. RIGHT PANEL: PROPERTIES INSPECTOR ("Styles de texte" / "Styles d'annotation") */}
+                <View
+                    style={[
+                        styles.rightInspectorPanel,
+                        { backgroundColor: colors.card, borderLeftColor: colors.border }
+                    ]}
+                >
+                    {/* Header */}
+                    <View style={styles.inspectorHeader}>
+                        <Ionicons
+                            name={masterMode === 'modify' ? 'text-outline' : 'color-palette-outline'}
+                            size={18}
+                            color="#00D2FF"
+                        />
+                        <Text style={styles.inspectorTitle}>
+                            {masterMode === 'modify'
+                                ? selectedBlock
+                                    ? 'Styles de texte'
+                                    : 'Modifier PDF'
+                                : 'Styles d\'annotation'}
+                        </Text>
+                    </View>
+
+                    <ScrollView showsVerticalScrollIndicator={false} style={styles.inspectorBody}>
+                        {/* CASE 1: A text block is selected in Modifier mode */}
+                        {masterMode === 'modify' && selectedBlock && (
+                            <View style={styles.inspectorSection}>
+                                <Text style={styles.sectionSubtitle}>
+                                    Page {currentPage + 1} • Ligne sélectionnée
+                                </Text>
+
+                                {/* Police (Font Family) */}
+                                <Text style={styles.label}>Police</Text>
+                                <View style={styles.segmentRow}>
+                                    {(['Helvetica', 'TimesRoman', 'Courier'] as const).map(f => (
+                                        <Pressable
+                                            key={f}
+                                            style={[
+                                                styles.segmentBtn,
+                                                selectedBlock.fontFamily === f && styles.segmentBtnActive
+                                            ]}
+                                            onPress={() => updateTextBlock(selectedBlock.id, { fontFamily: f })}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.segmentBtnText,
+                                                    selectedBlock.fontFamily === f && styles.segmentBtnTextActive
+                                                ]}
+                                            >
+                                                {f === 'Helvetica' ? 'Carlito' : f === 'TimesRoman' ? 'Times' : 'Courier'}
+                                            </Text>
+                                        </Pressable>
+                                    ))}
                                 </View>
 
-                                {/* Police */}
-                                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Police</Text>
-                                <View style={styles.pillsRow}>
-                                    {(['Helvetica', 'TimesRoman', 'Courier'] as const).map(f => {
-                                        const names = { Helvetica: 'Arial', TimesRoman: 'Times', Courier: 'Courier' };
-                                        const isSel = fontFamily === f;
-                                        return (
-                                            <Pressable
-                                                key={f}
-                                                style={[
-                                                    styles.selectorPill,
-                                                    { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border },
-                                                    isSel && { backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: colors.primary }
-                                                ]}
-                                                onPress={() => {
-                                                    setFontFamily(f);
-                                                    updateActiveItem({ fontFamily: f });
-                                                }}
-                                            >
-                                                <Text style={[styles.selectorPillText, { color: isSel ? colors.primary : colors.textMuted }]}>
-                                                    {names[f]}
-                                                </Text>
-                                            </Pressable>
-                                        );
-                                    })}
+                                {/* Taille de police (Font Size) */}
+                                <Text style={styles.label}>Taille de police</Text>
+                                <View style={styles.sizeStepperRow}>
+                                    <Pressable
+                                        style={styles.stepperBtn}
+                                        onPress={() =>
+                                            updateTextBlock(selectedBlock.id, {
+                                                fontSize: Math.max(8, selectedBlock.fontSize - 2)
+                                            })
+                                        }
+                                    >
+                                        <Ionicons name="remove" size={16} color="#FFFFFF" />
+                                    </Pressable>
+                                    <Text style={styles.stepperValue}>
+                                        {selectedBlock.fontSize} pt
+                                    </Text>
+                                    <Pressable
+                                        style={styles.stepperBtn}
+                                        onPress={() =>
+                                            updateTextBlock(selectedBlock.id, {
+                                                fontSize: Math.min(96, selectedBlock.fontSize + 2)
+                                            })
+                                        }
+                                    >
+                                        <Ionicons name="add" size={16} color="#FFFFFF" />
+                                    </Pressable>
                                 </View>
 
-                                {/* Taille & Styles B, I, U */}
-                                <View style={styles.rowBetween}>
-                                    <View>
-                                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Taille</Text>
-                                        <View style={[styles.stepperBox, { backgroundColor: 'rgba(0,0,0,0.3)', borderColor: colors.border }]}>
-                                            <Pressable
-                                                style={[styles.stepperBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}
-                                                onPress={() => {
-                                                    const s = Math.max(10, selectedSize - 2);
-                                                    setSelectedSize(s);
-                                                    updateActiveItem({ size: s });
-                                                }}
-                                            >
-                                                <Ionicons name="remove" size={14} color={colors.text} />
-                                            </Pressable>
-                                            <Text style={[styles.stepperValue, { color: colors.text }]}>{selectedSize}pt</Text>
-                                            <Pressable
-                                                style={[styles.stepperBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}
-                                                onPress={() => {
-                                                    const s = Math.min(64, selectedSize + 2);
-                                                    setSelectedSize(s);
-                                                    updateActiveItem({ size: s });
-                                                }}
-                                            >
-                                                <Ionicons name="add" size={14} color={colors.text} />
-                                            </Pressable>
-                                        </View>
-                                    </View>
+                                {/* Styles: Gras, Italique, Souligné */}
+                                <Text style={styles.label}>Formatage</Text>
+                                <View style={styles.styleButtonsRow}>
+                                    <Pressable
+                                        style={[
+                                            styles.formatBtn,
+                                            selectedBlock.fontWeight === 'bold' && styles.formatBtnActive
+                                        ]}
+                                        onPress={() =>
+                                            updateTextBlock(selectedBlock.id, {
+                                                fontWeight: selectedBlock.fontWeight === 'bold' ? 'normal' : 'bold'
+                                            })
+                                        }
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.formatBtnText,
+                                                { fontWeight: 'bold' },
+                                                selectedBlock.fontWeight === 'bold' && styles.formatBtnTextActive
+                                            ]}
+                                        >
+                                            B
+                                        </Text>
+                                    </Pressable>
 
-                                    <View>
-                                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Format</Text>
-                                        <View style={styles.styleButtonsRow}>
-                                            <Pressable
-                                                style={[
-                                                    styles.styleBtn,
-                                                    { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border },
-                                                    selectedWeight === 'bold' && { backgroundColor: colors.primary, borderColor: colors.primary }
-                                                ]}
-                                                onPress={() => {
-                                                    const w = selectedWeight === 'bold' ? 'normal' : 'bold';
-                                                    setSelectedWeight(w);
-                                                    updateActiveItem({ fontWeight: w });
-                                                }}
-                                            >
-                                                <Text style={{ fontWeight: 'bold', color: selectedWeight === 'bold' ? '#fff' : colors.text }}>B</Text>
-                                            </Pressable>
-                                            <Pressable
-                                                style={[
-                                                    styles.styleBtn,
-                                                    { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border },
-                                                    selectedStyle === 'italic' && { backgroundColor: colors.primary, borderColor: colors.primary }
-                                                ]}
-                                                onPress={() => {
-                                                    const st = selectedStyle === 'italic' ? 'normal' : 'italic';
-                                                    setSelectedStyle(st);
-                                                    updateActiveItem({ fontStyle: st });
-                                                }}
-                                            >
-                                                <Text style={{ fontStyle: 'italic', color: selectedStyle === 'italic' ? '#fff' : colors.text }}>I</Text>
-                                            </Pressable>
-                                            <Pressable
-                                                style={[
-                                                    styles.styleBtn,
-                                                    { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border },
-                                                    isUnderline && { backgroundColor: colors.primary, borderColor: colors.primary }
-                                                ]}
-                                                onPress={() => {
-                                                    const u = !isUnderline;
-                                                    setIsUnderline(u);
-                                                    updateActiveItem({ isUnderline: u });
-                                                }}
-                                            >
-                                                <Text style={{ textDecorationLine: 'underline', color: isUnderline ? '#fff' : colors.text }}>U</Text>
-                                            </Pressable>
-                                        </View>
-                                    </View>
+                                    <Pressable
+                                        style={[
+                                            styles.formatBtn,
+                                            selectedBlock.fontStyle === 'italic' && styles.formatBtnActive
+                                        ]}
+                                        onPress={() =>
+                                            updateTextBlock(selectedBlock.id, {
+                                                fontStyle: selectedBlock.fontStyle === 'italic' ? 'normal' : 'italic'
+                                            })
+                                        }
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.formatBtnText,
+                                                { fontStyle: 'italic' },
+                                                selectedBlock.fontStyle === 'italic' && styles.formatBtnTextActive
+                                            ]}
+                                        >
+                                            I
+                                        </Text>
+                                    </Pressable>
+
+                                    <Pressable
+                                        style={[
+                                            styles.formatBtn,
+                                            selectedBlock.isUnderline && styles.formatBtnActive
+                                        ]}
+                                        onPress={() =>
+                                            updateTextBlock(selectedBlock.id, {
+                                                isUnderline: !selectedBlock.isUnderline
+                                            })
+                                        }
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.formatBtnText,
+                                                { textDecorationLine: 'underline' },
+                                                selectedBlock.isUnderline && styles.formatBtnTextActive
+                                            ]}
+                                        >
+                                            U
+                                        </Text>
+                                    </Pressable>
                                 </View>
 
                                 {/* Alignement */}
-                                <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: 14 }]}>Alignement</Text>
-                                <View style={styles.pillsRow}>
-                                    {(['left', 'center', 'right'] as const).map(al => {
-                                        const isSel = selectedAlign === al;
-                                        const icons = { left: 'menu-outline', center: 'reorder-two-outline', right: 'menu-outline' };
-                                        return (
-                                            <Pressable
-                                                key={al}
-                                                style={[
-                                                    styles.selectorPill,
-                                                    { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border },
-                                                    isSel && { backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: colors.primary }
-                                                ]}
-                                                onPress={() => {
-                                                    setSelectedAlign(al);
-                                                    updateActiveItem({ textAlign: al });
-                                                }}
-                                            >
-                                                <Ionicons name={icons[al] as any} size={16} color={isSel ? colors.primary : colors.textMuted} />
-                                            </Pressable>
-                                        );
-                                    })}
+                                <Text style={styles.label}>Alignement</Text>
+                                <View style={styles.segmentRow}>
+                                    {(['left', 'center', 'right'] as const).map(align => (
+                                        <Pressable
+                                            key={align}
+                                            style={[
+                                                styles.segmentBtn,
+                                                selectedBlock.textAlign === align && styles.segmentBtnActive
+                                            ]}
+                                            onPress={() => updateTextBlock(selectedBlock.id, { textAlign: align })}
+                                        >
+                                            <Ionicons
+                                                name={
+                                                    align === 'left'
+                                                        ? 'reorder-two-outline'
+                                                        : align === 'center'
+                                                        ? 'reorder-three-outline'
+                                                        : 'reorder-four-outline'
+                                                }
+                                                size={16}
+                                                color={selectedBlock.textAlign === align ? '#00D2FF' : '#94A3B8'}
+                                            />
+                                        </Pressable>
+                                    ))}
                                 </View>
 
-                                {/* Couleur actuelle & Palette */}
-                                <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: 14 }]}>Couleur du texte</Text>
-                                <View style={styles.colorSwatchesGroup}>
-                                    {PRESET_COLORS.map(c => {
-                                        const isSel = selectedColor === c;
-                                        return (
-                                            <Pressable
-                                                key={c}
-                                                style={[
-                                                    styles.colorCircle,
-                                                    { backgroundColor: c },
-                                                    isSel && styles.colorCircleActive
-                                                ]}
-                                                onPress={() => {
-                                                    setSelectedColor(c);
-                                                    updateActiveItem({ color: c });
-                                                }}
-                                            >
-                                                {isSel && <Ionicons name="checkmark" size={12} color={c === '#ffffff' ? '#000000' : '#ffffff'} />}
-                                            </Pressable>
-                                        );
-                                    })}
+                                {/* Couleur actuelle */}
+                                <Text style={styles.label}>Couleur actuelle</Text>
+                                <View style={styles.colorPalette}>
+                                    {PRESET_COLORS.map(c => (
+                                        <Pressable
+                                            key={c}
+                                            style={[
+                                                styles.colorSwatch,
+                                                { backgroundColor: c },
+                                                selectedBlock.color === c && styles.colorSwatchActive
+                                            ]}
+                                            onPress={() => updateTextBlock(selectedBlock.id, { color: c })}
+                                        />
+                                    ))}
                                 </View>
 
-                                {/* Masquage de fond */}
-                                <Pressable
-                                    style={styles.checkboxRow}
-                                    onPress={() => {
-                                        const bg = !hasTextBg;
-                                        setHasTextBg(bg);
-                                        updateActiveItem({ backgroundColor: bg ? '#ffffff' : undefined });
-                                    }}
-                                >
-                                    <Ionicons
-                                        name={hasTextBg ? 'checkbox' : 'square-outline'}
-                                        size={18}
-                                        color={hasTextBg ? colors.primary : colors.textMuted}
-                                    />
-                                    <Text style={[styles.checkboxLabel, { color: colors.text }]}>
-                                        Boîte de fond opaque (masquage)
+                                {/* Actions sur ce bloc */}
+                                <View style={styles.blockActionButtons}>
+                                    <Pressable
+                                        style={styles.deleteBlockBtn}
+                                        onPress={() => handleDeleteTextBlock(selectedBlock.id)}
+                                    >
+                                        <Ionicons name="trash-outline" size={15} color="#EF4444" />
+                                        <Text style={styles.deleteBlockText}>Supprimer ce texte</Text>
+                                    </Pressable>
+
+                                    {selectedBlock.isEdited && (
+                                        <Pressable
+                                            style={styles.resetBlockBtn}
+                                            onPress={() => handleResetTextBlock(selectedBlock.id)}
+                                        >
+                                            <Ionicons name="refresh-outline" size={15} color="#94A3B8" />
+                                            <Text style={styles.resetBlockText}>Rétablir original</Text>
+                                        </Pressable>
+                                    )}
+                                </View>
+                            </View>
+                        )}
+
+                        {/* CASE 2: No block selected in Modifier mode */}
+                        {masterMode === 'modify' && !selectedBlock && (
+                            <View style={styles.inspectorSection}>
+                                <View style={styles.infoBox}>
+                                    <Ionicons name="information-circle-outline" size={20} color="#00D2FF" />
+                                    <Text style={styles.infoBoxText}>
+                                        Cliquez sur n'importe quel texte encadré dans la page pour le modifier directement, ou ajoutez de nouveaux blocs ci-dessous.
                                     </Text>
+                                </View>
+
+                                <Pressable style={styles.quickAddBtn} onPress={handleAddNewText}>
+                                    <Ionicons name="add-circle" size={18} color="#00D2FF" />
+                                    <Text style={styles.quickAddText}>Ajouter du texte libre</Text>
+                                </Pressable>
+
+                                <Pressable style={styles.quickAddBtn} onPress={handleAddWhiteout}>
+                                    <Ionicons name="square" size={18} color="#00D2FF" />
+                                    <Text style={styles.quickAddText}>Masquer une zone (Gomme)</Text>
                                 </Pressable>
                             </View>
                         )}
 
-                        {/* B. DRAW / ANNOTER PROPERTIES PANEL */}
-                        {activeTool === 'draw' && (
-                            <View style={styles.sectionBlock}>
-                                <View style={[styles.sidebarHeader, { borderBottomColor: colors.border }]}>
-                                    <Ionicons name="brush" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-                                    <Text style={[styles.sidebarTitle, { color: colors.text }]}>Styles d'annotation</Text>
-                                </View>
-
-                                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Mode de dessin</Text>
-                                <View style={styles.pillsRow}>
+                        {/* CASE 3: Annotate Mode styles */}
+                        {masterMode === 'annotate' && (
+                            <View style={styles.inspectorSection}>
+                                <Text style={styles.label}>Mode de dessin</Text>
+                                <View style={styles.segmentRow}>
                                     <Pressable
                                         style={[
-                                            styles.selectorPill,
-                                            { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border },
-                                            drawMode === 'pen' && { backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: colors.primary }
+                                            styles.segmentBtn,
+                                            !isHighlighter && styles.segmentBtnActive
                                         ]}
-                                        onPress={() => setDrawMode('pen')}
+                                        onPress={() => {
+                                            setIsHighlighter(false);
+                                            setActiveAnnotateTool('draw');
+                                        }}
                                     >
-                                        <Text style={[styles.selectorPillText, { color: drawMode === 'pen' ? colors.primary : colors.textMuted }]}>
+                                        <Text
+                                            style={[
+                                                styles.segmentBtnText,
+                                                !isHighlighter && styles.segmentBtnTextActive
+                                            ]}
+                                        >
                                             Stylo (Opaque)
                                         </Text>
                                     </Pressable>
                                     <Pressable
                                         style={[
-                                            styles.selectorPill,
-                                            { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border },
-                                            drawMode === 'highlighter' && { backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: colors.primary }
+                                            styles.segmentBtn,
+                                            isHighlighter && styles.segmentBtnActive
                                         ]}
                                         onPress={() => {
-                                            setDrawMode('highlighter');
-                                            setSelectedColor('#f59e0b');
-                                            setDrawStrokeWidth(8);
+                                            setIsHighlighter(true);
+                                            setActiveAnnotateTool('highlighter');
                                         }}
                                     >
-                                        <Text style={[styles.selectorPillText, { color: drawMode === 'highlighter' ? colors.primary : colors.textMuted }]}>
+                                        <Text
+                                            style={[
+                                                styles.segmentBtnText,
+                                                isHighlighter && styles.segmentBtnTextActive
+                                            ]}
+                                        >
                                             Surligneur
                                         </Text>
                                     </Pressable>
                                 </View>
 
-                                <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: 14 }]}>Épaisseur du trait</Text>
-                                <View style={styles.pillsRow}>
-                                    {[2, 4, 8, 14].map(w => {
-                                        const isSel = drawStrokeWidth === w;
-                                        return (
-                                            <Pressable
-                                                key={w}
+                                <Text style={styles.label}>Épaisseur du trait</Text>
+                                <View style={styles.segmentRow}>
+                                    {[2, 4, 8, 14].map(size => (
+                                        <Pressable
+                                            key={size}
+                                            style={[
+                                                styles.segmentBtn,
+                                                drawStrokeWidth === size && styles.segmentBtnActive
+                                            ]}
+                                            onPress={() => setDrawStrokeWidth(size)}
+                                        >
+                                            <Text
                                                 style={[
-                                                    styles.selectorPill,
-                                                    { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border },
-                                                    isSel && { backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: colors.primary }
+                                                    styles.segmentBtnText,
+                                                    drawStrokeWidth === size && styles.segmentBtnTextActive
                                                 ]}
-                                                onPress={() => setDrawStrokeWidth(w)}
                                             >
-                                                <Text style={[styles.selectorPillText, { color: isSel ? colors.primary : colors.textMuted }]}>
-                                                    {w}px
-                                                </Text>
-                                            </Pressable>
-                                        );
-                                    })}
+                                                {size}px
+                                            </Text>
+                                        </Pressable>
+                                    ))}
                                 </View>
 
-                                <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: 14 }]}>Couleur du trait</Text>
-                                <View style={styles.colorSwatchesGroup}>
-                                    {PRESET_COLORS.map(c => {
-                                        const isSel = selectedColor === c;
-                                        return (
-                                            <Pressable
-                                                key={c}
-                                                style={[
-                                                    styles.colorCircle,
-                                                    { backgroundColor: c },
-                                                    isSel && styles.colorCircleActive
-                                                ]}
-                                                onPress={() => setSelectedColor(c)}
-                                            >
-                                                {isSel && <Ionicons name="checkmark" size={12} color={c === '#ffffff' ? '#000000' : '#ffffff'} />}
-                                            </Pressable>
-                                        );
-                                    })}
+                                <Text style={styles.label}>Couleur du trait</Text>
+                                <View style={styles.colorPalette}>
+                                    {PRESET_COLORS.map(c => (
+                                        <Pressable
+                                            key={c}
+                                            style={[
+                                                styles.colorSwatch,
+                                                { backgroundColor: c },
+                                                drawColor === c && styles.colorSwatchActive
+                                            ]}
+                                            onPress={() => setDrawColor(c)}
+                                        />
+                                    ))}
                                 </View>
 
                                 <Pressable
-                                    style={[styles.outlineActionBtn, { borderColor: colors.border, marginTop: 20 }]}
-                                    onPress={clearDrawingsForCurrentPage}
+                                    style={styles.clearDrawingsBtn}
+                                    onPress={() => {
+                                        const updated = edits.filter(
+                                            e => !(e.pageIndex === currentPage && e.type === 'draw')
+                                        );
+                                        setEdits(updated);
+                                        pushHistory(textBlocks, updated);
+                                    }}
                                 >
-                                    <Ionicons name="trash-outline" size={16} color="#ef4444" style={{ marginRight: 6 }} />
-                                    <Text style={{ color: '#ef4444', fontSize: 13, fontWeight: '600' }}>
+                                    <Ionicons name="trash-outline" size={15} color="#EF4444" />
+                                    <Text style={styles.clearDrawingsText}>
                                         Effacer les dessins de cette page
-                                    </Text>
-                                </Pressable>
-                            </View>
-                        )}
-
-                        {/* C. SHAPE PROPERTIES PANEL */}
-                        {activeTool === 'shape' && (
-                            <View style={styles.sectionBlock}>
-                                <View style={[styles.sidebarHeader, { borderBottomColor: colors.border }]}>
-                                    <Ionicons name="shapes" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-                                    <Text style={[styles.sidebarTitle, { color: colors.text }]}>Options de forme</Text>
-                                </View>
-
-                                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Type de forme</Text>
-                                <View style={styles.pillsRow}>
-                                    {(['rectangle', 'circle', 'line'] as const).map(sh => {
-                                        const names = { rectangle: 'Rectangle', circle: 'Cercle', line: 'Ligne' };
-                                        const isSel = shapeType === sh;
-                                        return (
-                                            <Pressable
-                                                key={sh}
-                                                style={[
-                                                    styles.selectorPill,
-                                                    { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border },
-                                                    isSel && { backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: colors.primary }
-                                                ]}
-                                                onPress={() => {
-                                                    setShapeType(sh);
-                                                    updateActiveItem({ shapeType: sh });
-                                                }}
-                                            >
-                                                <Text style={[styles.selectorPillText, { color: isSel ? colors.primary : colors.textMuted }]}>
-                                                    {names[sh]}
-                                                </Text>
-                                            </Pressable>
-                                        );
-                                    })}
-                                </View>
-
-                                <Pressable
-                                    style={[styles.actionPrimaryBtn, { backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: colors.primary, marginTop: 14 }]}
-                                    onPress={() => addShape(shapeType)}
-                                >
-                                    <Ionicons name="add-circle-outline" size={18} color={colors.primary} style={{ marginRight: 6 }} />
-                                    <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>
-                                        Insérer la forme sur la page
-                                    </Text>
-                                </Pressable>
-                            </View>
-                        )}
-
-                        {/* D. WHITEOUT PROPERTIES PANEL */}
-                        {activeTool === 'whiteout' && (
-                            <View style={styles.sectionBlock}>
-                                <View style={[styles.sidebarHeader, { borderBottomColor: colors.border }]}>
-                                    <Ionicons name="square" size={18} color={colors.primary} style={{ marginRight: 8 }} />
-                                    <Text style={[styles.sidebarTitle, { color: colors.text }]}>Outil Gomme (Masquage)</Text>
-                                </View>
-
-                                <Text style={[styles.hintText, { color: colors.textMuted }]}>
-                                    Cliquez sur le document pour effacer ou masquer du texte existant avec un bloc blanc opaque.
-                                </Text>
-
-                                <Pressable
-                                    style={[styles.actionPrimaryBtn, { backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: colors.primary, marginTop: 14 }]}
-                                    onPress={() => addWhiteoutBox(30, 40, 30, 6)}
-                                >
-                                    <Ionicons name="add-circle-outline" size={18} color={colors.primary} style={{ marginRight: 6 }} />
-                                    <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>
-                                        Ajouter un bloc blanc
                                     </Text>
                                 </Pressable>
                             </View>
                         )}
                     </ScrollView>
 
-                    {/* BIG FAST TRANSFER ACTION CTA (Enregistrer les modifications) */}
-                    <View style={[styles.ctaContainer, { borderTopColor: colors.border, backgroundColor: colors.card }]}>
+                    {/* Bottom CTA: Fast Transfer Electric Blue Save Button */}
+                    <View style={styles.inspectorFooter}>
                         <Pressable
-                            style={({ pressed }: any) => [
-                                styles.ctaButton,
-                                { backgroundColor: colors.primary },
-                                pressed && styles.ctaButtonPressed
-                            ]}
-                            onPress={() => onComplete(edits)}
+                            style={[styles.saveBtn, isSaving && { opacity: 0.7 }]}
+                            onPress={handleSave}
+                            disabled={isSaving}
                         >
-                            <Text style={styles.ctaButtonText}>Enregistrer les modifications</Text>
-                            <Ionicons name="checkmark-circle" size={20} color="#ffffff" style={{ marginLeft: 8 }} />
+                            {isSaving ? (
+                                <ActivityIndicator color="#0B0C10" size="small" />
+                            ) : (
+                                <>
+                                    <Text style={styles.saveBtnText}>Enregistrer les modifications</Text>
+                                    <Ionicons name="checkmark-circle" size={18} color="#0B0C10" />
+                                </>
+                            )}
                         </Pressable>
                     </View>
                 </View>
             </View>
 
-            {/* SIGNATURE PAD MODAL */}
+            {/* Signature Pad Component */}
             <SignaturePad
-                visible={isSignaturePadOpen}
-                onClose={() => setIsSignaturePadOpen(false)}
+                visible={signatureModalOpen}
+                onClose={() => setSignatureModalOpen(false)}
                 onSave={handleSignatureSave}
                 colors={colors}
             />
@@ -1141,365 +1395,554 @@ export default function PdfEditor({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        width: '100%',
-        height: '100%',
-        position: 'relative',
-        overflow: 'hidden',
+        backgroundColor: '#0B0C10'
     },
-    backgroundGlow: {
-        position: 'absolute',
-        top: -150,
-        left: '50%',
-        transform: [{ translateX: -400 }],
-        width: 800,
-        height: 800,
-        borderRadius: 400,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 140,
-        zIndex: 0,
-    },
+    // Top Bar
     topBar: {
-        height: 62,
-        borderBottomWidth: 1,
+        height: 58,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        zIndex: 20,
+        paddingHorizontal: 16,
+        borderBottomWidth: 1,
+        zIndex: 50
     },
     topBarLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 12
     },
     iconButton: {
-        padding: 8,
+        width: 36,
+        height: 36,
         borderRadius: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        justifyContent: 'center',
+        alignItems: 'center'
     },
-    topBarTitle: {
-        fontSize: 15,
-        fontWeight: '700',
+    titleContainer: {
+        justifyContent: 'center'
     },
-    topBarSubtitle: {
-        fontSize: 11,
+    title: {
+        fontSize: 14,
+        fontWeight: 'bold'
     },
-    toolsSwitcher: {
+    subtitle: {
+        fontSize: 11
+    },
+    masterPill: {
         flexDirection: 'row',
-        alignItems: 'center',
-        padding: 4,
-        borderRadius: 10,
+        backgroundColor: '#0F131D',
+        borderRadius: 20,
+        padding: 3,
         borderWidth: 1,
-        gap: 4,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        marginLeft: 8
     },
-    toolPill: {
+    masterPillOption: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 7,
-        gap: 6,
+        paddingVertical: 5,
+        borderRadius: 16,
+        gap: 6
     },
-    toolPillActive: {
-        shadowColor: '#3b82f6',
-        shadowOpacity: 0.4,
-        shadowRadius: 4,
-        elevation: 3,
+    masterPillOptionActive: {
+        backgroundColor: 'rgba(0, 210, 255, 0.15)',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 210, 255, 0.4)'
     },
-    toolPillText: {
-        fontSize: 13,
+    masterPillText: {
+        fontSize: 12,
         fontWeight: '600',
+        color: '#94A3B8'
+    },
+    masterPillTextActive: {
+        color: '#00D2FF'
+    },
+    topBarCenter: {
+        flexDirection: 'row',
+        alignItems: 'center'
+    },
+    toolSegment: {
+        flexDirection: 'row',
+        backgroundColor: '#0F131D',
+        borderRadius: 10,
+        padding: 3,
+        gap: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.06)'
+    },
+    subToolBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
+        gap: 6
+    },
+    subToolBtnActive: {
+        backgroundColor: 'rgba(0, 210, 255, 0.15)',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 210, 255, 0.35)'
+    },
+    subToolText: {
+        fontSize: 12,
+        fontWeight: '500',
+        color: '#94A3B8'
+    },
+    subToolTextActive: {
+        color: '#00D2FF',
+        fontWeight: '600'
     },
     topBarRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 14,
-    },
-    historyGroup: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
+        gap: 8
     },
     historyBtn: {
-        padding: 6,
-        borderRadius: 6,
-    },
-    zoomStepper: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderRadius: 6,
-        overflow: 'hidden',
-    },
-    zoomBtn: {
-        paddingHorizontal: 8,
-        paddingVertical: 6,
-    },
-    zoomText: {
-        fontSize: 12,
-        fontWeight: '600',
-        paddingHorizontal: 6,
-    },
-    mainLayout: {
-        flex: 1,
-        flexDirection: 'row',
-        zIndex: 1,
-    },
-    leftNav: {
-        width: 150,
-        borderRightWidth: 1,
-        paddingTop: 14,
-    },
-    leftNavTitle: {
-        fontSize: 11,
-        fontWeight: '700',
-        letterSpacing: 1,
-        paddingHorizontal: 16,
-        marginBottom: 10,
-    },
-    leftNavScroll: {
-        paddingHorizontal: 14,
-        paddingBottom: 30,
-        gap: 14,
-    },
-    thumbCard: {
-        width: '100%',
-        height: 160,
-        borderRadius: 8,
-        borderWidth: 1,
-        overflow: 'hidden',
-        position: 'relative',
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    thumbBadge: {
-        position: 'absolute',
-        top: 6,
-        left: 6,
-        backgroundColor: '#475569',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-        zIndex: 10,
-    },
-    thumbBadgeText: {
-        color: '#ffffff',
-        fontSize: 10,
-        fontWeight: '700',
-    },
-    thumbImage: {
-        width: '100%',
-        height: '100%',
-    },
-    centerCanvasScroll: {
-        flex: 1,
-    },
-    centerCanvasContent: {
-        padding: 30,
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100%',
-    },
-    pageSheetWrapper: {
-        backgroundColor: '#ffffff',
-        borderRadius: 6,
-        position: 'relative',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.45,
-        shadowRadius: 20,
-        elevation: 10,
-    },
-    pageSheetImage: {
-        width: '100%',
-        height: '100%',
-    },
-    interactionOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-    },
-    drawItemWrapper: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-    },
-    drawItemSelected: {
-        borderWidth: 1,
-        borderColor: '#3b82f6',
-        borderStyle: 'dashed',
-    },
-    drawDeleteBtn: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        backgroundColor: '#ef4444',
-        padding: 6,
-        borderRadius: 6,
-        zIndex: 150,
-    },
-    rightSidebar: {
-        width: 330,
-        borderLeftWidth: 1,
-        flexDirection: 'column',
-    },
-    sidebarScroll: {
-        flex: 1,
-    },
-    sidebarContent: {
-        padding: 20,
-    },
-    sidebarHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingBottom: 14,
-        borderBottomWidth: 1,
-        marginBottom: 18,
-    },
-    sidebarTitle: {
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    sectionBlock: {
-        marginBottom: 20,
-    },
-    fieldLabel: {
-        fontSize: 12,
-        fontWeight: '600',
-        marginBottom: 8,
-    },
-    pillsRow: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    selectorPill: {
-        flex: 1,
-        paddingVertical: 8,
-        paddingHorizontal: 8,
-        borderRadius: 6,
-        borderWidth: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    selectorPillText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    rowBetween: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 14,
-    },
-    stepperBox: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderRadius: 6,
-        overflow: 'hidden',
-    },
-    stepperBtn: {
-        paddingHorizontal: 8,
-        paddingVertical: 6,
-    },
-    stepperValue: {
-        fontSize: 12,
-        fontWeight: '600',
-        paddingHorizontal: 8,
-    },
-    styleButtonsRow: {
-        flexDirection: 'row',
-        gap: 6,
-    },
-    styleBtn: {
         width: 32,
         height: 32,
         borderRadius: 6,
-        borderWidth: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
         justifyContent: 'center',
-        alignItems: 'center',
+        alignItems: 'center'
     },
-    colorSwatchesGroup: {
+    historyBtnDisabled: {
+        opacity: 0.35
+    },
+    zoomControls: {
         flexDirection: 'row',
-        gap: 8,
-        flexWrap: 'wrap',
-    },
-    colorCircle: {
-        width: 22,
-        height: 22,
-        borderRadius: 11,
-        justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: '#0F131D',
+        borderRadius: 8,
+        paddingHorizontal: 6,
+        paddingVertical: 3,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        gap: 6
     },
-    colorCircleActive: {
+    zoomBtn: {
+        padding: 4
+    },
+    zoomText: {
+        fontSize: 11,
+        fontWeight: '600',
+        minWidth: 34,
+        textAlign: 'center'
+    },
+    // Main Studio
+    mainStudio: {
+        flex: 1,
+        flexDirection: 'row',
+        overflow: 'hidden'
+    },
+    // Left thumbnails
+    leftThumbnailsPanel: {
+        width: 140,
+        borderRightWidth: 1,
+        paddingVertical: 12
+    },
+    thumbHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        marginBottom: 10,
+        gap: 6
+    },
+    thumbHeaderText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#94A3B8',
+        letterSpacing: 0.5
+    },
+    thumbList: {
+        paddingHorizontal: 12,
+        gap: 12
+    },
+    thumbCard: {
+        width: '100%',
+        aspectRatio: 0.72,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 6,
+        overflow: 'hidden',
         borderWidth: 2,
-        borderColor: '#ffffff',
-        shadowColor: '#000',
+        borderColor: 'transparent',
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 3
+    },
+    thumbCardActive: {
+        borderColor: '#00D2FF',
+        shadowColor: '#00D2FF',
+        shadowOpacity: 0.6,
+        shadowRadius: 10
+    },
+    thumbBadge: {
+        position: 'absolute',
+        top: 4,
+        left: 4,
+        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+        borderRadius: 4,
+        paddingHorizontal: 5,
+        paddingVertical: 2,
+        zIndex: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4
+    },
+    thumbBadgeText: {
+        fontSize: 9,
+        fontWeight: '700',
+        color: '#FFFFFF'
+    },
+    thumbEditDot: {
+        width: 5,
+        height: 5,
+        borderRadius: 3,
+        backgroundColor: '#00D2FF'
+    },
+    thumbImage: {
+        width: '100%',
+        height: '100%'
+    },
+    // Center Workspace
+    centerWorkspace: {
+        flex: 1,
+        backgroundColor: '#0B0C10'
+    },
+    centerWorkspaceContent: {
+        paddingVertical: 40,
+        paddingHorizontal: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100%'
+    },
+    canvasWrapper: {
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    pageSheet: {
+        width: 600,
+        height: 840,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 4,
+        overflow: 'hidden',
+        position: 'relative',
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.6,
+        shadowRadius: 25,
+        elevation: 10
+    },
+    pageBackground: {
+        width: '100%',
+        height: '100%'
+    },
+    // Floating Bottom Pill
+    floatingBottomPill: {
+        position: 'absolute',
+        bottom: 24,
+        alignSelf: 'center',
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(15, 23, 42, 0.92)',
+        borderRadius: 24,
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        gap: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.12)',
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.5,
-        shadowRadius: 3,
-        elevation: 3,
+        shadowRadius: 16,
+        elevation: 8,
+        zIndex: 60
     },
-    checkboxRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 16,
+    floatingNavBtn: {
+        padding: 4
     },
-    checkboxLabel: {
+    floatingPageText: {
         fontSize: 12,
-        marginLeft: 8,
+        fontWeight: '600',
+        color: '#F8FAFC'
     },
-    hintText: {
-        fontSize: 12,
-        lineHeight: 18,
+    floatingZoomText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#CBD5E1',
+        minWidth: 36,
+        textAlign: 'center'
     },
-    outlineActionBtn: {
+    floatingDivider: {
+        width: 1,
+        height: 14,
+        backgroundColor: 'rgba(255, 255, 255, 0.15)'
+    },
+    // Right Inspector Panel
+    rightInspectorPanel: {
+        width: 310,
+        borderLeftWidth: 1,
+        display: 'flex',
+        flexDirection: 'column'
+    },
+    inspectorHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 10,
-        borderRadius: 8,
-        borderWidth: 1,
-    },
-    actionPrimaryBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 10,
-        borderRadius: 8,
-        borderWidth: 1,
-    },
-    ctaContainer: {
-        padding: 18,
-        borderTopWidth: 1,
-    },
-    ctaButton: {
-        borderRadius: 12,
+        paddingHorizontal: 16,
         paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+        gap: 8
+    },
+    inspectorTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#FFFFFF'
+    },
+    inspectorBody: {
+        flex: 1,
+        padding: 16
+    },
+    inspectorSection: {
+        gap: 14
+    },
+    sectionSubtitle: {
+        fontSize: 11,
+        color: '#94A3B8',
+        fontWeight: '500'
+    },
+    label: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#CBD5E1',
+        marginTop: 4
+    },
+    segmentRow: {
         flexDirection: 'row',
+        backgroundColor: '#0F131D',
+        borderRadius: 8,
+        padding: 3,
+        gap: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.06)'
+    },
+    segmentBtn: {
+        flex: 1,
+        paddingVertical: 7,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 6
+    },
+    segmentBtnActive: {
+        backgroundColor: 'rgba(0, 210, 255, 0.15)',
+        borderWidth: 1,
+        borderColor: 'rgba(0, 210, 255, 0.4)'
+    },
+    segmentBtnText: {
+        fontSize: 11,
+        fontWeight: '500',
+        color: '#94A3B8'
+    },
+    segmentBtnTextActive: {
+        color: '#00D2FF',
+        fontWeight: '700'
+    },
+    sizeStepperRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#0F131D',
+        borderRadius: 8,
+        padding: 4,
+        justifyContent: 'space-between',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.06)'
+    },
+    stepperBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 6,
+        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    stepperValue: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#FFFFFF'
+    },
+    styleButtonsRow: {
+        flexDirection: 'row',
+        gap: 8
+    },
+    formatBtn: {
+        flex: 1,
+        height: 36,
+        borderRadius: 6,
+        backgroundColor: '#0F131D',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#3b82f6',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)'
+    },
+    formatBtnActive: {
+        backgroundColor: 'rgba(0, 210, 255, 0.15)',
+        borderColor: '#00D2FF'
+    },
+    formatBtnText: {
+        fontSize: 13,
+        color: '#94A3B8'
+    },
+    formatBtnTextActive: {
+        color: '#00D2FF'
+    },
+    colorPalette: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8
+    },
+    colorSwatch: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.15)'
+    },
+    colorSwatchActive: {
+        borderColor: '#00D2FF',
+        transform: [{ scale: 1.15 }]
+    },
+    blockActionButtons: {
+        marginTop: 10,
+        gap: 8
+    },
+    deleteBlockBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 9,
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(239, 68, 68, 0.3)',
+        gap: 6
+    },
+    deleteBlockText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#EF4444'
+    },
+    resetBlockBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        borderRadius: 8,
+        gap: 6
+    },
+    resetBlockText: {
+        fontSize: 11,
+        color: '#94A3B8'
+    },
+    infoBox: {
+        flexDirection: 'row',
+        backgroundColor: 'rgba(0, 210, 255, 0.06)',
+        borderRadius: 8,
+        padding: 12,
+        gap: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 210, 255, 0.2)'
+    },
+    infoBoxText: {
+        flex: 1,
+        fontSize: 12,
+        color: '#CBD5E1',
+        lineHeight: 18
+    },
+    quickAddBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 11,
+        paddingHorizontal: 14,
+        backgroundColor: '#0F131D',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        gap: 8
+    },
+    quickAddText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#FFFFFF'
+    },
+    clearDrawingsBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 9,
+        backgroundColor: 'rgba(239, 68, 68, 0.08)',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(239, 68, 68, 0.25)',
+        gap: 6,
+        marginTop: 6
+    },
+    clearDrawingsText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#EF4444'
+    },
+    inspectorFooter: {
+        padding: 16,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255, 255, 255, 0.06)'
+    },
+    saveBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#00D2FF',
+        borderRadius: 10,
+        paddingVertical: 13,
+        gap: 8,
+        shadowColor: '#00D2FF',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.4,
         shadowRadius: 10,
-        elevation: 5,
+        elevation: 5
     },
-    ctaButtonPressed: {
-        opacity: 0.9,
-        transform: [{ scale: 0.98 }],
-    },
-    ctaButtonText: {
-        color: '#ffffff',
-        fontSize: 15,
+    saveBtnText: {
+        fontSize: 13,
         fontWeight: '700',
+        color: '#0B0C10'
     },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20
+    },
+    modalContent: {
+        width: '100%',
+        maxWidth: 500,
+        borderRadius: 16,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)'
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 16
+    },
+    modalTitle: {
+        fontSize: 16,
+        fontWeight: 'bold'
+    }
 });

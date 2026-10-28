@@ -40,9 +40,173 @@ export const loadPdfJs = (): Promise<any> => {
     return pdfJsLoadingPromise;
 };
 
+export interface PdfTextBlock {
+    id: string;
+    pageIndex: number;
+    originalText: string;
+    currentText: string;
+    x: number;          // % from left (0 - 100)
+    y: number;          // % from top (0 - 100)
+    width: number;      // % of page width
+    height: number;     // % of page height
+    fontSize: number;   // in pt
+    fontFamily: 'Helvetica' | 'TimesRoman' | 'Courier';
+    fontWeight: 'normal' | 'bold';
+    fontStyle: 'normal' | 'italic';
+    color: string;      // hex e.g. '#000000'
+    textAlign: 'left' | 'center' | 'right';
+    isUnderline?: boolean;
+    isEdited?: boolean;
+    isDeleted?: boolean;
+}
+
+export function extractBlocksFromTextContent(
+    textContent: any,
+    viewport: any,
+    pageIndex: number
+): PdfTextBlock[] {
+    if (!textContent || !textContent.items || textContent.items.length === 0) {
+        return [];
+    }
+
+    interface RawItem {
+        str: string;
+        x: number;
+        y: number;
+        baselineY: number;
+        width: number;
+        height: number;
+        fontSize: number;
+        fontName: string;
+    }
+
+    const rawItems: RawItem[] = [];
+
+    for (const item of textContent.items) {
+        if (!('str' in item) || !item.str) continue;
+        if (!item.transform || item.transform.length < 6) continue;
+
+        const scaleX = item.transform[0];
+        const skewY = item.transform[1];
+        const fontSize = Math.sqrt(scaleX * scaleX + skewY * skewY) || 12;
+
+        const tx = item.transform[4];
+        const ty = item.transform[5];
+
+        const itemX = tx;
+        const baselineY = viewport.height - ty;
+        const itemY = baselineY - (fontSize * 0.85);
+        const itemWidth = item.width || (fontSize * item.str.length * 0.5);
+        const itemHeight = fontSize * 1.2;
+
+        rawItems.push({
+            str: item.str,
+            x: itemX,
+            y: itemY,
+            baselineY,
+            width: itemWidth,
+            height: itemHeight,
+            fontSize,
+            fontName: item.fontName || 'Helvetica',
+        });
+    }
+
+    if (rawItems.length === 0) return [];
+
+    rawItems.sort((a, b) => {
+        const yDiff = a.baselineY - b.baselineY;
+        if (Math.abs(yDiff) < Math.min(a.fontSize, b.fontSize) * 0.45) {
+            return a.x - b.x;
+        }
+        return yDiff;
+    });
+
+    interface ClusteredLine {
+        text: string;
+        x: number;
+        y: number;
+        baselineY: number;
+        width: number;
+        height: number;
+        fontSize: number;
+        fontName: string;
+    }
+
+    const lines: ClusteredLine[] = [];
+
+    for (const it of rawItems) {
+        if (!it.str.trim()) continue;
+
+        const lastLine = lines[lines.length - 1];
+        const isSameLine = lastLine &&
+            Math.abs(it.baselineY - lastLine.baselineY) < Math.min(it.fontSize, lastLine.fontSize) * 0.45 &&
+            (it.x - (lastLine.x + lastLine.width)) < it.fontSize * 1.8 &&
+            it.x >= (lastLine.x - 2);
+
+        if (isSameLine) {
+            const needsSpace = !lastLine.text.endsWith(' ') && !it.str.startsWith(' ');
+            lastLine.text += (needsSpace ? ' ' : '') + it.str;
+            lastLine.width = (it.x + it.width) - lastLine.x;
+            lastLine.height = Math.max(lastLine.height, it.height);
+            lastLine.y = Math.min(lastLine.y, it.y);
+            lastLine.fontSize = Math.max(lastLine.fontSize, it.fontSize);
+        } else {
+            lines.push({
+                text: it.str,
+                x: it.x,
+                y: it.y,
+                baselineY: it.baselineY,
+                width: it.width,
+                height: it.height,
+                fontSize: it.fontSize,
+                fontName: it.fontName,
+            });
+        }
+    }
+
+    return lines.map((line, idx) => {
+        const xPct = Math.max(0, Math.min(100, (line.x / viewport.width) * 100));
+        const yPct = Math.max(0, Math.min(100, (line.y / viewport.height) * 100));
+        const wPct = Math.max(2, Math.min(100 - xPct, (line.width / viewport.width) * 100));
+        const hPct = Math.max(1.5, Math.min(100 - yPct, (line.height / viewport.height) * 100));
+
+        const fn = (line.fontName || '').toLowerCase();
+        let fontFamily: 'Helvetica' | 'TimesRoman' | 'Courier' = 'Helvetica';
+        if (fn.includes('times') || fn.includes('roman') || fn.includes('serif')) {
+            fontFamily = 'TimesRoman';
+        } else if (fn.includes('courier') || fn.includes('mono')) {
+            fontFamily = 'Courier';
+        }
+
+        const isBold = fn.includes('bold') || fn.includes('black') || fn.includes('heavy');
+        const isItalic = fn.includes('italic') || fn.includes('oblique');
+
+        return {
+            id: `text-block-p${pageIndex}-${idx}`,
+            pageIndex,
+            originalText: line.text,
+            currentText: line.text,
+            x: xPct,
+            y: yPct,
+            width: wPct,
+            height: hPct,
+            fontSize: Math.round(line.fontSize * 10) / 10,
+            fontFamily,
+            fontWeight: isBold ? 'bold' : 'normal',
+            fontStyle: isItalic ? 'italic' : 'normal',
+            color: '#000000',
+            textAlign: 'left',
+            isUnderline: false,
+            isEdited: false,
+            isDeleted: false,
+        };
+    });
+}
+
 export function usePdfEngine({ setStep, setResultUrl }: { setStep: (step: string) => void, setResultUrl: (url: string) => void }) {
     const [pdfOriginalBuffer, setPdfOriginalBuffer] = useState<ArrayBuffer | null>(null);
     const [pdfEditorPages, setPdfEditorPages] = useState<string[]>([]);
+    const [pdfTextBlocks, setPdfTextBlocks] = useState<PdfTextBlock[]>([]);
     const [organizePages, setOrganizePages] = useState<OrganizePageItem[]>([]);
     const [organizeFiles, setOrganizeFiles] = useState<any[]>([]);
     const [pdfDocRef, setPdfDocRef] = useState<any>(null);
@@ -62,6 +226,7 @@ export function usePdfEngine({ setStep, setResultUrl }: { setStep: (step: string
             setPdfOriginalBuffer(arrayBuffer);
 
             let pages: string[] = [];
+            const extractedBlocks: PdfTextBlock[] = [];
 
             if (Platform.OS === 'web') {
                 try {
@@ -82,7 +247,15 @@ export function usePdfEngine({ setStep, setResultUrl }: { setStep: (step: string
                             await page.render({ canvasContext: ctx, viewport }).promise;
                             pages.push(canvas.toDataURL('image/jpeg', 0.8));
                         }
+                        try {
+                            const textContent = await page.getTextContent();
+                            const blocks = extractBlocksFromTextContent(textContent, viewport, j - 1);
+                            extractedBlocks.push(...blocks);
+                        } catch (err) {
+                            console.warn(`Failed to extract text content on page ${j}`, err);
+                        }
                     }
+                    setPdfTextBlocks(extractedBlocks);
                 } catch (e) {
                     console.warn("Local PDF rendering failed, falling back to backend", e);
                 }
@@ -152,6 +325,10 @@ export function usePdfEngine({ setStep, setResultUrl }: { setStep: (step: string
             const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
             const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
             const fontBoldItalic = await pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique);
+            const fontTimes = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+            const fontTimesBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+            const fontCourier = await pdfDoc.embedFont(StandardFonts.Courier);
+            const fontCourierBold = await pdfDoc.embedFont(StandardFonts.CourierBold);
 
             for (const edit of edits) {
                 const page = pdfPages[edit.pageIndex];
@@ -159,6 +336,72 @@ export function usePdfEngine({ setStep, setResultUrl }: { setStep: (step: string
 
                 const { width, height } = page.getSize();
                 
+                if (edit.type === 'replace' || (edit as any).isReplace) {
+                    const x = (edit.x / 100) * width;
+                    const rectWidth = ((edit.width || 10) / 100) * width;
+                    const rectHeight = ((edit.height || 4) / 100) * height;
+                    const rectY = height - ((edit.y / 100) * height) - rectHeight;
+
+                    // Opaque white erase of original text
+                    page.drawRectangle({
+                        x: Math.max(0, x - 1),
+                        y: Math.max(0, rectY - 1),
+                        width: rectWidth + 2,
+                        height: rectHeight + 2,
+                        color: rgb(1, 1, 1),
+                    });
+
+                    if (!(edit as any).isDeleted && edit.text && edit.text.trim().length > 0) {
+                        const fontSize = edit.size || 14;
+                        let fontToUse = fontNormal;
+                        if (edit.fontFamily === 'TimesRoman') {
+                            fontToUse = edit.fontWeight === 'bold' ? fontTimesBold : fontTimes;
+                        } else if (edit.fontFamily === 'Courier') {
+                            fontToUse = edit.fontWeight === 'bold' ? fontCourierBold : fontCourier;
+                        } else {
+                            fontToUse = edit.fontWeight === 'bold' ? fontBold : fontNormal;
+                        }
+
+                        let r = 0, g = 0, b = 0;
+                        if (edit.color && edit.color.startsWith('#')) {
+                            const hex = edit.color.replace('#', '');
+                            r = parseInt(hex.substring(0, 2), 16) / 255;
+                            g = parseInt(hex.substring(2, 4), 16) / 255;
+                            b = parseInt(hex.substring(4, 6), 16) / 255;
+                        }
+
+                        const lines = edit.text.split('\n');
+                        const lineHeight = fontSize * 1.15;
+                        lines.forEach((lineText, lineIdx) => {
+                            const lineY = rectY + rectHeight - ((lineIdx + 1) * lineHeight) + (lineHeight * 0.2);
+                            let xOffset = 0;
+                            if (edit.textAlign === 'center' || edit.textAlign === 'right') {
+                                const textW = fontToUse.widthOfTextAtSize(lineText, fontSize);
+                                if (edit.textAlign === 'center') xOffset = (rectWidth - textW) / 2;
+                                if (edit.textAlign === 'right') xOffset = rectWidth - textW;
+                            }
+
+                            page.drawText(lineText, {
+                                x: x + Math.max(0, xOffset),
+                                y: lineY,
+                                size: fontSize,
+                                font: fontToUse,
+                                color: rgb(r, g, b),
+                            });
+
+                            if ((edit as any).isUnderline) {
+                                const textW = fontToUse.widthOfTextAtSize(lineText, fontSize);
+                                page.drawLine({
+                                    start: { x: x + Math.max(0, xOffset), y: lineY - 2 },
+                                    end: { x: x + Math.max(0, xOffset) + textW, y: lineY - 2 },
+                                    thickness: 1,
+                                    color: rgb(r, g, b),
+                                });
+                            }
+                        });
+                    }
+                }
+
                 if (edit.type === 'text' && edit.text) {
                     const x = (edit.x / 100) * width;
                     const fontSize = edit.size || 24;
@@ -377,6 +620,8 @@ export function usePdfEngine({ setStep, setResultUrl }: { setStep: (step: string
         setPdfOriginalBuffer,
         pdfEditorPages,
         setPdfEditorPages,
+        pdfTextBlocks,
+        setPdfTextBlocks,
         organizePages,
         setOrganizePages,
         organizeFiles,

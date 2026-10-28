@@ -109,6 +109,7 @@ export default function ConvertScreen() {
     const {
         pdfOriginalBuffer, setPdfOriginalBuffer,
         pdfEditorPages, setPdfEditorPages,
+        pdfTextBlocks, setPdfTextBlocks,
         organizePages, setOrganizePages,
         organizeFiles, setOrganizeFiles,
         pdfDocRef, setPdfDocRef,
@@ -899,6 +900,8 @@ export default function ConvertScreen() {
         return (
             <PdfEditor 
                 pages={pdfEditorPages} 
+                pdfOriginalBuffer={pdfOriginalBuffer}
+                initialTextBlocks={pdfTextBlocks}
                 colors={colors}
                 onComplete={handlePdfEditorComplete}
                 onCancel={() => cancelTool(selectedService?.id === 'sign-pdf' ? 'sign_choice' : 'tool_intro')}

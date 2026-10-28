@@ -17453,3 +17453,37 @@ Date : Mercredi, 28 Octobre 2026 à 11h47 et 30 secondes
   - Prise en charge native du dessin libre vectoriel (`page.drawSvgPath` avec échelle et opacité pour le surlignage).
   - Prise en charge des formes géométriques vectorielles (`page.drawEllipse`, `page.drawRectangle`, `page.drawLine`).
   - Ajout du soulignement vectoriel direct sur les blocs de texte.
+
+
+================================================================================
+CHAPITRE 45 : ÉDITION DIRECTE DU TEXTE DU PDF (CLONAGE FONCTIONNEL ILOVEPDF & DESIGN FAST TRANSFER)
+================================================================================
+Date : Mercredi, 28 Octobre 2026 à 13h48 et 30 secondes
+
+### 1. Contexte & Demande Utilisateur
+- **Constat :** L'utilisateur a fourni des captures d'écran comparatives précises de l'éditeur iLovePDF (`ilovepdf.com/fr/modifier_pdf`). Il a souligné que dans iLovePDF, les lignes et paragraphes existants du PDF sont directement détectés et délimités par des boîtes bleues tiretées. En cliquant sur n'importe quel texte du PDF, l'utilisateur peut le modifier directement sur la page (changement de mots, correction de fautes, modification de police/taille/couleur ou suppression).
+- **Objectif :** Intégrer l'édition directe in-situ de tous les textes du PDF (détection, regroupement en blocs/lignes cohérentes, modification inline, masquage blanc opaque automatique de l'ancien texte et gravure native du nouveau texte avec `pdf-lib`), tout en conservant l'ergonomie studio d'iLovePDF (bascule Annoter / Modifier, pilule flottante basse de navigation et zoom) et la charte graphique sombre Fast Transfer (`#0B0C10`, lueur néon `backgroundGlow`, volets glassmorphism sombres et bouton CTA cyan électrique).
+
+### 2. Architecture & Réalisations Techniques
+- **1. Moteur d'Extraction Vectorielle & Regroupement de Lignes (`usePdfEngine.ts`) :**
+  - Ajout de l'interface `PdfTextBlock` et de la fonction algorithmique `extractBlocksFromTextContent` :
+    - Analyse des matrices de transformation affines (`scaleX`, `scaleY`, translation `tx`, `ty`) de chaque item de texte extrait via PDF.js.
+    - Regroupement des mots adjacents sur une même ligne de base (baseline) pour former des phrases cohérentes (titres, paragraphes, puces).
+    - Calcul des coordonnées et dimensions en pourcentages du feuillet, détection de la police, de la taille en points, du gras et de l'italique.
+  - Sauvegarde native dans le PDF avec `pdf-lib` :
+    - Pour chaque bloc modifié ou supprimé : application d'un rectangle de masquage blanc opaque (`page.drawRectangle`) aux coordonnées exactes du texte d'origine pour effacer proprement l'ancien tracé.
+    - Re-gravure du nouveau texte (`page.drawText`) avec la typographie choisie (StandardFonts : Helvetica, TimesRoman, Courier), la taille exacte, la couleur et le soulignement.
+
+- **2. Refonte du Studio `PdfEditor.tsx` :**
+  - **Bascule Maître en TopBar :** Pilule ergonomique `[ Modifier | Annoter ]` (mode Modifier par défaut avec sous-outils « Éditer le texte », « Ajouter texte » et « Masquer zone »).
+  - **Affichage dynamique des boîtes de texte sur le feuillet :**
+    - Tous les textes du PDF sont entourés d'un contour bleu-cyan tireté discret.
+    - Survol dynamique avec curseur textuel et mise en surbrillance.
+    - Clic direct sur un texte : le bloc s'active en bleu cyan continu avec halo lumineux, applique un fond blanc opaque recouvrant l'ancien tracé, et ouvre un champ de saisie direct `TextInput` en ligne avec autofocus.
+    - Mise à jour en temps réel de l'inspecteur latéral droit « Styles de texte » affichant la police, la taille exacte détectée (avec steppers `[-] [+]`), le formatage B / I / U, l'alignement, la palette de couleurs et les boutons d'action rapide (Supprimer ce texte, Rétablir l'original).
+  - **Pilule flottante basse (Bottom Toolbar) :**
+    - Navigation fluide inter-pages (`< Page 2 / 50 >`), stepper de zoom (`[-] 100% [+]`) et bouton d'ajustement.
+  - **Volet gauche des miniatures :**
+    - Liste verticale des pages avec indicateur de page courante et pastille bleue sur les pages modifiées.
+  - **Bouton CTA Fast Transfer :**
+    - Bouton cyan électrique éclatant « Enregistrer les modifications » au bas du volet droit.
