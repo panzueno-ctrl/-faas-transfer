@@ -48,6 +48,7 @@ import OcrLanguageSelector, { OcrLanguage } from '../features/convert/ui/OcrLang
 import PdfEditor, { PdfEditItem } from '../features/convert/ui/PdfEditor';
 import RotationEditor from '../features/convert/ui/RotationEditor';
 import CompressEditor from '../features/convert/ui/CompressEditor';
+import NumberPagesEditor from '../features/convert/ui/NumberPagesEditor';
 import { PDFDocument, rgb, StandardFonts, degrees } from 'pdf-lib/dist/pdf-lib.esm.js';
 import JSZip from 'jszip';
 import { usePdfEngine, loadPdfJs } from '../features/convert/hooks/usePdfEngine';
@@ -66,7 +67,7 @@ export default function ConvertScreen() {
     const styles = getStyles(colors);
 
     // Ajout de l'état "tool_intro"
-    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'sign_choice' | 'request_signature' | 'signature_request_done' | 'pdf_editor' | 'watermark_editor' | 'rotation_editor' | 'organize_editor' | 'merge_editor' | 'preparing_editor' | 'processing' | 'done'>('menu');
+    const [step, setStep] = useState<'menu' | 'tool_intro' | 'staging' | 'split_editor' | 'number_editor' | 'sign_choice' | 'request_signature' | 'signature_request_done' | 'pdf_editor' | 'watermark_editor' | 'rotation_editor' | 'organize_editor' | 'merge_editor' | 'preparing_editor' | 'processing' | 'done'>('menu');
     const [localError, setLocalError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'files' | 'media'>('files');
     const [selectedService, setSelectedService] = useState<any>(null);
@@ -120,7 +121,8 @@ export default function ConvertScreen() {
         handleRotationComplete,
         handleOrganizeComplete,
         handleMergeComplete,
-        handleSplitPDF
+        handleSplitPDF,
+        handleNumberPagesComplete
     } = useConvertActions({
         step,
         setStep: setStep as any,
@@ -259,6 +261,8 @@ export default function ConvertScreen() {
                 if (selectedService.id === 'split-pdf') {
                     initOrganizeEditor(res.assets, false, 'split_editor');
                     setSplitPoints([]);
+                } else if (selectedService.id === 'number-pdf') {
+                    initOrganizeEditor(res.assets, false, 'number_editor');
                 } else if (selectedService.id === 'sign-pdf') {
                     setStep('sign_choice');
                 } else if (selectedService.id === 'edit-pdf' || selectedService.id === 'annotate-pdf' || selectedService.id === 'censor-pdf') {
@@ -997,6 +1001,19 @@ export default function ConvertScreen() {
                 files={organizeFiles}
                 colors={colors}
                 onComplete={handleOrganizeComplete}
+                onCancel={() => cancelTool()}
+                onAddFiles={handleAddFilesToOrganize}
+            />
+        );
+    }
+
+    if (step === 'number_editor') {
+        return (
+            <NumberPagesEditor
+                pages={organizePages}
+                files={organizeFiles}
+                colors={colors}
+                onComplete={handleNumberPagesComplete}
                 onCancel={() => cancelTool()}
                 onAddFiles={handleAddFilesToOrganize}
             />

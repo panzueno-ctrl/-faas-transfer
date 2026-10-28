@@ -5,6 +5,7 @@ import JSZip from 'jszip';
 import * as FileSystem from 'expo-file-system';
 import { loadPdfJs } from './usePdfEngine';
 import { OrganizePageItem, OrganizeFileItem } from '../ui/OrganizeEditor';
+import { NumberPagesSettings } from '../ui/NumberPagesEditor';
 
 export interface WatermarkSettings {
     text: string;
@@ -711,12 +712,182 @@ export function useConvertActions({
         }, 100);
     };
 
+
+    const handleNumberPagesComplete = async (settings: NumberPagesSettings) => {
+        setStep('processing');
+        setTimeout(async () => {
+            try {
+                let buffer = (organizeFiles.length > 0 && organizeFiles[0]?.buffer) || pdfOriginalBuffer;
+                if (!buffer && selectedFiles.length > 0) {
+                    const originalFile = selectedFiles[0];
+                    if (Platform.OS === 'web' && originalFile.file) {
+                        buffer = await originalFile.file.arrayBuffer();
+                    } else if (originalFile.uri) {
+                        const response = await fetch(originalFile.uri);
+                        buffer = await response.arrayBuffer();
+                    }
+                }
+
+                if (!buffer) {
+                    throw new Error("Impossible de charger le fichier PDF.");
+                }
+
+                const pdfDoc = await PDFDocument.load(buffer);
+                const pdfPages = pdfDoc.getPages();
+                const totalPages = pdfPages.length;
+
+                // Select standard font based on settings
+                let fontName = StandardFonts.Helvetica;
+                if (settings.fontFamily === 'TimesRoman') {
+                    if (settings.isBold && settings.isItalic) fontName = StandardFonts.TimesRomanBoldItalic;
+                    else if (settings.isBold) fontName = StandardFonts.TimesRomanBold;
+                    else if (settings.isItalic) fontName = StandardFonts.TimesRomanItalic;
+                    else fontName = StandardFonts.TimesRoman;
+                } else if (settings.fontFamily === 'Courier') {
+                    if (settings.isBold && settings.isItalic) fontName = StandardFonts.CourierBoldOblique;
+                    else if (settings.isBold) fontName = StandardFonts.CourierBold;
+                    else if (settings.isItalic) fontName = StandardFonts.CourierOblique;
+                    else fontName = StandardFonts.Courier;
+                } else {
+                    if (settings.isBold && settings.isItalic) fontName = StandardFonts.HelveticaBoldOblique;
+                    else if (settings.isBold) fontName = StandardFonts.HelveticaBold;
+                    else if (settings.isItalic) fontName = StandardFonts.HelveticaOblique;
+                    else fontName = StandardFonts.Helvetica;
+                }
+
+                const font = await pdfDoc.embedFont(fontName);
+
+                // Margin in points
+                let marginPt = 30;
+                if (settings.margin === 'narrow') marginPt = 15;
+                if (settings.margin === 'wide') marginPt = 50;
+
+                // Color
+                let r = 0, g = 0, b = 0;
+                if (settings.color && settings.color.startsWith('#')) {
+                    const hex = settings.color.replace('#', '');
+                    r = parseInt(hex.substring(0, 2), 16) / 255;
+                    g = parseInt(hex.substring(2, 4), 16) / 255;
+                    b = parseInt(hex.substring(4, 6), 16) / 255;
+                }
+                const textColor = rgb(r, g, b);
+
+                const fontSize = settings.fontSize || 12;
+                let currentCounter = settings.firstNumber || 1;
+
+                pdfPages.forEach((page, index) => {
+                    const pageNum = index + 1; // 1-based
+
+                    // Check if page is within range
+                    if (pageNum < settings.fromPage || pageNum > settings.toPage) {
+                        return;
+                    }
+                    if (settings.skipCover && pageNum === 1) {
+                        return;
+                    }
+
+                    // Format text
+                    let text = '';
+                    if (settings.format === 'simple') {
+                        text = `${currentCounter}`;
+                    } else if (settings.format === 'page_n') {
+                        text = `Page ${currentCounter}`;
+                    } else if (settings.format === 'page_n_of_total') {
+                        text = `Page ${currentCounter} sur ${totalPages}`;
+                    } else if (settings.format === 'n_slash_total') {
+                        text = `${currentCounter} / ${totalPages}`;
+                    } else if (settings.format === 'custom') {
+                        text = (settings.customPattern || '{n}')
+                            .replace(/{n}/g, `${currentCounter}`)
+                            .replace(/{p}/g, `${totalPages}`);
+                    } else {
+                        text = `${currentCounter}`;
+                    }
+
+                    currentCounter++;
+
+                    const { width, height } = page.getSize();
+                    const textWidth = font.widthOfTextAtSize(text, fontSize);
+                    const textHeight = fontSize;
+
+                    // Calculate effective position for this page
+                    let pos = settings.position;
+                    if (settings.pageMode === 'facing' && pageNum % 2 === 0) {
+                        if (pos.endsWith('right')) {
+                            pos = pos.replace('right', 'left') as any;
+                        } else if (pos.endsWith('left')) {
+                            pos = pos.replace('left', 'right') as any;
+                        }
+                    }
+
+                    // Determine x coordinate
+                    let x = marginPt;
+                    if (pos.includes('center')) {
+                        x = (width - textWidth) / 2;
+                    } else if (pos.includes('right')) {
+                        x = width - marginPt - textWidth;
+                    } else {
+                        x = marginPt;
+                    }
+
+                    // Determine y coordinate (0,0 is bottom-left in PDF)
+                    let y = marginPt;
+                    if (pos.startsWith('top')) {
+                        y = height - marginPt - textHeight;
+                    } else if (pos.startsWith('middle')) {
+                        y = (height - textHeight) / 2;
+                    } else {
+                        y = marginPt;
+                    }
+
+                    // Draw text
+                    page.drawText(text, {
+                        x,
+                        y,
+                        size: fontSize,
+                        font,
+                        color: textColor,
+                    });
+
+                    // Underline if requested
+                    if (settings.isUnderline) {
+                        page.drawLine({
+                            start: { x, y: y - 2 },
+                            end: { x: x + textWidth, y: y - 2 },
+                            thickness: 1,
+                            color: textColor,
+                        });
+                    }
+                });
+
+                const modifiedPdfBytes = await pdfDoc.save();
+                if (Platform.OS === 'web') {
+                    const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
+                    const url = URL.createObjectURL(blob);
+                    setResultUrl(url);
+                } else {
+                    const fileUri = FileSystem.cacheDirectory + 'document_numerote.pdf';
+                    const base64 = Buffer.from(modifiedPdfBytes).toString('base64');
+                    await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+                    setResultUrl(fileUri);
+                }
+                setFileName('document_numerote');
+                setStep('done');
+            } catch (e: any) {
+                console.error("Error applying page numbers:", e);
+                Alert.alert("Erreur", "Échec de l'ajout des numéros de page: " + (e.message || String(e)));
+                setStep('number_editor');
+            }
+        }, 100);
+    };
+
     return {
         initOrganizeEditor,
         handleWatermarkComplete,
         handleRotationComplete,
         handleOrganizeComplete,
         handleMergeComplete,
-        handleSplitPDF
+        handleSplitPDF,
+        handleNumberPagesComplete
     };
 }

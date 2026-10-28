@@ -17361,3 +17361,44 @@ Date : Mardi, 27 Octobre 2026 à 17h42 et 30 secondes
   - mobile/src/app/send.tsx : Envoyer des Gros Fichiers Gratuitement | Fast Transfer
   - mobile/src/app/receive.tsx : Recevoir et Télécharger des Fichiers | Fast Transfer
 - Résultat : React Helmet injecte désormais directement le titre officiel dans data-rh="true" sans laisser aucune balise vide.
+
+================================================================================
+CHAPITRE 42 : REFONTE TOTALE DU MODULE NUMÉROTER LES PAGES (STUDIO STYLE ILOVEPDF & SMALLPDF)
+================================================================================
+Date : Mercredi, 28 Octobre 2026 à 10h50 et 00 secondes
+
+### 1. Contexte & Demande Utilisateur
+- **Constat :** L'utilisateur a validé le bon fonctionnement global des outils mais s'est arrêté sur l'outil « Numéroter les pages » (number-pdf). Il a constaté avec insatisfaction que l'outil s'ouvrait dans l'ancienne vue d'attente (staging modal) avec un simple cercle sombre et deux sélecteurs textuels réduits, ne reflétant pas l'exigence d'un produit SaaS moderne.
+- **Référence imposée :** Recréer fidèlement l'ergonomie, la disposition et le style de SmallPDF et iLovePDF (page officielle https://www.ilovepdf.com/fr/ajouter_numeros_de_page), avec affichage dynamique des vignettes PDF et du repère rouge interactif.
+
+### 2. Architecture & Composants Développés
+- **1. Création du Studio Plein Écran NumberPagesEditor.tsx :**
+  - Fichier : `mobile/src/features/convert/ui/NumberPagesEditor.tsx`
+  - **Espace de travail interactif (gauche) :**
+    - Grille responsive de vignettes de pages générées en temps réel via PDF.js.
+    - Intégration du **point rouge signature d'iLovePDF** sur chaque carte de page, se déplaçant instantanément en fonction de la position et de la marge sélectionnées.
+    - Prise en charge visuelle du mode miroir (Pages opposées) : sur les pages paires, le point rouge s'inverse automatiquement (ex. droite vers gauche).
+    - Indicateur visuel d'exclusion ("Non numérotée") pour les pages hors de la plage sélectionnée ou lorsque la couverture est sautée.
+    - Modal de zoom / loupe haute résolution au clic sur une vignette.
+  - **Volet d'options professionnel (droite) :**
+    - *Mode de la page :* Sélecteur radio entre "Une seule page" et "Pages opposées".
+    - *Position :* Matrice interactive 3x3 (9 cellules interactives avec mise en surbrillance et pastille rouge active).
+    - *Marge :* Sélecteur segmenté "Recommandé" (30 pt), "Étroit" (15 pt), "Large" (50 pt).
+    - *Pages :* Stepper du premier numéro de départ, sélection de la plage de pages ("de la page [ 1 ] à [ N ]"), case à cocher "Ne pas numéroter la première page (couverture)".
+    - *Format de texte :* Préréglages {n}, Page {n}, {n} / {p}, Page {n} sur {p}, ou format entièrement personnalisé avec placeholders.
+    - *Format de texte & typographie :* Sélection de la police (Arial/Helvetica, Times New Roman, Courier), taille (stepper pt), boutons de style Gras (B), Italique (I), Souligné (U), et nuancier de couleurs.
+    - *Bouton d'action CTA :* Grand bouton rouge iLovePDF "Ajouter des numéros de pages" avec icône de confirmation.
+
+- **2. Moteur Vectoriel Client (useConvertActions.ts) :**
+  - Fichier : `mobile/src/features/convert/hooks/useConvertActions.ts`
+  - Méthode `handleNumberPagesComplete(settings: NumberPagesSettings)` :
+    - Injection vectorielle directe via `pdf-lib` sans aucune compression destructrice de l'original.
+    - Calcul précis des coordonnées (x, y) en tenant compte de la largeur du texte calculée (`font.widthOfTextAtSize`), des marges dynamiques et de la parité de chaque page (mode miroir).
+    - Dessin vectoriel du texte et du trait de soulignement si activé.
+    - Traitement instantané côté client avec zéro latence serveur et génération du lien de téléchargement direct.
+
+- **3. Câblage dans le Routeur applicatif (convert.tsx) :**
+  - Fichier : `mobile/src/app/convert.tsx`
+  - Routage immédiat de `selectedService.id === 'number-pdf'` vers `initOrganizeEditor(res.assets, false, 'number_editor')`.
+  - Élimination totale de l'ancien affichage staging pour la numérotation.
+  - Ajout du type d'état `'number_editor'` dans le state machine de conversion.
