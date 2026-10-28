@@ -17637,3 +17637,33 @@ Date : Mercredi, 28 Octobre 2026 à 17h30 et 00 secondes
 - **3. Persistance du Rendu Après Modification :**
   - Si l'utilisateur a modifié le texte (`isEdited === true`), le bloc conserve son fond blanc couvrant et affiche le nouveau texte vectoriel.
   - Si l'utilisateur clique en dehors sans avoir rien modifié, le bloc repasse instantanément en transparence sans altérer le document.
+
+================================================================================
+Date : Mercredi, 28 Octobre 2026 à 18h05 et 00 secondes
+
+### 1. Contexte & Demande Utilisateur
+- **Constats & Besoins de Fluidité :**
+  1. **Défilement continu des pages (Word / Acrobat) :** Les pages étaient présentées une par une de manière statique, obligeant l'utilisateur à cliquer sur les vignettes latérales pour changer de page. L'utilisateur a demandé un défilement vertical continu fluide à la molette de la souris / au trackpad comme sur Word ou Adobe Acrobat.
+  2. **Désélection et masquage des cadres au clic sur zone blanche :** Lorsqu'un élément ou un texte est en cours d'édition (cadre bleu et poignées de redimensionnement), le clic sur n'importe quel espace vide (marge blanche de la page ou fond sombre de l'espace de travail) doit immédiatement masquer le cadre pour admirer la page sans encombrement visuel. Un nouveau clic sur le texte doit réafficher les bordures.
+  3. **Changement d'outil dans la barre supérieure sans résidu visuel :** Lors du passage d'un outil à un autre (ex. de texte à Formes ou Crayon), l'élément précédemment sélectionné conservait parfois son cadre et son halo lumineux. L'utilisateur a demandé une séparation nette et un nettoyage automatique de la sélection au changement d'outil.
+
+### 2. Architecture & Réalisations Techniques
+- **1. Défilement Continu Multi-Pages (PdfEditor.tsx) :**
+  - Remplacement du conteneur mono-page par un flux continu vertical de toutes les pages (`pages.map`).
+  - Chaque feuille est surmontée d'un badge discret flottant (`Page X sur N`) avec espacement optimisé de 36px.
+  - Détection automatique de la page active via l'écouteur `onScroll` du `ScrollView` (`workspaceScrollRef`), synchronisant en temps réel :
+    - Le surlignage de la vignette dans le panneau de navigation gauche.
+    - Le compteur de pagination inférieur (`< Page X / N >`).
+    - L'indicateur du titre dans la barre supérieure.
+  - Défilement animé fluide (`scrollToPage`) lors d'un clic sur une vignette latérale ou sur les flèches de navigation.
+
+- **2. Désélection Tactile & Masquage Immédiat des Cadres (PdfEditor.tsx) :**
+  - Ajout d'intercepteurs de clic (`onPress`) sur le fond global du canvas et sur les marges blanches de chaque page :
+    - Clic sur zone vide => `setSelectedBlockId(null)` et `setSelectedEditId(null)`.
+    - Les cadres, bordures en pointillés et 8 poignées s'effacent instantanément pour offrir une prévisualisation fidèle et épurée.
+    - Clic sur le texte => réactivation immédiate du bloc en mode édition avec ses 8 poignées.
+
+- **3. Commutateur d'Outils Unifié (`selectStudioTool`) :**
+  - Centralisation de la sélection d'outils de la barre d'en-tête (`activeStudioTool`).
+  - Réinitialisation systématique de la sélection active (`setSelectedBlockId(null)`, `setSelectedEditId(null)`) dès qu'un nouvel outil est choisi (`Formes`, `Crayon`, `Surligneur`, `+ Image`, etc.).
+  - Élimination garantie de tout effet de halo résiduel ("brillance") sur d'anciens éléments.

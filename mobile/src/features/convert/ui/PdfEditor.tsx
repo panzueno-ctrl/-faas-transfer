@@ -112,6 +112,55 @@ export default function PdfEditor({
     const [shapeType, setShapeType] = useState<'rectangle' | 'circle' | 'line'>('rectangle');
     const [isSaving, setIsSaving] = useState(false);
     const imageInputRef = useRef<any>(null);
+    const workspaceScrollRef = useRef<ScrollView>(null);
+    const [activeStudioTool, setActiveStudioTool] = useState<string>('text_edit');
+
+        const scrollToPage = (idx: number) => {
+        const clamped = Math.max(0, Math.min(pages.length - 1, idx));
+        setCurrentPage(clamped);
+        setSelectedBlockId(null);
+        setSelectedEditId(null);
+        if (workspaceScrollRef.current) {
+            const pageUnitHeight = (sheetDimensions.height * zoom) + 44;
+            workspaceScrollRef.current.scrollTo({
+                y: clamped * pageUnitHeight,
+                animated: true
+            });
+        }
+    };
+
+    const selectStudioTool = (tool: string) => {
+        // Clear any active selection immediately so nothing shines or stays stuck
+        setSelectedBlockId(null);
+        setSelectedEditId(null);
+        setActiveStudioTool(tool);
+
+        if (tool === 'text_edit') {
+            setMasterMode('modify');
+            setActiveModifyTool('text_edit');
+        } else if (tool === 'add_text') {
+            setMasterMode('modify');
+            handleAddNewText();
+        } else if (tool === 'image') {
+            handleTriggerImageUpload();
+        } else if (tool === 'shape') {
+            setMasterMode('annotate');
+            setActiveAnnotateTool('shape');
+            handleAddShape(shapeType);
+        } else if (tool === 'draw') {
+            setMasterMode('annotate');
+            setActiveAnnotateTool('draw');
+            setIsHighlighter(false);
+        } else if (tool === 'highlighter') {
+            setMasterMode('annotate');
+            setActiveAnnotateTool('highlighter');
+            setIsHighlighter(true);
+        } else if (tool === 'signature') {
+            setSignatureModalOpen(true);
+        } else if (tool === 'whiteout') {
+            handleAddWhiteout();
+        }
+    };
 
     const handleTriggerImageUpload = () => {
         if (Platform.OS === 'web' && imageInputRef.current) {
@@ -570,23 +619,19 @@ export default function PdfEditor({
                         <Pressable
                             style={[
                                 styles.subToolBtn,
-                                masterMode === 'modify' && activeModifyTool === 'text_edit' && styles.subToolBtnActive
+                                activeStudioTool === 'text_edit' && styles.subToolBtnActive
                             ]}
-                            onPress={() => {
-                                setMasterMode('modify');
-                                setActiveModifyTool('text_edit');
-                                setSelectedEditId(null);
-                            }}
+                            onPress={() => selectStudioTool('text_edit')}
                         >
                             <Ionicons
                                 name="create"
                                 size={15}
-                                color={masterMode === 'modify' && activeModifyTool === 'text_edit' ? '#00D2FF' : '#94A3B8'}
+                                color={activeStudioTool === 'text_edit' ? '#00D2FF' : '#94A3B8'}
                             />
                             <Text
                                 style={[
                                     styles.subToolText,
-                                    masterMode === 'modify' && activeModifyTool === 'text_edit' && styles.subToolTextActive
+                                    activeStudioTool === 'text_edit' && styles.subToolTextActive
                                 ]}
                             >
                                 Éditer texte
@@ -595,42 +640,67 @@ export default function PdfEditor({
 
                         {/* 2. Ajouter texte libre */}
                         <Pressable
-                            style={styles.subToolBtn}
-                            onPress={handleAddNewText}
+                            style={[
+                                styles.subToolBtn,
+                                activeStudioTool === 'add_text' && styles.subToolBtnActive
+                            ]}
+                            onPress={() => selectStudioTool('add_text')}
                         >
-                            <Ionicons name="add-circle-outline" size={15} color="#94A3B8" />
-                            <Text style={styles.subToolText}>+ Texte</Text>
+                            <Ionicons
+                                name="add-circle-outline"
+                                size={15}
+                                color={activeStudioTool === 'add_text' ? '#00D2FF' : '#94A3B8'}
+                            />
+                            <Text
+                                style={[
+                                    styles.subToolText,
+                                    activeStudioTool === 'add_text' && styles.subToolTextActive
+                                ]}
+                            >
+                                + Texte
+                            </Text>
                         </Pressable>
 
                         {/* 3. Ajouter image */}
                         <Pressable
-                            style={styles.subToolBtn}
-                            onPress={handleTriggerImageUpload}
+                            style={[
+                                styles.subToolBtn,
+                                activeStudioTool === 'image' && styles.subToolBtnActive
+                            ]}
+                            onPress={() => selectStudioTool('image')}
                         >
-                            <Ionicons name="image-outline" size={15} color="#94A3B8" />
-                            <Text style={styles.subToolText}>+ Image</Text>
+                            <Ionicons
+                                name="image-outline"
+                                size={15}
+                                color={activeStudioTool === 'image' ? '#00D2FF' : '#94A3B8'}
+                            />
+                            <Text
+                                style={[
+                                    styles.subToolText,
+                                    activeStudioTool === 'image' && styles.subToolTextActive
+                                ]}
+                            >
+                                + Image
+                            </Text>
                         </Pressable>
 
                         {/* 4. Formes (Rectangle, Cercle, Flèche, Ligne) */}
                         <Pressable
                             style={[
                                 styles.subToolBtn,
-                                activeAnnotateTool === 'shape' && styles.subToolBtnActive
+                                activeStudioTool === 'shape' && styles.subToolBtnActive
                             ]}
-                            onPress={() => {
-                                setActiveAnnotateTool('shape');
-                                handleAddShape(shapeType);
-                            }}
+                            onPress={() => selectStudioTool('shape')}
                         >
                             <Ionicons
                                 name="shapes-outline"
                                 size={15}
-                                color={activeAnnotateTool === 'shape' ? '#00D2FF' : '#94A3B8'}
+                                color={activeStudioTool === 'shape' ? '#00D2FF' : '#94A3B8'}
                             />
                             <Text
                                 style={[
                                     styles.subToolText,
-                                    activeAnnotateTool === 'shape' && styles.subToolTextActive
+                                    activeStudioTool === 'shape' && styles.subToolTextActive
                                 ]}
                             >
                                 Formes
@@ -641,24 +711,19 @@ export default function PdfEditor({
                         <Pressable
                             style={[
                                 styles.subToolBtn,
-                                masterMode === 'annotate' && activeAnnotateTool === 'draw' && !isHighlighter && styles.subToolBtnActive
+                                activeStudioTool === 'draw' && styles.subToolBtnActive
                             ]}
-                            onPress={() => {
-                                setMasterMode('annotate');
-                                setActiveAnnotateTool('draw');
-                                setIsHighlighter(false);
-                                setSelectedBlockId(null);
-                            }}
+                            onPress={() => selectStudioTool('draw')}
                         >
                             <Ionicons
                                 name="pencil"
                                 size={15}
-                                color={masterMode === 'annotate' && activeAnnotateTool === 'draw' && !isHighlighter ? '#00D2FF' : '#94A3B8'}
+                                color={activeStudioTool === 'draw' ? '#00D2FF' : '#94A3B8'}
                             />
                             <Text
                                 style={[
                                     styles.subToolText,
-                                    masterMode === 'annotate' && activeAnnotateTool === 'draw' && !isHighlighter && styles.subToolTextActive
+                                    activeStudioTool === 'draw' && styles.subToolTextActive
                                 ]}
                             >
                                 Crayon
@@ -669,24 +734,19 @@ export default function PdfEditor({
                         <Pressable
                             style={[
                                 styles.subToolBtn,
-                                masterMode === 'annotate' && activeAnnotateTool === 'highlighter' && styles.subToolBtnActive
+                                activeStudioTool === 'highlighter' && styles.subToolBtnActive
                             ]}
-                            onPress={() => {
-                                setMasterMode('annotate');
-                                setActiveAnnotateTool('highlighter');
-                                setIsHighlighter(true);
-                                setSelectedBlockId(null);
-                            }}
+                            onPress={() => selectStudioTool('highlighter')}
                         >
                             <Ionicons
                                 name="color-wand-outline"
                                 size={15}
-                                color={masterMode === 'annotate' && activeAnnotateTool === 'highlighter' ? '#00D2FF' : '#94A3B8'}
+                                color={activeStudioTool === 'highlighter' ? '#00D2FF' : '#94A3B8'}
                             />
                             <Text
                                 style={[
                                     styles.subToolText,
-                                    masterMode === 'annotate' && activeAnnotateTool === 'highlighter' && styles.subToolTextActive
+                                    activeStudioTool === 'highlighter' && styles.subToolTextActive
                                 ]}
                             >
                                 Surligneur
@@ -695,20 +755,48 @@ export default function PdfEditor({
 
                         {/* 7. Signer */}
                         <Pressable
-                            style={styles.subToolBtn}
-                            onPress={() => setSignatureModalOpen(true)}
+                            style={[
+                                styles.subToolBtn,
+                                activeStudioTool === 'signature' && styles.subToolBtnActive
+                            ]}
+                            onPress={() => selectStudioTool('signature')}
                         >
-                            <Ionicons name="finger-print-outline" size={15} color="#94A3B8" />
-                            <Text style={styles.subToolText}>Signer</Text>
+                            <Ionicons
+                                name="finger-print-outline"
+                                size={15}
+                                color={activeStudioTool === 'signature' ? '#00D2FF' : '#94A3B8'}
+                            />
+                            <Text
+                                style={[
+                                    styles.subToolText,
+                                    activeStudioTool === 'signature' && styles.subToolTextActive
+                                ]}
+                            >
+                                Signer
+                            </Text>
                         </Pressable>
 
                         {/* 8. Gomme / Masquer zone */}
                         <Pressable
-                            style={styles.subToolBtn}
-                            onPress={handleAddWhiteout}
+                            style={[
+                                styles.subToolBtn,
+                                activeStudioTool === 'whiteout' && styles.subToolBtnActive
+                            ]}
+                            onPress={() => selectStudioTool('whiteout')}
                         >
-                            <Ionicons name="square-outline" size={15} color="#94A3B8" />
-                            <Text style={styles.subToolText}>Gomme / Masquer</Text>
+                            <Ionicons
+                                name="square-outline"
+                                size={15}
+                                color={activeStudioTool === 'whiteout' ? '#00D2FF' : '#94A3B8'}
+                            />
+                            <Text
+                                style={[
+                                    styles.subToolText,
+                                    activeStudioTool === 'whiteout' && styles.subToolTextActive
+                                ]}
+                            >
+                                Gomme / Masquer
+                            </Text>
                         </Pressable>
                     </ScrollView>
                 </View>
@@ -791,11 +879,7 @@ export default function PdfEditor({
                                         styles.thumbCard,
                                         isCurrent && styles.thumbCardActive
                                     ]}
-                                    onPress={() => {
-                                        setCurrentPage(idx);
-                                        setSelectedBlockId(null);
-                                        setSelectedEditId(null);
-                                    }}
+                                    onPress={() => scrollToPage(idx)}
                                 >
                                     <View style={styles.thumbBadge}>
                                         <Text style={styles.thumbBadgeText}>{idx + 1}</Text>
@@ -814,10 +898,23 @@ export default function PdfEditor({
 
                 {/* 2B. CENTER WORKSPACE: REALISTIC PDF PAGE CANVAS */}
                 <ScrollView
+                    ref={workspaceScrollRef}
                     style={styles.centerWorkspace}
                     contentContainerStyle={styles.centerWorkspaceContent}
                     maximumZoomScale={2.5}
                     minimumZoomScale={0.5}
+                    onScroll={e => {
+                        const yOffset = e.nativeEvent.contentOffset.y;
+                        const pageUnitHeight = (sheetDimensions.height * zoom) + 48;
+                        const visiblePage = Math.min(
+                            pages.length - 1,
+                            Math.max(0, Math.round(yOffset / pageUnitHeight))
+                        );
+                        if (visiblePage !== currentPage) {
+                            setCurrentPage(visiblePage);
+                        }
+                    }}
+                    scrollEventThrottle={32}
                 >
                     <View
                         style={[
@@ -827,329 +924,327 @@ export default function PdfEditor({
                             }
                         ]}
                     >
-                        {/* Realistic White Sheet Document with drop shadow */}
                         <Pressable
-                            onLayout={e => {
-                                const { width, height } = e.nativeEvent.layout;
-                                if (width > 0 && height > 0) {
-                                    setCanvasDimensions({ width, height });
-                                }
-                            }}
                             onPress={() => {
-                                // Smooth click outside: deselect active text block or edit item without blocking
-                                if (selectedBlockId !== null) setSelectedBlockId(null);
-                                if (selectedEditId !== null) setSelectedEditId(null);
+                                // Global click on canvas background / margins: deselect active frames
+                                setSelectedBlockId(null);
+                                setSelectedEditId(null);
                             }}
-                            style={[
-                                styles.pageSheet,
-                                {
-                                    width: sheetDimensions.width,
-                                    height: sheetDimensions.height
-                                }
-                            ]}
-                            {...(Platform.OS === 'web' && masterMode === 'annotate'
-                                ? {
-                                      onPointerDown: handlePointerDown,
-                                      onPointerMove: handlePointerMove,
-                                      onPointerUp: handlePointerUp
-                                  }
-                                : {})}
+                            style={{ width: '100%', alignItems: 'center' }}
                         >
-                            {/* Base rendered PDF page image */}
-                            {pages[currentPage] && (
-                                <Image
-                                    source={{ uri: pages[currentPage] }}
-                                    style={styles.pageBackground}
-                                    resizeMode="cover"
-                                />
-                            )}
-
-                            {/* IN 'MODIFIER' MODE: TRUE ILOVEPDF INTERACTIVE IN-PLACE TEXT BLOCKS */}
-                            {masterMode === 'modify' &&
-                                currentPageBlocks.map(block => {
-                                    const isSelected = selectedBlockId === block.id;
-                                    const scale = (block.pageWidth && sheetDimensions.width > 0)
-                                        ? (sheetDimensions.width / block.pageWidth)
-                                        : (sheetDimensions.width / 620);
-                                    const effectiveFontSize = Math.max(9, Math.round(block.fontSize * scale));
-                                    const lineCount = Math.max(1, (block.currentText || '').split('\n').length);
-
-                                    // Deleted block: whiteout patch
-                                    if (block.isDeleted) {
-                                        return (
-                                            <View
-                                                key={block.id}
-                                                style={{
-                                                    position: 'absolute',
-                                                    left: `${block.x}%`,
-                                                    top: `${block.y}%`,
-                                                    width: `${block.width}%`,
-                                                    height: `${block.height}%`,
-                                                    backgroundColor: '#FFFFFF',
-                                                    borderWidth: 1,
-                                                    borderColor: 'rgba(239, 68, 68, 0.4)',
-                                                    borderStyle: 'dashed',
-                                                    borderRadius: 2,
-                                                    justifyContent: 'center',
-                                                    alignItems: 'center',
-                                                    zIndex: 20
-                                                }}
-                                            >
-                                                <Text style={{ fontSize: 9, color: '#EF4444', fontStyle: 'italic' }}>
-                                                    [Texte supprimé]
-                                                </Text>
-                                            </View>
-                                        );
-                                    }
-
-                                    // 1. ACTIVE EDITING BLOCK (When clicked - Word/iLovePDF in-place editor)
-                                    if (isSelected) {
-                                        return (
-                                            <View
-                                                key={block.id}
-                                                onStartShouldSetResponder={() => true}
-                                                {...(Platform.OS === 'web'
-                                                    ? {
-                                                          onClick: (e: any) => e.stopPropagation(),
-                                                          onMouseDown: (e: any) => e.stopPropagation(),
-                                                          onTouchStart: (e: any) => e.stopPropagation()
-                                                      }
-                                                    : {})}
-                                                style={{
-                                                    position: 'absolute',
-                                                    left: `${block.x}%`,
-                                                    top: `${block.y}%`,
-                                                    minWidth: `${block.width}%`,
-                                                    minHeight: `${block.height}%`,
-                                                    backgroundColor: '#FFFFFF',
-                                                    borderWidth: 1.5,
-                                                    borderColor: '#00D2FF',
-                                                    borderStyle: 'solid',
-                                                    borderRadius: 2,
-                                                    boxShadow: '0 0 14px rgba(0, 210, 255, 0.4)',
-                                                    zIndex: 100,
-                                                    paddingHorizontal: 4,
-                                                    paddingVertical: 2
-                                                }}
-                                            >
-                                                {/* 8 Selection Handles */}
-                                                {render8Handles()}
-
-                                                <TextInput
-                                                    value={block.currentText}
-                                                    onChangeText={txt =>
-                                                        updateTextBlock(block.id, { currentText: txt, isEdited: true })
-                                                    }
-                                                    multiline={true}
-                                                    autoFocus={true}
-                                                    scrollEnabled={false}
-                                                    {...(Platform.OS === 'web'
-                                                        ? ({
-                                                              rows: lineCount
-                                                          } as any)
-                                                        : {})}
-                                                    style={{
-                                                        fontSize: effectiveFontSize,
-                                                        lineHeight: effectiveFontSize * 1.30,
-                                                        fontFamily:
-                                                            block.fontFamily === 'TimesRoman'
-                                                                ? Platform.OS === 'web' ? 'Times New Roman, serif' : 'serif'
-                                                                : block.fontFamily === 'Courier'
-                                                                ? 'Courier, monospace'
-                                                                : 'Arial, sans-serif',
-                                                        fontWeight: block.fontWeight,
-                                                        fontStyle: block.fontStyle,
-                                                        textDecorationLine: block.isUnderline ? 'underline' : 'none',
-                                                        color: block.color,
-                                                        textAlign: block.textAlign,
-                                                        padding: 0,
-                                                        margin: 0,
-                                                        backgroundColor: 'transparent',
-                                                        outline: 'none',
-                                                        minWidth: '100%',
-                                                        cursor: 'text',
-                                                        ...(Platform.OS === 'web'
-                                                            ? {
-                                                                  resize: 'none',
-                                                                  scrollbarWidth: 'none',
-                                                                  msOverflowStyle: 'none',
-                                                                  whiteSpace: 'pre-wrap',
-                                                                  wordBreak: 'break-word',
-                                                                  height: 'auto'
-                                                              }
-                                                            : {})
-                                                    } as any}
-                                                />
-                                            </View>
-                                        );
-                                    }
-
-                                    // 2. EDITED BLOCK (When modified and saved in-place)
-                                    if (block.isEdited) {
-                                        return (
-                                            <Pressable
-                                                key={block.id}
-                                                onPress={(e: any) => {
-                                                    if (e && e.stopPropagation) e.stopPropagation();
-                                                    setSelectedBlockId(block.id);
-                                                    setSelectedEditId(null);
-                                                }}
-                                                style={({ hovered }: any) => ({
-                                                    position: 'absolute',
-                                                    left: `${block.x}%`,
-                                                    top: `${block.y}%`,
-                                                    minWidth: `${block.width}%`,
-                                                    minHeight: `${block.height}%`,
-                                                    backgroundColor: '#FFFFFF',
-                                                    borderWidth: 1,
-                                                    borderColor: hovered ? '#00D2FF' : 'rgba(0, 180, 255, 0.45)',
-                                                    borderStyle: 'solid',
-                                                    borderRadius: 2,
-                                                    zIndex: 35,
-                                                    paddingHorizontal: 4,
-                                                    paddingVertical: 2,
-                                                    cursor: (Platform.OS === 'web' ? 'text' : undefined) as any
-                                                })}
-                                            >
-                                                <Text
-                                                    style={{
-                                                        fontSize: effectiveFontSize,
-                                                        lineHeight: effectiveFontSize * 1.30,
-                                                        fontFamily:
-                                                            block.fontFamily === 'TimesRoman'
-                                                                ? Platform.OS === 'web' ? 'Times New Roman, serif' : 'serif'
-                                                                : block.fontFamily === 'Courier'
-                                                                ? 'Courier, monospace'
-                                                                : 'Arial, sans-serif',
-                                                        fontWeight: block.fontWeight,
-                                                        fontStyle: block.fontStyle,
-                                                        textDecorationLine: block.isUnderline ? 'underline' : 'none',
-                                                        color: block.color,
-                                                        textAlign: block.textAlign,
-                                                        whiteSpace: (Platform.OS === 'web' ? 'pre-wrap' : undefined) as any
-                                                    }}
-                                                >
-                                                    {block.currentText}
-                                                </Text>
-                                            </Pressable>
-                                        );
-                                    }
-
-                                    // 3. UNEDITED BLOCK: 100% TRANSPARENT - NEVER MASKS ORIGINAL PDF TEXT!
-                                    // Displays exact PDF original text with subtle dashed border on hover (like iLovePDF)
-                                    return (
-                                        <Pressable
-                                            key={block.id}
-                                            onPress={(e: any) => {
-                                                if (e && e.stopPropagation) e.stopPropagation();
-                                                setSelectedBlockId(block.id);
-                                                setSelectedEditId(null);
-                                            }}
-                                            style={({ hovered }: any) => ({
-                                                position: 'absolute',
-                                                left: `${block.x}%`,
-                                                top: `${block.y}%`,
-                                                width: `${block.width}%`,
-                                                height: `${block.height}%`,
-                                                backgroundColor: hovered ? 'rgba(0, 210, 255, 0.05)' : 'transparent',
-                                                borderWidth: 1,
-                                                borderColor: hovered ? '#00D2FF' : 'rgba(0, 180, 255, 0.35)',
-                                                borderStyle: 'dashed',
-                                                borderRadius: 2,
-                                                zIndex: 30,
-                                                cursor: (Platform.OS === 'web' ? 'text' : undefined) as any
-                                            })}
-                                        />
-                                    );
-                                })}
-
-                            {/* CUSTOM ADDED ITEMS & ANNOTATIONS */}
-                            {currentPageEdits.map(edit => {
-                                if (edit.type === 'draw' && edit.signatureData?.data) {
-                                    return (
-                                        <View
-                                            key={edit.id}
-                                            style={StyleSheet.absoluteFill}
-                                            pointerEvents="none"
-                                        >
-                                            <Svg width="100%" height="100%">
-                                                <Path
-                                                    d={edit.signatureData.data}
-                                                    stroke={edit.color || '#000000'}
-                                                    strokeWidth={edit.size || 3}
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    fill="none"
-                                                    opacity={edit.opacity !== undefined ? edit.opacity : 1}
-                                                />
-                                            </Svg>
-                                        </View>
-                                    );
-                                }
+                            {pages.map((pageUri, pageIdx) => {
+                                const isCurrentPage = currentPage === pageIdx;
+                                const pageBlocks = textBlocks.filter(b => b.pageIndex === pageIdx);
+                                const pageEdits = edits.filter(e => e.pageIndex === pageIdx);
 
                                 return (
-                                    <PdfEditItemView
-                                        key={edit.id}
-                                        edit={edit}
-                                        isSelected={selectedEditId === edit.id}
-                                        canvasSize={canvasDimensions}
-                                        onSelect={() => {
-                                            setSelectedEditId(edit.id);
-                                            setSelectedBlockId(null);
-                                        }}
-                                        onRemove={() => {
-                                            const updated = edits.filter(e => e.id !== edit.id);
-                                            setEdits(updated);
-                                            pushHistory(textBlocks, updated);
-                                            setSelectedEditId(null);
-                                        }}
-                                        onChangeText={txt => {
-                                            const updated = edits.map(e =>
-                                                e.id === edit.id ? { ...e, text: txt } : e
-                                            );
-                                            setEdits(updated);
-                                            pushHistory(textBlocks, updated);
-                                        }}
-                                        onResize={(w, h) => {
-                                            const updated = edits.map(e =>
-                                                e.id === edit.id ? { ...e, width: w, height: h } : e
-                                            );
-                                            setEdits(updated);
-                                            pushHistory(textBlocks, updated);
-                                        }}
-                                        onDuplicate={() => {
-                                            const dup: PdfEditItem = {
-                                                ...edit,
-                                                id: `edit-dup-${Date.now()}`,
-                                                x: Math.min(80, (edit.x || 0) + 5),
-                                                y: Math.min(80, (edit.y || 0) + 5)
-                                            };
-                                            const updated = [...edits, dup];
-                                            setEdits(updated);
-                                            setSelectedEditId(dup.id);
-                                            pushHistory(textBlocks, updated);
-                                        }}
-                                        panHandlers={{}}
-                                    />
+                                    <View key={`page-card-${pageIdx}`} style={styles.pageCardWrapper}>
+                                        {/* Floating Page Badge */}
+                                        <View style={styles.pageFloatingBadge}>
+                                            <Text style={styles.pageFloatingBadgeText}>
+                                                Page {pageIdx + 1} sur {pages.length}
+                                            </Text>
+                                        </View>
+
+                                        {/* Realistic Document Sheet */}
+                                        <Pressable
+                                            onPress={(e: any) => {
+                                                // Click outside on sheet white space: deselect
+                                                setSelectedBlockId(null);
+                                                setSelectedEditId(null);
+                                                setCurrentPage(pageIdx);
+                                            }}
+                                            style={[
+                                                styles.pageSheet,
+                                                {
+                                                    width: sheetDimensions.width,
+                                                    height: sheetDimensions.height
+                                                }
+                                            ]}
+                                            {...(Platform.OS === 'web' && masterMode === 'annotate' && isCurrentPage
+                                                ? {
+                                                      onPointerDown: handlePointerDown,
+                                                      onPointerMove: handlePointerMove,
+                                                      onPointerUp: handlePointerUp
+                                                  }
+                                                : {})}
+                                        >
+                                            {/* Base rendered PDF page image */}
+                                            <Image
+                                                source={{ uri: pageUri }}
+                                                style={styles.pageBackground}
+                                                resizeMode="cover"
+                                            />
+
+                                            {/* TEXT BLOCKS FOR THIS PAGE */}
+                                            {masterMode === 'modify' &&
+                                                pageBlocks.map(block => {
+                                                    const isSelected = selectedBlockId === block.id;
+                                                    const scale = (block.pageWidth && sheetDimensions.width > 0)
+                                                        ? (sheetDimensions.width / block.pageWidth)
+                                                        : (sheetDimensions.width / 620);
+                                                    const effectiveFontSize = Math.max(9, Math.round(block.fontSize * scale));
+                                                    const lineCount = Math.max(1, (block.currentText || '').split('\n').length);
+
+                                                    if (block.isDeleted) {
+                                                        return (
+                                                            <View
+                                                                key={block.id}
+                                                                style={{
+                                                                    position: 'absolute',
+                                                                    left: `${block.x}%`,
+                                                                    top: `${block.y}%`,
+                                                                    width: `${block.width}%`,
+                                                                    height: `${block.height}%`,
+                                                                    backgroundColor: '#FFFFFF',
+                                                                    borderWidth: 1,
+                                                                    borderColor: 'rgba(239, 68, 68, 0.4)',
+                                                                    borderStyle: 'dashed',
+                                                                    borderRadius: 2,
+                                                                    justifyContent: 'center',
+                                                                    alignItems: 'center',
+                                                                    zIndex: 20
+                                                                }}
+                                                            >
+                                                                <Text style={{ fontSize: 9, color: '#EF4444', fontStyle: 'italic' }}>
+                                                                    [Texte supprimé]
+                                                                </Text>
+                                                            </View>
+                                                        );
+                                                    }
+
+                                                    // 1. ACTIVE EDITING BLOCK (When clicked)
+                                                    if (isSelected) {
+                                                        return (
+                                                            <View
+                                                                key={block.id}
+                                                                onStartShouldSetResponder={() => true}
+                                                                {...(Platform.OS === 'web'
+                                                                    ? {
+                                                                          onClick: (e: any) => e.stopPropagation(),
+                                                                          onMouseDown: (e: any) => e.stopPropagation(),
+                                                                          onTouchStart: (e: any) => e.stopPropagation()
+                                                                      }
+                                                                    : {})}
+                                                                style={{
+                                                                    position: 'absolute',
+                                                                    left: `${block.x}%`,
+                                                                    top: `${block.y}%`,
+                                                                    minWidth: `${block.width}%`,
+                                                                    minHeight: `${block.height}%`,
+                                                                    backgroundColor: '#FFFFFF',
+                                                                    borderWidth: 1.5,
+                                                                    borderColor: '#00D2FF',
+                                                                    borderStyle: 'solid',
+                                                                    borderRadius: 2,
+                                                                    boxShadow: '0 0 14px rgba(0, 210, 255, 0.4)',
+                                                                    zIndex: 100,
+                                                                    paddingHorizontal: 4,
+                                                                    paddingVertical: 2
+                                                                }}
+                                                            >
+                                                                {render8Handles()}
+
+                                                                <TextInput
+                                                                    value={block.currentText}
+                                                                    onChangeText={txt =>
+                                                                        updateTextBlock(block.id, { currentText: txt, isEdited: true })
+                                                                    }
+                                                                    multiline={true}
+                                                                    autoFocus={true}
+                                                                    scrollEnabled={false}
+                                                                    {...(Platform.OS === 'web'
+                                                                        ? ({
+                                                                              rows: lineCount
+                                                                          } as any)
+                                                                        : {})}
+                                                                    style={{
+                                                                        fontSize: effectiveFontSize,
+                                                                        lineHeight: effectiveFontSize * 1.30,
+                                                                        fontFamily:
+                                                                            block.fontFamily === 'TimesRoman'
+                                                                                ? Platform.OS === 'web' ? 'Times New Roman, serif' : 'serif'
+                                                                                : block.fontFamily === 'Courier'
+                                                                                ? 'Courier, monospace'
+                                                                                : 'Arial, sans-serif',
+                                                                        fontWeight: block.fontWeight,
+                                                                        fontStyle: block.fontStyle,
+                                                                        textDecorationLine: block.isUnderline ? 'underline' : 'none',
+                                                                        color: block.color,
+                                                                        textAlign: block.textAlign,
+                                                                        padding: 0,
+                                                                        margin: 0,
+                                                                        backgroundColor: 'transparent',
+                                                                        outline: 'none',
+                                                                        minWidth: '100%',
+                                                                        cursor: 'text',
+                                                                        ...(Platform.OS === 'web'
+                                                                            ? {
+                                                                                  resize: 'none',
+                                                                                  scrollbarWidth: 'none',
+                                                                                  msOverflowStyle: 'none',
+                                                                                  whiteSpace: 'pre-wrap',
+                                                                                  wordBreak: 'break-word',
+                                                                                  height: 'auto'
+                                                                              }
+                                                                            : {})
+                                                                    } as any}
+                                                                />
+                                                            </View>
+                                                        );
+                                                    }
+
+                                                    // 2. EDITED BLOCK
+                                                    if (block.isEdited) {
+                                                        return (
+                                                            <Pressable
+                                                                key={block.id}
+                                                                onPress={(e: any) => {
+                                                                    if (e && e.stopPropagation) e.stopPropagation();
+                                                                    setSelectedBlockId(block.id);
+                                                                    setSelectedEditId(null);
+                                                                    setCurrentPage(pageIdx);
+                                                                }}
+                                                                style={({ hovered }: any) => ({
+                                                                    position: 'absolute',
+                                                                    left: `${block.x}%`,
+                                                                    top: `${block.y}%`,
+                                                                    minWidth: `${block.width}%`,
+                                                                    minHeight: `${block.height}%`,
+                                                                    backgroundColor: '#FFFFFF',
+                                                                    borderWidth: 1,
+                                                                    borderColor: hovered ? '#00D2FF' : 'rgba(0, 180, 255, 0.45)',
+                                                                    borderStyle: 'solid',
+                                                                    borderRadius: 2,
+                                                                    zIndex: 35,
+                                                                    paddingHorizontal: 4,
+                                                                    paddingVertical: 2,
+                                                                    cursor: (Platform.OS === 'web' ? 'text' : undefined) as any
+                                                                })}
+                                                            >
+                                                                <Text
+                                                                    style={{
+                                                                        fontSize: effectiveFontSize,
+                                                                        lineHeight: effectiveFontSize * 1.30,
+                                                                        fontFamily:
+                                                                            block.fontFamily === 'TimesRoman'
+                                                                                ? Platform.OS === 'web' ? 'Times New Roman, serif' : 'serif'
+                                                                                : block.fontFamily === 'Courier'
+                                                                                ? 'Courier, monospace'
+                                                                                : 'Arial, sans-serif',
+                                                                        fontWeight: block.fontWeight,
+                                                                        fontStyle: block.fontStyle,
+                                                                        textDecorationLine: block.isUnderline ? 'underline' : 'none',
+                                                                        color: block.color,
+                                                                        textAlign: block.textAlign,
+                                                                        whiteSpace: (Platform.OS === 'web' ? 'pre-wrap' : undefined) as any
+                                                                    }}
+                                                                >
+                                                                    {block.currentText}
+                                                                </Text>
+                                                            </Pressable>
+                                                        );
+                                                    }
+
+                                                    // 3. UNEDITED BLOCK: 100% TRANSPARENT
+                                                    return (
+                                                        <Pressable
+                                                            key={block.id}
+                                                            onPress={(e: any) => {
+                                                                if (e && e.stopPropagation) e.stopPropagation();
+                                                                setSelectedBlockId(block.id);
+                                                                setSelectedEditId(null);
+                                                                setCurrentPage(pageIdx);
+                                                            }}
+                                                            style={({ hovered }: any) => ({
+                                                                position: 'absolute',
+                                                                left: `${block.x}%`,
+                                                                top: `${block.y}%`,
+                                                                width: `${block.width}%`,
+                                                                height: `${block.height}%`,
+                                                                backgroundColor: hovered ? 'rgba(0, 210, 255, 0.05)' : 'transparent',
+                                                                borderWidth: 1,
+                                                                borderColor: hovered ? '#00D2FF' : 'rgba(0, 180, 255, 0.35)',
+                                                                borderStyle: 'dashed',
+                                                                borderRadius: 2,
+                                                                zIndex: 30,
+                                                                cursor: (Platform.OS === 'web' ? 'text' : undefined) as any
+                                                            })}
+                                                        />
+                                                    );
+                                                })}
+
+                                            {/* EDITS / ANNOTATIONS FOR THIS PAGE */}
+                                            {pageEdits.map(edit => {
+                                                if (edit.type === 'draw' && edit.signatureData?.data) {
+                                                    return (
+                                                        <View
+                                                            key={edit.id}
+                                                            style={StyleSheet.absoluteFill}
+                                                            pointerEvents="none"
+                                                        >
+                                                            <Svg width="100%" height="100%">
+                                                                <Path
+                                                                    d={edit.signatureData.data}
+                                                                    stroke={edit.color || '#00D2FF'}
+                                                                    strokeWidth={edit.size || 3}
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                    fill="none"
+                                                                    opacity={edit.opacity !== undefined ? edit.opacity : 1}
+                                                                />
+                                                            </Svg>
+                                                        </View>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <PdfEditItemView
+                                                        key={edit.id}
+                                                        edit={edit}
+                                                        isSelected={selectedEditId === edit.id}
+                                                        canvasSize={sheetDimensions}
+                                                        onSelect={() => {
+                                                            setSelectedEditId(edit.id);
+                                                            setSelectedBlockId(null);
+                                                            setCurrentPage(pageIdx);
+                                                        }}
+                                                        onRemove={() => {
+                                                            const next = edits.filter(e => e.id !== edit.id);
+                                                            setEdits(next);
+                                                            setSelectedEditId(null);
+                                                            pushHistory(textBlocks, next);
+                                                        }}
+                                                        onUpdate={updatedProps => {
+                                                            const next = edits.map(e =>
+                                                                e.id === edit.id ? { ...e, ...updatedProps } : e
+                                                            );
+                                                            setEdits(next);
+                                                        }}
+                                                    />
+                                                );
+                                            })}
+
+                                            {/* Active SVG Drawing Path while dragging on current page */}
+                                            {isDrawing && isCurrentPage && currentPath.length > 0 && (
+                                                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                                                    <Svg width="100%" height="100%">
+                                                        <Path
+                                                            d={currentPath}
+                                                            stroke={drawColor}
+                                                            strokeWidth={isHighlighter ? Math.max(12, drawStrokeWidth * 3) : drawStrokeWidth}
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            fill="none"
+                                                            opacity={isHighlighter ? 0.35 : 1}
+                                                        />
+                                                    </Svg>
+                                                </View>
+                                            )}
+                                        </Pressable>
+                                    </View>
                                 );
                             })}
-
-                            {/* Active SVG Drawing Path while dragging */}
-                            {isDrawing && currentPath.length > 0 && (
-                                <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                                    <Svg width="100%" height="100%">
-                                        <Path
-                                            d={currentPath}
-                                            stroke={drawColor}
-                                            strokeWidth={isHighlighter ? Math.max(12, drawStrokeWidth * 3) : drawStrokeWidth}
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            fill="none"
-                                            opacity={isHighlighter ? 0.35 : 1}
-                                        />
-                                    </Svg>
-                                </View>
-                            )}
                         </Pressable>
                     </View>
 
@@ -1157,7 +1252,7 @@ export default function PdfEditor({
                     <View style={styles.floatingBottomPill}>
                         <Pressable
                             style={styles.floatingNavBtn}
-                            onPress={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                            onPress={() => scrollToPage(currentPage - 1)}
                             disabled={currentPage === 0}
                         >
                             <Ionicons
@@ -1173,7 +1268,7 @@ export default function PdfEditor({
 
                         <Pressable
                             style={styles.floatingNavBtn}
-                            onPress={() => setCurrentPage(prev => Math.min(pages.length - 1, prev + 1))}
+                            onPress={() => scrollToPage(currentPage + 1)}
                             disabled={currentPage === pages.length - 1}
                         >
                             <Ionicons
@@ -1823,6 +1918,24 @@ const styles = StyleSheet.create({
     canvasWrapper: {
         alignItems: 'center',
         justifyContent: 'center'
+    },
+    pageCardWrapper: {
+        marginBottom: 36,
+        alignItems: 'center'
+    },
+    pageFloatingBadge: {
+        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+        borderRadius: 12,
+        paddingHorizontal: 10,
+        paddingVertical: 3,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.08)'
+    },
+    pageFloatingBadgeText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#94A3B8'
     },
     pageSheet: {
         width: 780,
