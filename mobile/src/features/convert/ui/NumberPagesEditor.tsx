@@ -10,7 +10,8 @@ import {
     TextInput,
     ActivityIndicator,
     Modal,
-    useWindowDimensions
+    useWindowDimensions,
+    Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { OrganizePageItem, OrganizeFileItem } from './OrganizeEditor';
@@ -52,7 +53,7 @@ interface NumberPagesEditorProps {
     colors: any;
 }
 
-const PRESET_COLORS = ['#000000', '#475569', '#dc2626', '#2563eb', '#16a34a'];
+const PRESET_COLORS = ['#000000', '#475569', '#ef4444', '#3b82f6', '#10b981'];
 
 const POSITION_LABELS: Record<PageNumberPosition, string> = {
     'top-left': 'Haut Gauche',
@@ -206,7 +207,7 @@ export default function NumberPagesEditor({
         ];
 
         return (
-            <View style={styles.matrixContainer}>
+            <View style={[styles.matrixContainer, { backgroundColor: 'rgba(0, 0, 0, 0.3)', borderColor: colors.border }]}>
                 {rows.map((row, rIdx) => (
                     <View key={`row-${rIdx}`} style={styles.matrixRow}>
                         {row.map(pos => {
@@ -216,7 +217,8 @@ export default function NumberPagesEditor({
                                     key={pos}
                                     style={[
                                         styles.matrixCell,
-                                        isSelected && styles.matrixCellSelected
+                                        { borderColor: 'rgba(255, 255, 255, 0.08)' },
+                                        isSelected && [styles.matrixCellSelected, { backgroundColor: 'rgba(239, 68, 68, 0.18)' }]
                                     ]}
                                     onPress={() => setPosition(pos)}
                                     accessibilityLabel={POSITION_LABELS[pos]}
@@ -224,7 +226,7 @@ export default function NumberPagesEditor({
                                     {isSelected ? (
                                         <View style={styles.matrixDotActive} />
                                     ) : (
-                                        <View style={styles.matrixDotEmpty} />
+                                        <View style={[styles.matrixDotEmpty, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]} />
                                     )}
                                 </Pressable>
                             );
@@ -236,27 +238,56 @@ export default function NumberPagesEditor({
     };
 
     return (
-        <SafeAreaView style={[styles.root, { backgroundColor: '#f8fafc' }]}>
+        <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]}>
+            {/* Signature Fast Transfer Background Glow */}
+            <View
+                style={[
+                    styles.backgroundGlow,
+                    {
+                        backgroundColor: colors.glow || 'rgba(59, 130, 246, 0.03)',
+                        shadowColor: colors.primary
+                    }
+                ]}
+                pointerEvents="none"
+            />
+
             {/* TOP BAR */}
-            <View style={styles.topBar}>
+            <View style={[styles.topBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
                 <View style={styles.topBarLeft}>
-                    <Pressable onPress={onCancel} style={styles.backButton}>
-                        <Ionicons name="arrow-back" size={22} color="#1e293b" />
+                    <Pressable
+                        onPress={onCancel}
+                        style={({ pressed }: any) => [
+                            styles.backButton,
+                            { backgroundColor: pressed ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.06)' }
+                        ]}
+                    >
+                        <Ionicons name="arrow-back" size={20} color={colors.text} />
                     </Pressable>
-                    <View style={styles.filePill}>
-                        <Ionicons name="document-text" size={18} color="#e53e3e" style={{ marginRight: 6 }} />
-                        <Text style={styles.filePillText} numberOfLines={1}>
+                    <View style={[styles.filePill, { backgroundColor: 'rgba(255, 255, 255, 0.04)', borderColor: colors.border }]}>
+                        <Ionicons name="document-text" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+                        <Text style={[styles.filePillText, { color: colors.text }]} numberOfLines={1}>
                             {fileName}
                         </Text>
-                        <Text style={styles.filePillBadge}>{totalPages} pages</Text>
+                        <Text style={[styles.filePillBadge, { backgroundColor: 'rgba(59, 130, 246, 0.15)', color: colors.primary }]}>
+                            {totalPages} pages
+                        </Text>
                     </View>
                 </View>
 
                 <View style={styles.topBarRight}>
                     {onAddFiles && (
-                        <Pressable onPress={onAddFiles} style={styles.addFilesBtn}>
-                            <Ionicons name="add-circle" size={18} color="#e53e3e" style={{ marginRight: 6 }} />
-                            <Text style={styles.addFilesBtnText}>Changer de fichier</Text>
+                        <Pressable
+                            onPress={onAddFiles}
+                            style={({ pressed }: any) => [
+                                styles.addFilesBtn,
+                                {
+                                    backgroundColor: pressed ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)',
+                                    borderColor: 'rgba(59, 130, 246, 0.3)'
+                                }
+                            ]}
+                        >
+                            <Ionicons name="add-circle" size={18} color={colors.primary} style={{ marginRight: 6 }} />
+                            <Text style={[styles.addFilesBtnText, { color: colors.primary }]}>Changer de fichier</Text>
                         </Pressable>
                     )}
                 </View>
@@ -264,11 +295,11 @@ export default function NumberPagesEditor({
 
             {/* MAIN CONTENT AREA */}
             <View style={[styles.mainLayout, !isDesktop && styles.mainLayoutMobile]}>
-                {/* LEFT WORKSPACE: PAGE THUMBNAILS GRID */}
-                <View style={styles.workspace}>
+                {/* LEFT WORKSPACE: PAGE THUMBNAILS GRID (Dark Fast Transfer Canvas with floating white document sheets) */}
+                <View style={[styles.workspace, { backgroundColor: 'transparent' }]}>
                     <View style={styles.workspaceHeader}>
-                        <Text style={styles.workspaceTitle}>Aperçu des pages</Text>
-                        <Text style={styles.workspaceSubtitle}>
+                        <Text style={[styles.workspaceTitle, { color: colors.text }]}>Aperçu des pages</Text>
+                        <Text style={[styles.workspaceSubtitle, { color: colors.textMuted }]}>
                             Le point rouge indique l'emplacement exact du numéro sur chaque page
                         </Text>
                     </View>
@@ -285,18 +316,27 @@ export default function NumberPagesEditor({
                             const previewText = getPageTextPreview(pageNum);
 
                             return (
-                                <View key={page.id || `p-${index}`} style={styles.pageCard}>
+                                <View
+                                    key={page.id || `p-${index}`}
+                                    style={[
+                                        styles.pageCard,
+                                        {
+                                            backgroundColor: colors.card,
+                                            borderColor: colors.border
+                                        }
+                                    ]}
+                                >
                                     {/* Page Number Badge */}
-                                    <View style={styles.pageCardHeader}>
-                                        <Text style={styles.pageBadgeText}>Page {pageNum}</Text>
+                                    <View style={[styles.pageCardHeader, { backgroundColor: 'rgba(255, 255, 255, 0.03)', borderBottomColor: colors.border }]}>
+                                        <Text style={[styles.pageBadgeText, { color: colors.textMuted }]}>Page {pageNum}</Text>
                                         {!numbered && (
-                                            <View style={styles.excludedBadge}>
-                                                <Text style={styles.excludedBadgeText}>Non numérotée</Text>
+                                            <View style={[styles.excludedBadge, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
+                                                <Text style={[styles.excludedBadgeText, { color: colors.danger || '#ef4444' }]}>Non numérotée</Text>
                                             </View>
                                         )}
                                     </View>
 
-                                    {/* Thumbnail Image Container */}
+                                    {/* Thumbnail Image Container (Crisp white document sheet for clear PDF readability) */}
                                     <View style={styles.thumbnailWrapper}>
                                         {page.imageUri ? (
                                             <Image
@@ -306,8 +346,8 @@ export default function NumberPagesEditor({
                                             />
                                         ) : (
                                             <View style={styles.skeletonContainer}>
-                                                <ActivityIndicator size="small" color="#e53e3e" />
-                                                <Text style={styles.skeletonText}>Chargement...</Text>
+                                                <ActivityIndicator size="small" color={colors.primary} />
+                                                <Text style={[styles.skeletonText, { color: colors.textMuted }]}>Chargement...</Text>
                                             </View>
                                         )}
 
@@ -338,39 +378,58 @@ export default function NumberPagesEditor({
                     </ScrollView>
                 </View>
 
-                {/* RIGHT SIDEBAR: OPTIONS PANEL */}
-                <View style={[styles.sidebar, !isDesktop && styles.sidebarMobile]}>
+                {/* RIGHT SIDEBAR: OPTIONS PANEL (Fast Transfer Dark Card) */}
+                <View
+                    style={[
+                        styles.sidebar,
+                        {
+                            backgroundColor: colors.card,
+                            borderLeftColor: colors.border
+                        },
+                        !isDesktop && [styles.sidebarMobile, { borderTopColor: colors.border }]
+                    ]}
+                >
                     <ScrollView
                         style={styles.sidebarScroll}
                         contentContainerStyle={styles.sidebarContent}
                         showsVerticalScrollIndicator={false}
                     >
-                        <View style={styles.sidebarHeader}>
-                            <Ionicons name="list" size={20} color="#e53e3e" style={{ marginRight: 8 }} />
-                            <Text style={styles.sidebarTitle}>Options des numéros de pages</Text>
+                        <View style={[styles.sidebarHeader, { borderBottomColor: colors.border }]}>
+                            <Ionicons name="list" size={20} color={colors.primary} style={{ marginRight: 8 }} />
+                            <Text style={[styles.sidebarTitle, { color: colors.text }]}>Options des numéros de pages</Text>
                         </View>
 
                         {/* SECTION 1: MODE DE LA PAGE */}
                         <View style={styles.sectionBlock}>
-                            <Text style={styles.sectionLabel}>Mode de la page</Text>
+                            <Text style={[styles.sectionLabel, { color: colors.text }]}>Mode de la page</Text>
                             <View style={styles.modeRow}>
                                 <Pressable
                                     style={[
                                         styles.modeOption,
-                                        pageMode === 'single' && styles.modeOptionActive
+                                        { backgroundColor: 'rgba(255, 255, 255, 0.03)', borderColor: colors.border },
+                                        pageMode === 'single' && {
+                                            backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                                            borderColor: colors.primary
+                                        }
                                     ]}
                                     onPress={() => setPageMode('single')}
                                 >
-                                    <View style={[
-                                        styles.radioCircle,
-                                        pageMode === 'single' && styles.radioCircleActive
-                                    ]}>
-                                        {pageMode === 'single' && <View style={styles.radioInnerDot} />}
+                                    <View
+                                        style={[
+                                            styles.radioCircle,
+                                            { borderColor: colors.border },
+                                            pageMode === 'single' && { borderColor: colors.primary }
+                                        ]}
+                                    >
+                                        {pageMode === 'single' && <View style={[styles.radioInnerDot, { backgroundColor: colors.primary }]} />}
                                     </View>
-                                    <Text style={[
-                                        styles.modeOptionText,
-                                        pageMode === 'single' && styles.modeOptionTextActive
-                                    ]}>
+                                    <Text
+                                        style={[
+                                            styles.modeOptionText,
+                                            { color: colors.textMuted },
+                                            pageMode === 'single' && { color: colors.text, fontWeight: '700' }
+                                        ]}
+                                    >
                                         Une seule page
                                     </Text>
                                 </Pressable>
@@ -378,20 +437,30 @@ export default function NumberPagesEditor({
                                 <Pressable
                                     style={[
                                         styles.modeOption,
-                                        pageMode === 'facing' && styles.modeOptionActive
+                                        { backgroundColor: 'rgba(255, 255, 255, 0.03)', borderColor: colors.border },
+                                        pageMode === 'facing' && {
+                                            backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                                            borderColor: colors.primary
+                                        }
                                     ]}
                                     onPress={() => setPageMode('facing')}
                                 >
-                                    <View style={[
-                                        styles.radioCircle,
-                                        pageMode === 'facing' && styles.radioCircleActive
-                                    ]}>
-                                        {pageMode === 'facing' && <View style={styles.radioInnerDot} />}
+                                    <View
+                                        style={[
+                                            styles.radioCircle,
+                                            { borderColor: colors.border },
+                                            pageMode === 'facing' && { borderColor: colors.primary }
+                                        ]}
+                                    >
+                                        {pageMode === 'facing' && <View style={[styles.radioInnerDot, { backgroundColor: colors.primary }]} />}
                                     </View>
-                                    <Text style={[
-                                        styles.modeOptionText,
-                                        pageMode === 'facing' && styles.modeOptionTextActive
-                                    ]}>
+                                    <Text
+                                        style={[
+                                            styles.modeOptionText,
+                                            { color: colors.textMuted },
+                                            pageMode === 'facing' && { color: colors.text, fontWeight: '700' }
+                                        ]}
+                                    >
                                         Pages opposées
                                     </Text>
                                 </Pressable>
@@ -403,13 +472,13 @@ export default function NumberPagesEditor({
                             <View style={styles.twoColRow}>
                                 {/* Position 3x3 */}
                                 <View style={styles.twoColItem}>
-                                    <Text style={styles.sectionLabel}>Position :</Text>
+                                    <Text style={[styles.sectionLabel, { color: colors.text }]}>Position :</Text>
                                     {renderPositionGrid()}
                                 </View>
 
                                 {/* Margin Selection */}
                                 <View style={styles.twoColItem}>
-                                    <Text style={styles.sectionLabel}>Marge :</Text>
+                                    <Text style={[styles.sectionLabel, { color: colors.text }]}>Marge :</Text>
                                     <View style={styles.marginStack}>
                                         {(['recommended', 'narrow', 'wide'] as MarginPreset[]).map(m => {
                                             const labels: Record<MarginPreset, string> = {
@@ -423,14 +492,21 @@ export default function NumberPagesEditor({
                                                     key={m}
                                                     style={[
                                                         styles.marginPill,
-                                                        isSel && styles.marginPillActive
+                                                        { backgroundColor: 'rgba(255, 255, 255, 0.03)', borderColor: colors.border },
+                                                        isSel && {
+                                                            backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                                                            borderColor: colors.primary
+                                                        }
                                                     ]}
                                                     onPress={() => setMargin(m)}
                                                 >
-                                                    <Text style={[
-                                                        styles.marginPillText,
-                                                        isSel && styles.marginPillTextActive
-                                                    ]}>
+                                                    <Text
+                                                        style={[
+                                                            styles.marginPillText,
+                                                            { color: colors.textMuted },
+                                                            isSel && { color: colors.primary, fontWeight: '700' }
+                                                        ]}
+                                                    >
                                                         {labels[m]}
                                                     </Text>
                                                 </Pressable>
@@ -443,48 +519,48 @@ export default function NumberPagesEditor({
 
                         {/* SECTION 3: PAGES & PLAGE */}
                         <View style={styles.sectionBlock}>
-                            <Text style={styles.sectionLabel}>Pages</Text>
+                            <Text style={[styles.sectionLabel, { color: colors.text }]}>Pages</Text>
 
                             {/* Premier numéro */}
                             <View style={styles.inputRow}>
-                                <Text style={styles.fieldSubLabel}>Premier numéro :</Text>
-                                <View style={styles.stepperBox}>
+                                <Text style={[styles.fieldSubLabel, { color: colors.textMuted }]}>Premier numéro :</Text>
+                                <View style={[styles.stepperBox, { backgroundColor: 'rgba(0,0,0,0.3)', borderColor: colors.border }]}>
                                     <Pressable
-                                        style={styles.stepperBtn}
+                                        style={[styles.stepperBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}
                                         onPress={() => setFirstNumber(Math.max(1, firstNumber - 1))}
                                     >
-                                        <Ionicons name="remove" size={16} color="#475569" />
+                                        <Ionicons name="remove" size={16} color={colors.text} />
                                     </Pressable>
                                     <TextInput
-                                        style={styles.stepperInput}
+                                        style={[styles.stepperInput, { color: colors.text }]}
                                         keyboardType="numeric"
                                         value={String(firstNumber)}
                                         onChangeText={t => setFirstNumber(Math.max(1, parseInt(t) || 1))}
                                     />
                                     <Pressable
-                                        style={styles.stepperBtn}
+                                        style={[styles.stepperBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}
                                         onPress={() => setFirstNumber(firstNumber + 1)}
                                     >
-                                        <Ionicons name="add" size={16} color="#475569" />
+                                        <Ionicons name="add" size={16} color={colors.text} />
                                     </Pressable>
                                 </View>
                             </View>
 
                             {/* Plage de pages */}
-                            <Text style={[styles.fieldSubLabel, { marginTop: 12 }]}>
+                            <Text style={[styles.fieldSubLabel, { marginTop: 14, color: colors.textMuted }]}>
                                 Quelles pages souhaitez-vous numéroter ?
                             </Text>
                             <View style={styles.rangeRow}>
-                                <Text style={styles.rangeText}>de la page</Text>
+                                <Text style={[styles.rangeText, { color: colors.textMuted }]}>de la page</Text>
                                 <TextInput
-                                    style={styles.rangeInput}
+                                    style={[styles.rangeInput, { backgroundColor: 'rgba(0,0,0,0.3)', borderColor: colors.border, color: colors.text }]}
                                     keyboardType="numeric"
                                     value={String(fromPage)}
                                     onChangeText={t => setFromPage(Math.max(1, Math.min(parseInt(t) || 1, toPage)))}
                                 />
-                                <Text style={styles.rangeText}>à</Text>
+                                <Text style={[styles.rangeText, { color: colors.textMuted }]}>à</Text>
                                 <TextInput
-                                    style={styles.rangeInput}
+                                    style={[styles.rangeInput, { backgroundColor: 'rgba(0,0,0,0.3)', borderColor: colors.border, color: colors.text }]}
                                     keyboardType="numeric"
                                     value={String(toPage)}
                                     onChangeText={t => setToPage(Math.max(fromPage, Math.min(parseInt(t) || totalPages, totalPages)))}
@@ -499,9 +575,9 @@ export default function NumberPagesEditor({
                                 <Ionicons
                                     name={skipCover ? "checkbox" : "square-outline"}
                                     size={20}
-                                    color={skipCover ? "#e53e3e" : "#94a3b8"}
+                                    color={skipCover ? colors.primary : colors.textMuted}
                                 />
-                                <Text style={styles.checkboxLabel}>
+                                <Text style={[styles.checkboxLabel, { color: colors.text }]}>
                                     Ne pas numéroter la première page (couverture)
                                 </Text>
                             </Pressable>
@@ -509,7 +585,7 @@ export default function NumberPagesEditor({
 
                         {/* SECTION 4: TEXTE DU NUMÉRO */}
                         <View style={styles.sectionBlock}>
-                            <Text style={styles.sectionLabel}>Texte :</Text>
+                            <Text style={[styles.sectionLabel, { color: colors.text }]}>Texte :</Text>
                             <View style={styles.formatStack}>
                                 {[
                                     { id: 'simple', label: '1, 2, 3 (Recommandé)' },
@@ -522,16 +598,29 @@ export default function NumberPagesEditor({
                                     return (
                                         <Pressable
                                             key={f.id}
-                                            style={[styles.formatRow, isSel && styles.formatRowActive]}
+                                            style={[
+                                                styles.formatRow,
+                                                { backgroundColor: 'rgba(255, 255, 255, 0.02)', borderColor: colors.border },
+                                                isSel && {
+                                                    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                                                    borderColor: colors.primary
+                                                }
+                                            ]}
                                             onPress={() => setFormat(f.id as TextFormat)}
                                         >
                                             <Ionicons
                                                 name={isSel ? "radio-button-on" : "radio-button-off"}
                                                 size={16}
-                                                color={isSel ? "#e53e3e" : "#94a3b8"}
+                                                color={isSel ? colors.primary : colors.textMuted}
                                                 style={{ marginRight: 8 }}
                                             />
-                                            <Text style={[styles.formatRowText, isSel && styles.formatRowTextActive]}>
+                                            <Text
+                                                style={[
+                                                    styles.formatRowText,
+                                                    { color: colors.textMuted },
+                                                    isSel && { color: colors.text, fontWeight: '700' }
+                                                ]}
+                                            >
                                                 {f.label}
                                             </Text>
                                         </Pressable>
@@ -539,15 +628,16 @@ export default function NumberPagesEditor({
                                 })}
 
                                 {format === 'custom' && (
-                                    <View style={styles.customFormatBox}>
-                                        <Text style={styles.customFormatHint}>
+                                    <View style={[styles.customFormatBox, { backgroundColor: 'rgba(0,0,0,0.3)', borderColor: colors.border }]}>
+                                        <Text style={[styles.customFormatHint, { color: colors.textMuted }]}>
                                             Utilisez {'{n}'} pour le numéro de page et {'{p}'} pour le total.
                                         </Text>
                                         <TextInput
-                                            style={styles.customFormatInput}
+                                            style={[styles.customFormatInput, { backgroundColor: 'rgba(255,255,255,0.05)', borderColor: colors.border, color: colors.text }]}
                                             value={customPattern}
                                             onChangeText={setCustomPattern}
                                             placeholder="Ex: Document - Page {n}/{p}"
+                                            placeholderTextColor={colors.textMuted}
                                         />
                                     </View>
                                 )}
@@ -556,7 +646,7 @@ export default function NumberPagesEditor({
 
                         {/* SECTION 5: FORMAT DE TEXTE & TYPOGRAPHIE */}
                         <View style={styles.sectionBlock}>
-                            <Text style={styles.sectionLabel}>Format de texte :</Text>
+                            <Text style={[styles.sectionLabel, { color: colors.text }]}>Format de texte :</Text>
 
                             {/* Police & Taille */}
                             <View style={styles.typoRow}>
@@ -572,10 +662,23 @@ export default function NumberPagesEditor({
                                         return (
                                             <Pressable
                                                 key={f}
-                                                style={[styles.fontBtn, isSel && styles.fontBtnActive]}
+                                                style={[
+                                                    styles.fontBtn,
+                                                    { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border },
+                                                    isSel && {
+                                                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                                                        borderColor: colors.primary
+                                                    }
+                                                ]}
                                                 onPress={() => setFontFamily(f)}
                                             >
-                                                <Text style={[styles.fontBtnText, isSel && styles.fontBtnTextActive]}>
+                                                <Text
+                                                    style={[
+                                                        styles.fontBtnText,
+                                                        { color: colors.textMuted },
+                                                        isSel && { color: colors.primary, fontWeight: '700' }
+                                                    ]}
+                                                >
                                                     {names[f]}
                                                 </Text>
                                             </Pressable>
@@ -584,19 +687,19 @@ export default function NumberPagesEditor({
                                 </View>
 
                                 {/* Font Size */}
-                                <View style={styles.fontSizeStepper}>
+                                <View style={[styles.fontSizeStepper, { backgroundColor: 'rgba(0,0,0,0.3)', borderColor: colors.border }]}>
                                     <Pressable
-                                        style={styles.fontSizeBtn}
+                                        style={[styles.fontSizeBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}
                                         onPress={() => setFontSize(Math.max(8, fontSize - 1))}
                                     >
-                                        <Ionicons name="remove" size={14} color="#475569" />
+                                        <Ionicons name="remove" size={14} color={colors.text} />
                                     </Pressable>
-                                    <Text style={styles.fontSizeValue}>{fontSize}pt</Text>
+                                    <Text style={[styles.fontSizeValue, { color: colors.text }]}>{fontSize}pt</Text>
                                     <Pressable
-                                        style={styles.fontSizeBtn}
+                                        style={[styles.fontSizeBtn, { backgroundColor: 'rgba(255,255,255,0.06)' }]}
                                         onPress={() => setFontSize(Math.min(28, fontSize + 1))}
                                     >
-                                        <Ionicons name="add" size={14} color="#475569" />
+                                        <Ionicons name="add" size={14} color={colors.text} />
                                     </Pressable>
                                 </View>
                             </View>
@@ -606,26 +709,38 @@ export default function NumberPagesEditor({
                                 {/* B, I, U Buttons */}
                                 <View style={styles.styleButtonsGroup}>
                                     <Pressable
-                                        style={[styles.styleBtn, isBold && styles.styleBtnActive]}
+                                        style={[
+                                            styles.styleBtn,
+                                            { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border },
+                                            isBold && { backgroundColor: colors.primary, borderColor: colors.primary }
+                                        ]}
                                         onPress={() => setIsBold(!isBold)}
                                     >
-                                        <Text style={[styles.styleBtnText, { fontWeight: 'bold' }, isBold && styles.styleBtnTextActive]}>
+                                        <Text style={[styles.styleBtnText, { fontWeight: 'bold', color: isBold ? '#fff' : colors.text }]}>
                                             B
                                         </Text>
                                     </Pressable>
                                     <Pressable
-                                        style={[styles.styleBtn, isItalic && styles.styleBtnActive]}
+                                        style={[
+                                            styles.styleBtn,
+                                            { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border },
+                                            isItalic && { backgroundColor: colors.primary, borderColor: colors.primary }
+                                        ]}
                                         onPress={() => setIsItalic(!isItalic)}
                                     >
-                                        <Text style={[styles.styleBtnText, { fontStyle: 'italic' }, isItalic && styles.styleBtnTextActive]}>
+                                        <Text style={[styles.styleBtnText, { fontStyle: 'italic', color: isItalic ? '#fff' : colors.text }]}>
                                             I
                                         </Text>
                                     </Pressable>
                                     <Pressable
-                                        style={[styles.styleBtn, isUnderline && styles.styleBtnActive]}
+                                        style={[
+                                            styles.styleBtn,
+                                            { backgroundColor: 'rgba(255,255,255,0.03)', borderColor: colors.border },
+                                            isUnderline && { backgroundColor: colors.primary, borderColor: colors.primary }
+                                        ]}
                                         onPress={() => setIsUnderline(!isUnderline)}
                                     >
-                                        <Text style={[styles.styleBtnText, { textDecorationLine: 'underline' }, isUnderline && styles.styleBtnTextActive]}>
+                                        <Text style={[styles.styleBtnText, { textDecorationLine: 'underline', color: isUnderline ? '#fff' : colors.text }]}>
                                             U
                                         </Text>
                                     </Pressable>
@@ -654,17 +769,18 @@ export default function NumberPagesEditor({
                         </View>
                     </ScrollView>
 
-                    {/* BIG RED CTA BUTTON (iLovePDF Style) */}
-                    <View style={styles.ctaContainer}>
+                    {/* BIG FAST TRANSFER CTA BUTTON */}
+                    <View style={[styles.ctaContainer, { borderTopColor: colors.border, backgroundColor: colors.card }]}>
                         <Pressable
-                            style={({ pressed }) => [
+                            style={({ pressed }: any) => [
                                 styles.ctaButton,
+                                { backgroundColor: colors.primary },
                                 pressed && styles.ctaButtonPressed
                             ]}
                             onPress={handleApply}
                         >
                             <Text style={styles.ctaButtonText}>Ajouter des numéros de pages</Text>
-                            <Ionicons name="arrow-forward-circle" size={26} color="#ffffff" style={{ marginLeft: 8 }} />
+                            <Ionicons name="arrow-forward-circle" size={24} color="#ffffff" style={{ marginLeft: 8 }} />
                         </Pressable>
                     </View>
                 </View>
@@ -674,14 +790,14 @@ export default function NumberPagesEditor({
             {previewPageIndex !== null && (
                 <Modal visible={true} transparent={true} animationType="fade">
                     <View style={styles.modalOverlay}>
-                        <View style={styles.modalCard}>
-                            <View style={styles.modalHeader}>
-                                <Text style={styles.modalTitle}>Aperçu - Page {previewPageIndex + 1}</Text>
+                        <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                            <View style={[styles.modalHeader, { backgroundColor: 'rgba(255,255,255,0.04)', borderBottomColor: colors.border }]}>
+                                <Text style={[styles.modalTitle, { color: colors.text }]}>Aperçu - Page {previewPageIndex + 1}</Text>
                                 <Pressable
                                     onPress={() => setPreviewPageIndex(null)}
-                                    style={styles.modalCloseBtn}
+                                    style={[styles.modalCloseBtn, { backgroundColor: 'rgba(255,255,255,0.08)' }]}
                                 >
-                                    <Ionicons name="close" size={24} color="#1e293b" />
+                                    <Ionicons name="close" size={22} color={colors.text} />
                                 </Pressable>
                             </View>
 
@@ -708,7 +824,7 @@ export default function NumberPagesEditor({
                                         )}
                                     </View>
                                 ) : (
-                                    <ActivityIndicator size="large" color="#e53e3e" />
+                                    <ActivityIndicator size="large" color={colors.primary} />
                                 )}
                             </View>
                         </View>
@@ -722,12 +838,25 @@ export default function NumberPagesEditor({
 const styles = StyleSheet.create({
     root: {
         flex: 1,
+        position: 'relative',
+        overflow: 'hidden',
+    },
+    backgroundGlow: {
+        position: 'absolute',
+        top: -150,
+        left: '50%',
+        transform: [{ translateX: -400 }],
+        width: 800,
+        height: 800,
+        borderRadius: 400,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 140,
+        zIndex: 0,
     },
     topBar: {
         height: 60,
-        backgroundColor: '#ffffff',
         borderBottomWidth: 1,
-        borderBottomColor: '#e2e8f0',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -742,30 +871,25 @@ const styles = StyleSheet.create({
         padding: 8,
         borderRadius: 8,
         marginRight: 12,
-        backgroundColor: '#f1f5f9',
     },
     filePill: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#f8fafc',
         paddingVertical: 6,
         paddingHorizontal: 12,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: '#e2e8f0',
         maxWidth: 320,
     },
     filePillText: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#1e293b',
         marginRight: 8,
     },
     filePillBadge: {
         fontSize: 12,
-        color: '#64748b',
-        backgroundColor: '#e2e8f0',
-        paddingHorizontal: 6,
+        fontWeight: '600',
+        paddingHorizontal: 8,
         paddingVertical: 2,
         borderRadius: 10,
     },
@@ -776,29 +900,26 @@ const styles = StyleSheet.create({
     addFilesBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff1f2',
         paddingVertical: 8,
         paddingHorizontal: 14,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: '#fecdd3',
     },
     addFilesBtnText: {
         fontSize: 13,
         fontWeight: '600',
-        color: '#e53e3e',
     },
     mainLayout: {
         flex: 1,
         flexDirection: 'row',
+        zIndex: 1,
     },
     mainLayoutMobile: {
         flexDirection: 'column',
     },
     workspace: {
         flex: 1,
-        backgroundColor: '#f1f5f9',
-        padding: 20,
+        padding: 24,
     },
     workspaceHeader: {
         marginBottom: 16,
@@ -806,30 +927,26 @@ const styles = StyleSheet.create({
     workspaceTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#1e293b',
     },
     workspaceSubtitle: {
         fontSize: 13,
-        color: '#64748b',
         marginTop: 2,
     },
     thumbnailsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 16,
+        gap: 18,
         paddingBottom: 40,
     },
     pageCard: {
         width: 170,
-        backgroundColor: '#ffffff',
-        borderRadius: 8,
+        borderRadius: 10,
         borderWidth: 1,
-        borderColor: '#cbd5e1',
         overflow: 'hidden',
         shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 6,
-        elevation: 2,
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 3,
     },
     pageCardHeader: {
         flexDirection: 'row',
@@ -838,24 +955,19 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 6,
         borderBottomWidth: 1,
-        borderBottomColor: '#f1f5f9',
-        backgroundColor: '#f8fafc',
     },
     pageBadgeText: {
         fontSize: 11,
         fontWeight: '600',
-        color: '#475569',
     },
     excludedBadge: {
-        backgroundColor: '#fee2e2',
         paddingHorizontal: 4,
         paddingVertical: 1,
         borderRadius: 4,
     },
     excludedBadgeText: {
         fontSize: 9,
-        fontWeight: '600',
-        color: '#dc2626',
+        fontWeight: '700',
     },
     thumbnailWrapper: {
         width: '100%',
@@ -875,7 +987,6 @@ const styles = StyleSheet.create({
     },
     skeletonText: {
         fontSize: 11,
-        color: '#94a3b8',
         marginTop: 6,
     },
     redMarker: {
@@ -887,23 +998,23 @@ const styles = StyleSheet.create({
         width: 14,
         height: 14,
         borderRadius: 7,
-        backgroundColor: '#e53e3e',
+        backgroundColor: '#ef4444',
         borderWidth: 2,
         borderColor: '#ffffff',
-        shadowColor: '#e53e3e',
-        shadowOpacity: 0.8,
-        shadowRadius: 4,
-        elevation: 3,
+        shadowColor: '#ef4444',
+        shadowOpacity: 0.9,
+        shadowRadius: 5,
+        elevation: 4,
     },
     previewTag: {
-        backgroundColor: 'rgba(229, 62, 62, 0.95)',
-        paddingHorizontal: 5,
-        paddingVertical: 1,
+        backgroundColor: 'rgba(239, 68, 68, 0.95)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
         borderRadius: 4,
         marginTop: 2,
         shadowColor: '#000',
-        shadowOpacity: 0.15,
-        shadowRadius: 2,
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
     },
     previewTagText: {
         color: '#ffffff',
@@ -925,16 +1036,13 @@ const styles = StyleSheet.create({
     },
     sidebar: {
         width: 380,
-        backgroundColor: '#ffffff',
         borderLeftWidth: 1,
-        borderLeftColor: '#e2e8f0',
         flexDirection: 'column',
     },
     sidebarMobile: {
         width: '100%',
         borderLeftWidth: 0,
         borderTopWidth: 1,
-        borderTopColor: '#e2e8f0',
     },
     sidebarScroll: {
         flex: 1,
@@ -947,21 +1055,18 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingBottom: 16,
         borderBottomWidth: 1,
-        borderBottomColor: '#f1f5f9',
         marginBottom: 20,
     },
     sidebarTitle: {
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: '700',
-        color: '#0f172a',
     },
     sectionBlock: {
-        marginBottom: 24,
+        marginBottom: 22,
     },
     sectionLabel: {
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '700',
-        color: '#1e293b',
         marginBottom: 10,
     },
     modeRow: {
@@ -974,42 +1079,26 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 10,
         paddingHorizontal: 12,
-        backgroundColor: '#f8fafc',
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: '#e2e8f0',
-    },
-    modeOptionActive: {
-        backgroundColor: '#fff1f2',
-        borderColor: '#e53e3e',
     },
     radioCircle: {
         width: 18,
         height: 18,
         borderRadius: 9,
         borderWidth: 2,
-        borderColor: '#cbd5e1',
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 8,
-    },
-    radioCircleActive: {
-        borderColor: '#e53e3e',
     },
     radioInnerDot: {
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: '#e53e3e',
     },
     modeOptionText: {
         fontSize: 13,
         fontWeight: '500',
-        color: '#475569',
-    },
-    modeOptionTextActive: {
-        color: '#0f172a',
-        fontWeight: '700',
     },
     twoColRow: {
         flexDirection: 'row',
@@ -1022,9 +1111,7 @@ const styles = StyleSheet.create({
         width: 120,
         height: 120,
         borderWidth: 1,
-        borderColor: '#cbd5e1',
-        borderRadius: 6,
-        backgroundColor: '#f8fafc',
+        borderRadius: 8,
         overflow: 'hidden',
     },
     matrixRow: {
@@ -1034,27 +1121,24 @@ const styles = StyleSheet.create({
     matrixCell: {
         flex: 1,
         borderWidth: 0.5,
-        borderColor: '#e2e8f0',
         justifyContent: 'center',
         alignItems: 'center',
     },
     matrixCellSelected: {
-        backgroundColor: '#fff1f2',
     },
     matrixDotEmpty: {
         width: 6,
         height: 6,
         borderRadius: 3,
-        backgroundColor: '#cbd5e1',
     },
     matrixDotActive: {
         width: 12,
         height: 12,
         borderRadius: 6,
-        backgroundColor: '#e53e3e',
-        shadowColor: '#e53e3e',
-        shadowOpacity: 0.6,
-        shadowRadius: 3,
+        backgroundColor: '#ef4444',
+        shadowColor: '#ef4444',
+        shadowOpacity: 0.8,
+        shadowRadius: 4,
     },
     marginStack: {
         gap: 8,
@@ -1062,24 +1146,13 @@ const styles = StyleSheet.create({
     marginPill: {
         paddingVertical: 8,
         paddingHorizontal: 12,
-        backgroundColor: '#f8fafc',
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: '#e2e8f0',
         alignItems: 'center',
-    },
-    marginPillActive: {
-        backgroundColor: '#fff1f2',
-        borderColor: '#e53e3e',
     },
     marginPillText: {
         fontSize: 12,
         fontWeight: '500',
-        color: '#475569',
-    },
-    marginPillTextActive: {
-        color: '#e53e3e',
-        fontWeight: '700',
     },
     inputRow: {
         flexDirection: 'row',
@@ -1088,29 +1161,24 @@ const styles = StyleSheet.create({
     },
     fieldSubLabel: {
         fontSize: 13,
-        fontWeight: '600',
-        color: '#475569',
+        fontWeight: '500',
     },
     stepperBox: {
         flexDirection: 'row',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#cbd5e1',
         borderRadius: 6,
         overflow: 'hidden',
-        backgroundColor: '#ffffff',
     },
     stepperBtn: {
         paddingHorizontal: 10,
         paddingVertical: 8,
-        backgroundColor: '#f1f5f9',
     },
     stepperInput: {
         width: 48,
         textAlign: 'center',
         fontSize: 13,
         fontWeight: '600',
-        color: '#0f172a',
         paddingVertical: 4,
     },
     rangeRow: {
@@ -1121,19 +1189,15 @@ const styles = StyleSheet.create({
     },
     rangeText: {
         fontSize: 13,
-        color: '#475569',
     },
     rangeInput: {
         width: 56,
         borderWidth: 1,
-        borderColor: '#cbd5e1',
         borderRadius: 6,
         paddingVertical: 6,
         textAlign: 'center',
         fontSize: 13,
         fontWeight: '600',
-        color: '#0f172a',
-        backgroundColor: '#ffffff',
     },
     checkboxRow: {
         flexDirection: 'row',
@@ -1142,7 +1206,6 @@ const styles = StyleSheet.create({
     },
     checkboxLabel: {
         fontSize: 13,
-        color: '#475569',
         marginLeft: 8,
         flex: 1,
     },
@@ -1156,44 +1219,27 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: '#e2e8f0',
-        backgroundColor: '#f8fafc',
-    },
-    formatRowActive: {
-        backgroundColor: '#fff1f2',
-        borderColor: '#e53e3e',
     },
     formatRowText: {
         fontSize: 13,
-        color: '#475569',
         fontWeight: '500',
-    },
-    formatRowTextActive: {
-        color: '#0f172a',
-        fontWeight: '700',
     },
     customFormatBox: {
         marginTop: 6,
         padding: 10,
-        backgroundColor: '#f8fafc',
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: '#e2e8f0',
     },
     customFormatHint: {
         fontSize: 11,
-        color: '#64748b',
         marginBottom: 6,
     },
     customFormatInput: {
         height: 38,
         borderWidth: 1,
-        borderColor: '#cbd5e1',
         borderRadius: 6,
-        backgroundColor: '#ffffff',
         paddingHorizontal: 10,
         fontSize: 13,
-        color: '#0f172a',
     },
     typoRow: {
         flexDirection: 'row',
@@ -1210,42 +1256,27 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: '#e2e8f0',
-        backgroundColor: '#f8fafc',
-    },
-    fontBtnActive: {
-        backgroundColor: '#fff1f2',
-        borderColor: '#e53e3e',
     },
     fontBtnText: {
         fontSize: 12,
-        color: '#475569',
         fontWeight: '500',
-    },
-    fontBtnTextActive: {
-        color: '#e53e3e',
-        fontWeight: '700',
     },
     fontSizeStepper: {
         flexDirection: 'row',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#cbd5e1',
         borderRadius: 6,
         overflow: 'hidden',
-        backgroundColor: '#ffffff',
     },
     fontSizeBtn: {
         paddingHorizontal: 8,
         paddingVertical: 6,
-        backgroundColor: '#f1f5f9',
     },
     fontSizeValue: {
         width: 40,
         textAlign: 'center',
         fontSize: 12,
         fontWeight: '600',
-        color: '#0f172a',
     },
     stylesAndColorsRow: {
         flexDirection: 'row',
@@ -1261,21 +1292,11 @@ const styles = StyleSheet.create({
         height: 32,
         borderRadius: 6,
         borderWidth: 1,
-        borderColor: '#e2e8f0',
-        backgroundColor: '#f8fafc',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    styleBtnActive: {
-        backgroundColor: '#1e293b',
-        borderColor: '#1e293b',
-    },
     styleBtnText: {
         fontSize: 13,
-        color: '#475569',
-    },
-    styleBtnTextActive: {
-        color: '#ffffff',
     },
     colorSwatchesGroup: {
         flexDirection: 'row',
@@ -1289,47 +1310,44 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.1)',
+        borderColor: 'rgba(255,255,255,0.2)',
     },
     colorCircleActive: {
         borderWidth: 2,
         borderColor: '#ffffff',
         shadowColor: '#000',
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.5,
         shadowRadius: 3,
         elevation: 3,
     },
     ctaContainer: {
         padding: 20,
         borderTopWidth: 1,
-        borderTopColor: '#e2e8f0',
-        backgroundColor: '#ffffff',
     },
     ctaButton: {
-        backgroundColor: '#e53e3e',
-        borderRadius: 10,
-        paddingVertical: 16,
+        borderRadius: 12,
+        paddingVertical: 15,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#e53e3e',
+        shadowColor: '#3b82f6',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 4,
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
+        elevation: 5,
     },
     ctaButtonPressed: {
-        backgroundColor: '#c53030',
+        opacity: 0.9,
         transform: [{ scale: 0.98 }],
     },
     ctaButtonText: {
         color: '#ffffff',
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '700',
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+        backgroundColor: 'rgba(5, 7, 13, 0.85)',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 20,
@@ -1338,12 +1356,12 @@ const styles = StyleSheet.create({
         width: '90%',
         maxWidth: 600,
         maxHeight: '90%',
-        backgroundColor: '#ffffff',
         borderRadius: 16,
+        borderWidth: 1,
         overflow: 'hidden',
         shadowColor: '#000',
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
+        shadowOpacity: 0.5,
+        shadowRadius: 20,
         elevation: 10,
     },
     modalHeader: {
@@ -1353,18 +1371,14 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingVertical: 14,
         borderBottomWidth: 1,
-        borderBottomColor: '#e2e8f0',
-        backgroundColor: '#f8fafc',
     },
     modalTitle: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#1e293b',
     },
     modalCloseBtn: {
         padding: 6,
         borderRadius: 8,
-        backgroundColor: '#f1f5f9',
     },
     modalBody: {
         padding: 20,
@@ -1375,7 +1389,7 @@ const styles = StyleSheet.create({
         width: '100%',
         height: 500,
         position: 'relative',
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#ffffff',
         borderRadius: 8,
         overflow: 'hidden',
     },

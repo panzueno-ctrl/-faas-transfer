@@ -17402,3 +17402,25 @@ Date : Mercredi, 28 Octobre 2026 à 10h50 et 00 secondes
   - Routage immédiat de `selectedService.id === 'number-pdf'` vers `initOrganizeEditor(res.assets, false, 'number_editor')`.
   - Élimination totale de l'ancien affichage staging pour la numérotation.
   - Ajout du type d'état `'number_editor'` dans le state machine de conversion.
+
+================================================================================
+CHAPITRE 43 : HARMONISATION VISUELLE DU STUDIO AVEC LE DESIGN SYSTEM FAST TRANSFER
+================================================================================
+Date : Mercredi, 28 Octobre 2026 à 11h06 et 00 secondes
+
+### 1. Précision & Recadrage de la Demande Utilisateur
+- **Constat :** L'utilisateur a salué l'ensemble des fonctionnalités professionnelles apportées (grille réactive, point rouge interactif, matrice 3x3, mode miroir), mais a expressément demandé de ne pas faire un clone graphique blanc d'iLovePDF.
+- **Directive stricte :** Conserver l'ADN et l'identité visuelle native de Fast Transfer : le fond sombre bleuté (#0B0C10), le halo lumineux circulaire bleu signature (backgroundGlow avec shadowRadius 140), ainsi que les surfaces en glassmorphism sombre (colors.card, colors.border, colors.primary).
+
+### 2. Ajustements Implémentés dans NumberPagesEditor.tsx
+- **Toile de fond & Ambiance :**
+  - Remplacement des fonds clairs hardcodés (#f8fafc, #ffffff) par `colors.background` (#0B0C10).
+  - Intégration du composant signature `backgroundGlow` (cercle lumineux 800x800 centré avec flou néon bleu `colors.primary`).
+- **Barre supérieure (TopBar) & Cartes de documents :**
+  - Barre d'outils et sélecteur de fichier passés sous le thème sombre de l'application (`colors.card`, bordures `colors.border`, badges en bleu primaire `colors.primary`).
+  - Les vignettes de pages demeurent des feuillets blancs réalistes pour une lisibilité optimale du contenu textuel du document, mais intégrées dans des cartes aux bordures sombres contrastées.
+- **Panneau latéral d'options (Sidebar) :**
+  - Fond de volet en `colors.card` sombre avec séparation `colors.border`.
+  - Matrice 3x3 assombrie (`rgba(0,0,0,0.3)`) avec bordures fines, conservant le point rouge dynamique iLovePDF et la surbrillance active.
+  - Sélecteurs de mode, de marges et de formats typographiques stylisés avec les micro-interactions natives Fast Transfer (surbrillance en bleu électrique `colors.primary`, textes `colors.text` et `colors.textMuted`).
+  - Bouton d'action principal CTA harmonisé avec la charte graphique de Fast Transfer (`colors.primary`).
