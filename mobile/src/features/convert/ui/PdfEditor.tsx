@@ -41,6 +41,7 @@ export interface PdfEditItem {
     signatureData?: SignatureData;
     shapeType?: 'rectangle' | 'circle' | 'line';
     opacity?: number;
+    imageUri?: string;
 }
 
 interface PdfEditorProps {
@@ -110,6 +111,39 @@ export default function PdfEditor({
     const [signatureModalOpen, setSignatureModalOpen] = useState(autoOpenSignTool);
     const [shapeType, setShapeType] = useState<'rectangle' | 'circle' | 'line'>('rectangle');
     const [isSaving, setIsSaving] = useState(false);
+    const imageInputRef = useRef<any>(null);
+
+    const handleTriggerImageUpload = () => {
+        if (Platform.OS === 'web' && imageInputRef.current) {
+            imageInputRef.current.click();
+        }
+    };
+
+    const handleImageFileChange = (e: any) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const dataUri = event.target?.result as string;
+            if (!dataUri) return;
+            const newEdit: PdfEditItem = {
+                id: `img-${Date.now()}`,
+                pageIndex: currentPage,
+                type: 'image',
+                x: 35,
+                y: 35,
+                width: 30,
+                height: 20,
+                imageUri: dataUri
+            };
+            const nextEdits = [...edits, newEdit];
+            setEdits(nextEdits);
+            setSelectedEditId(newEdit.id);
+            pushHistory(textBlocks, nextEdits);
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    };
 
     // Canvas layout dimensions
     const [sheetDimensions, setSheetDimensions] = useState<{ width: number; height: number }>({ width: 780, height: 551 });
@@ -529,129 +563,154 @@ export default function PdfEditor({
                     </View>
                 </View>
 
-                {/* Center section: Sub-tool Switcher based on Master Mode */}
+                {/* Center section: Unified iLovePDF Studio Toolbar */}
                 <View style={styles.topBarCenter}>
-                    {masterMode === 'modify' ? (
-                        <View style={styles.toolSegment}>
-                            <Pressable
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolSegment}>
+                        {/* 1. Éditer le texte (Mode Word / Direct In-place) */}
+                        <Pressable
+                            style={[
+                                styles.subToolBtn,
+                                masterMode === 'modify' && activeModifyTool === 'text_edit' && styles.subToolBtnActive
+                            ]}
+                            onPress={() => {
+                                setMasterMode('modify');
+                                setActiveModifyTool('text_edit');
+                                setSelectedEditId(null);
+                            }}
+                        >
+                            <Ionicons
+                                name="create"
+                                size={15}
+                                color={masterMode === 'modify' && activeModifyTool === 'text_edit' ? '#00D2FF' : '#94A3B8'}
+                            />
+                            <Text
                                 style={[
-                                    styles.subToolBtn,
-                                    activeModifyTool === 'text_edit' && styles.subToolBtnActive
+                                    styles.subToolText,
+                                    masterMode === 'modify' && activeModifyTool === 'text_edit' && styles.subToolTextActive
                                 ]}
-                                onPress={() => setActiveModifyTool('text_edit')}
                             >
-                                <Ionicons
-                                    name="text"
-                                    size={15}
-                                    color={activeModifyTool === 'text_edit' ? '#00D2FF' : '#94A3B8'}
-                                />
-                                <Text
-                                    style={[
-                                        styles.subToolText,
-                                        activeModifyTool === 'text_edit' && styles.subToolTextActive
-                                    ]}
-                                >
-                                    Éditer le texte
-                                </Text>
-                            </Pressable>
-                            <Pressable
-                                style={[styles.subToolBtn]}
-                                onPress={handleAddNewText}
-                            >
-                                <Ionicons name="add-circle-outline" size={15} color="#94A3B8" />
-                                <Text style={styles.subToolText}>Ajouter texte</Text>
-                            </Pressable>
-                            <Pressable
-                                style={[styles.subToolBtn]}
-                                onPress={handleAddWhiteout}
-                            >
-                                <Ionicons name="square-outline" size={15} color="#94A3B8" />
-                                <Text style={styles.subToolText}>Masquer zone</Text>
-                            </Pressable>
-                        </View>
-                    ) : (
-                        <View style={styles.toolSegment}>
-                            <Pressable
+                                Éditer texte
+                            </Text>
+                        </Pressable>
+
+                        {/* 2. Ajouter texte libre */}
+                        <Pressable
+                            style={styles.subToolBtn}
+                            onPress={handleAddNewText}
+                        >
+                            <Ionicons name="add-circle-outline" size={15} color="#94A3B8" />
+                            <Text style={styles.subToolText}>+ Texte</Text>
+                        </Pressable>
+
+                        {/* 3. Ajouter image */}
+                        <Pressable
+                            style={styles.subToolBtn}
+                            onPress={handleTriggerImageUpload}
+                        >
+                            <Ionicons name="image-outline" size={15} color="#94A3B8" />
+                            <Text style={styles.subToolText}>+ Image</Text>
+                        </Pressable>
+
+                        {/* 4. Formes (Rectangle, Cercle, Flèche, Ligne) */}
+                        <Pressable
+                            style={[
+                                styles.subToolBtn,
+                                activeAnnotateTool === 'shape' && styles.subToolBtnActive
+                            ]}
+                            onPress={() => {
+                                setActiveAnnotateTool('shape');
+                                handleAddShape(shapeType);
+                            }}
+                        >
+                            <Ionicons
+                                name="shapes-outline"
+                                size={15}
+                                color={activeAnnotateTool === 'shape' ? '#00D2FF' : '#94A3B8'}
+                            />
+                            <Text
                                 style={[
-                                    styles.subToolBtn,
-                                    activeAnnotateTool === 'draw' && !isHighlighter && styles.subToolBtnActive
+                                    styles.subToolText,
+                                    activeAnnotateTool === 'shape' && styles.subToolTextActive
                                 ]}
-                                onPress={() => {
-                                    setActiveAnnotateTool('draw');
-                                    setIsHighlighter(false);
-                                }}
                             >
-                                <Ionicons
-                                    name="pencil"
-                                    size={15}
-                                    color={activeAnnotateTool === 'draw' && !isHighlighter ? '#00D2FF' : '#94A3B8'}
-                                />
-                                <Text
-                                    style={[
-                                        styles.subToolText,
-                                        activeAnnotateTool === 'draw' && !isHighlighter && styles.subToolTextActive
-                                    ]}
-                                >
-                                    Crayon
-                                </Text>
-                            </Pressable>
-                            <Pressable
+                                Formes
+                            </Text>
+                        </Pressable>
+
+                        {/* 5. Crayon (Dessiner) */}
+                        <Pressable
+                            style={[
+                                styles.subToolBtn,
+                                masterMode === 'annotate' && activeAnnotateTool === 'draw' && !isHighlighter && styles.subToolBtnActive
+                            ]}
+                            onPress={() => {
+                                setMasterMode('annotate');
+                                setActiveAnnotateTool('draw');
+                                setIsHighlighter(false);
+                                setSelectedBlockId(null);
+                            }}
+                        >
+                            <Ionicons
+                                name="pencil"
+                                size={15}
+                                color={masterMode === 'annotate' && activeAnnotateTool === 'draw' && !isHighlighter ? '#00D2FF' : '#94A3B8'}
+                            />
+                            <Text
                                 style={[
-                                    styles.subToolBtn,
-                                    activeAnnotateTool === 'highlighter' && styles.subToolBtnActive
+                                    styles.subToolText,
+                                    masterMode === 'annotate' && activeAnnotateTool === 'draw' && !isHighlighter && styles.subToolTextActive
                                 ]}
-                                onPress={() => {
-                                    setActiveAnnotateTool('highlighter');
-                                    setIsHighlighter(true);
-                                }}
                             >
-                                <Ionicons
-                                    name="color-wand-outline"
-                                    size={15}
-                                    color={activeAnnotateTool === 'highlighter' ? '#00D2FF' : '#94A3B8'}
-                                />
-                                <Text
-                                    style={[
-                                        styles.subToolText,
-                                        activeAnnotateTool === 'highlighter' && styles.subToolTextActive
-                                    ]}
-                                >
-                                    Surligneur
-                                </Text>
-                            </Pressable>
-                            <Pressable
+                                Crayon
+                            </Text>
+                        </Pressable>
+
+                        {/* 6. Surligneur */}
+                        <Pressable
+                            style={[
+                                styles.subToolBtn,
+                                masterMode === 'annotate' && activeAnnotateTool === 'highlighter' && styles.subToolBtnActive
+                            ]}
+                            onPress={() => {
+                                setMasterMode('annotate');
+                                setActiveAnnotateTool('highlighter');
+                                setIsHighlighter(true);
+                                setSelectedBlockId(null);
+                            }}
+                        >
+                            <Ionicons
+                                name="color-wand-outline"
+                                size={15}
+                                color={masterMode === 'annotate' && activeAnnotateTool === 'highlighter' ? '#00D2FF' : '#94A3B8'}
+                            />
+                            <Text
                                 style={[
-                                    styles.subToolBtn,
-                                    activeAnnotateTool === 'shape' && styles.subToolBtnActive
+                                    styles.subToolText,
+                                    masterMode === 'annotate' && activeAnnotateTool === 'highlighter' && styles.subToolTextActive
                                 ]}
-                                onPress={() => {
-                                    setActiveAnnotateTool('shape');
-                                    handleAddShape(shapeType);
-                                }}
                             >
-                                <Ionicons
-                                    name="shapes-outline"
-                                    size={15}
-                                    color={activeAnnotateTool === 'shape' ? '#00D2FF' : '#94A3B8'}
-                                />
-                                <Text
-                                    style={[
-                                        styles.subToolText,
-                                        activeAnnotateTool === 'shape' && styles.subToolTextActive
-                                    ]}
-                                >
-                                    Formes
-                                </Text>
-                            </Pressable>
-                            <Pressable
-                                style={[styles.subToolBtn]}
-                                onPress={() => setSignatureModalOpen(true)}
-                            >
-                                <Ionicons name="finger-print-outline" size={15} color="#94A3B8" />
-                                <Text style={styles.subToolText}>Signer</Text>
-                            </Pressable>
-                        </View>
-                    )}
+                                Surligneur
+                            </Text>
+                        </Pressable>
+
+                        {/* 7. Signer */}
+                        <Pressable
+                            style={styles.subToolBtn}
+                            onPress={() => setSignatureModalOpen(true)}
+                        >
+                            <Ionicons name="finger-print-outline" size={15} color="#94A3B8" />
+                            <Text style={styles.subToolText}>Signer</Text>
+                        </Pressable>
+
+                        {/* 8. Gomme / Masquer zone */}
+                        <Pressable
+                            style={styles.subToolBtn}
+                            onPress={handleAddWhiteout}
+                        >
+                            <Ionicons name="square-outline" size={15} color="#94A3B8" />
+                            <Text style={styles.subToolText}>Gomme / Masquer</Text>
+                        </Pressable>
+                    </ScrollView>
                 </View>
 
                 {/* Right section: History Undo/Redo & Zoom controls */}
@@ -805,7 +864,7 @@ export default function PdfEditor({
                                 />
                             )}
 
-                            {/* IN 'MODIFIER' MODE: RENDER ALL PARAGRAPHS */}
+                            {/* IN 'MODIFIER' MODE: UNIFIED WORD-LIKE LIVE TEXT BLOCKS */}
                             {masterMode === 'modify' &&
                                 currentPageBlocks.map(block => {
                                     const isSelected = selectedBlockId === block.id;
@@ -842,139 +901,86 @@ export default function PdfEditor({
                                         );
                                     }
 
-                                    // SELECTED BLOCK: Word-like inline editing with 8 handles and ZERO scrollbars
-                                    if (isSelected) {
-                                        return (
-                                            <View
-                                                key={block.id}
-                                                onStartShouldSetResponder={() => true}
-                                                {...(Platform.OS === 'web'
-                                                    ? {
-                                                          onClick: (e: any) => e.stopPropagation(),
-                                                          onMouseDown: (e: any) => e.stopPropagation(),
-                                                          onTouchStart: (e: any) => e.stopPropagation()
-                                                      }
-                                                    : {})}
-                                                style={{
-                                                    position: 'absolute',
-                                                    left: `${Math.max(0, block.x - 0.5)}%`,
-                                                    top: `${Math.max(0, block.y - 0.5)}%`,
-                                                    minWidth: `${block.width + 1}%`,
-                                                    borderWidth: 1.5,
-                                                    borderColor: '#00D2FF',
-                                                    borderStyle: 'solid',
-                                                    borderRadius: 2,
-                                                    backgroundColor: '#FFFFFF',
-                                                    boxShadow: '0 0 14px rgba(0, 210, 255, 0.4)',
-                                                    zIndex: 100,
-                                                    padding: 4
-                                                }}
-                                            >
-                                                {/* 8 Selection Handles */}
-                                                {render8Handles()}
-
-                                                <TextInput
-                                                    value={block.currentText}
-                                                    onChangeText={txt =>
-                                                        updateTextBlock(block.id, { currentText: txt, isEdited: true })
-                                                    }
-                                                    multiline
-                                                    autoFocus
-                                                    scrollEnabled={false}
-                                                    style={{
-                                                        fontSize: effectiveFontSize,
-                                                        lineHeight: effectiveFontSize * 1.32,
-                                                        fontFamily:
-                                                            block.fontFamily === 'TimesRoman'
-                                                                ? Platform.OS === 'web'
-                                                                    ? 'Times New Roman, serif'
-                                                                    : 'serif'
-                                                                : block.fontFamily === 'Courier'
-                                                                ? 'Courier, monospace'
-                                                                : 'Arial, sans-serif',
-                                                        fontWeight: block.fontWeight,
-                                                        fontStyle: block.fontStyle,
-                                                        textDecorationLine: block.isUnderline ? 'underline' : 'none',
-                                                        color: block.color,
-                                                        textAlign: block.textAlign,
-                                                        padding: 0,
-                                                        margin: 0,
-                                                                                                                backgroundColor: 'transparent',
-                                                        outline: 'none',
-                                                        minWidth: '100%',
-                                                        ...(Platform.OS === 'web'
-                                                            ? {
-                                                                  overflow: 'hidden',
-                                                                  resize: 'none',
-                                                                  scrollbarWidth: 'none',
-                                                                  msOverflowStyle: 'none',
-                                                                  whiteSpace: 'pre-wrap',
-                                                                  wordBreak: 'break-word'
-                                                              }
-                                                            : {})
-                                                    } as any}
-                                                />
-                                            </View>
-                                        );
-                                    }
-
-                                    // UNSELECTED BLOCK: Clean presentation, visible border on hover
+                                    // Unified Word-like Live In-Place Text Block
                                     return (
-                                        <Pressable
+                                        <View
                                             key={block.id}
-                                            onPress={(e: any) => {
-                                                if (e && e.stopPropagation) e.stopPropagation();
-                                                setSelectedBlockId(block.id);
-                                                setSelectedEditId(null);
-                                            }}
-                                            style={({ hovered }: any) => ({
+                                            onStartShouldSetResponder={() => true}
+                                            {...(Platform.OS === 'web'
+                                                ? {
+                                                      onClick: (e: any) => e.stopPropagation(),
+                                                      onMouseDown: (e: any) => e.stopPropagation(),
+                                                      onTouchStart: (e: any) => e.stopPropagation()
+                                                  }
+                                                : {})}
+                                            style={{
                                                 position: 'absolute',
                                                 left: `${block.x}%`,
                                                 top: `${block.y}%`,
-                                                width: `${block.width}%`,
-                                                minHeight: `${block.height}%`,
-                                                borderWidth: 1,
-                                                borderColor: hovered
+                                                width: `${Math.max(block.width, 10)}%`,
+                                                minHeight: `${Math.max(block.height, 3.5)}%`,
+                                                borderWidth: isSelected ? 1.5 : 1,
+                                                borderColor: isSelected
                                                     ? '#00D2FF'
                                                     : block.isEdited
                                                     ? '#00D2FF'
-                                                    : 'rgba(0, 180, 255, 0.35)',
-                                                borderStyle: block.isEdited ? 'solid' : 'dashed',
+                                                    : 'rgba(0, 180, 255, 0.45)',
+                                                borderStyle: isSelected || block.isEdited ? 'solid' : 'dashed',
                                                 borderRadius: 2,
-                                                backgroundColor: block.isEdited
-                                                    ? '#FFFFFF'
-                                                    : hovered
-                                                    ? 'rgba(0, 210, 255, 0.05)'
-                                                    : 'transparent',
-                                                cursor: (Platform.OS === 'web' ? 'text' : undefined) as any,
-                                                padding: 2,
-                                                zIndex: 30
-                                            })}
+                                                backgroundColor: '#FFFFFF',
+                                                boxShadow: isSelected ? '0 0 14px rgba(0, 210, 255, 0.4)' : 'none',
+                                                zIndex: isSelected ? 100 : 30,
+                                                paddingHorizontal: 4,
+                                                paddingVertical: 2
+                                            }}
                                         >
-                                            {block.isEdited && (
-                                                <Text
-                                                    style={{
-                                                        fontSize: effectiveFontSize,
-                                                        lineHeight: effectiveFontSize * 1.32,
-                                                        fontFamily:
-                                                            block.fontFamily === 'TimesRoman'
-                                                                ? Platform.OS === 'web'
-                                                                    ? 'Times New Roman, serif'
-                                                                    : 'serif'
-                                                                : block.fontFamily === 'Courier'
-                                                                ? 'Courier, monospace'
-                                                                : 'Arial, sans-serif',
-                                                        fontWeight: block.fontWeight,
-                                                        fontStyle: block.fontStyle,
-                                                        textDecorationLine: block.isUnderline ? 'underline' : 'none',
-                                                        color: block.color,
-                                                        textAlign: block.textAlign,
-                                                                                                            }}
-                                                >
-                                                    {block.currentText}
-                                                </Text>
-                                            )}
-                                        </Pressable>
+                                            {/* 8 Selection Handles visible when selected */}
+                                            {isSelected && render8Handles()}
+
+                                            <TextInput
+                                                value={block.currentText}
+                                                onChangeText={txt =>
+                                                    updateTextBlock(block.id, { currentText: txt, isEdited: true })
+                                                }
+                                                onFocus={() => {
+                                                    setSelectedBlockId(block.id);
+                                                    setSelectedEditId(null);
+                                                }}
+                                                multiline={true}
+                                                scrollEnabled={false}
+                                                style={{
+                                                    fontSize: effectiveFontSize,
+                                                    lineHeight: effectiveFontSize * 1.30,
+                                                    fontFamily:
+                                                        block.fontFamily === 'TimesRoman'
+                                                            ? Platform.OS === 'web' ? 'Times New Roman, serif' : 'serif'
+                                                            : block.fontFamily === 'Courier'
+                                                            ? 'Courier, monospace'
+                                                            : 'Arial, sans-serif',
+                                                    fontWeight: block.fontWeight,
+                                                    fontStyle: block.fontStyle,
+                                                    textDecorationLine: block.isUnderline ? 'underline' : 'none',
+                                                    color: block.color,
+                                                    textAlign: block.textAlign,
+                                                    padding: 0,
+                                                    margin: 0,
+                                                    backgroundColor: 'transparent',
+                                                    outline: 'none',
+                                                    minWidth: '100%',
+                                                    cursor: 'text',
+                                                    ...(Platform.OS === 'web'
+                                                        ? {
+                                                              overflow: 'hidden',
+                                                              resize: 'none',
+                                                              scrollbarWidth: 'none',
+                                                              msOverflowStyle: 'none',
+                                                              whiteSpace: 'pre-wrap',
+                                                              wordBreak: 'break-word'
+                                                          }
+                                                        : {})
+                                                } as any}
+                                            />
+                                        </View>
                                     );
                                 })}
 
@@ -1488,6 +1494,15 @@ export default function PdfEditor({
             </View>
 
             {/* Signature Pad Component */}
+            {Platform.OS === 'web' && (
+                <input
+                    type="file"
+                    ref={imageInputRef}
+                    onChange={handleImageFileChange}
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                />
+            )}
             <SignaturePad
                 visible={signatureModalOpen}
                 onClose={() => setSignatureModalOpen(false)}

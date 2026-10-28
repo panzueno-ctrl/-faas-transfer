@@ -553,6 +553,37 @@ export function usePdfEngine({ setStep, setResultUrl }: { setStep: (step: string
                     }
                 }
 
+                if (edit.type === 'image' && edit.imageUri) {
+                    try {
+                        const base64Data = edit.imageUri.split(',')[1];
+                        if (base64Data) {
+                            const byteChars = atob(base64Data);
+                            const byteNumbers = new Uint8Array(byteChars.length);
+                            for (let i = 0; i < byteChars.length; i++) {
+                                byteNumbers[i] = byteChars.charCodeAt(i);
+                            }
+                            let embeddedImg;
+                            if (edit.imageUri.includes('png')) {
+                                embeddedImg = await pdfDoc.embedPng(byteNumbers);
+                            } else {
+                                embeddedImg = await pdfDoc.embedJpg(byteNumbers);
+                            }
+                            const x = (edit.x / 100) * width;
+                            const rectWidth = ((edit.width || 25) / 100) * width;
+                            const rectHeight = ((edit.height || 20) / 100) * height;
+                            const rectY = height - ((edit.y / 100) * height) - rectHeight;
+                            page.drawImage(embeddedImg, {
+                                x,
+                                y: rectY,
+                                width: rectWidth,
+                                height: rectHeight
+                            });
+                        }
+                    } catch (imgErr) {
+                        console.warn("Failed to embed image into PDF:", imgErr);
+                    }
+                }
+
                                 if (edit.type === 'whiteout') {
                     const x = (edit.x / 100) * width;
                     const rectWidth = ((edit.width || 18) / 100) * width;

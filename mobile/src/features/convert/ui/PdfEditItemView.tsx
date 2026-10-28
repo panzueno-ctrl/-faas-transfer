@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { View, Text, TextInput, Pressable, Platform, PanResponder, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, Platform, PanResponder, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Rect, Ellipse } from 'react-native-svg';
 import { PdfEditItem } from './PdfEditor';
@@ -94,6 +94,33 @@ export default function PdfEditItemView({
             />
         </>
     );
+
+    // 0. INSERTED IMAGE
+    if (edit.type === 'image' && edit.imageUri) {
+        return (
+            <Pressable
+                onPress={onSelect}
+                style={[
+                    styles.boxContainer,
+                    isSelected && styles.boxSelected,
+                    {
+                        width: '100%',
+                        height: '100%',
+                        overflow: 'hidden',
+                        backgroundColor: 'transparent'
+                    }
+                ]}
+            >
+                {isSelected && renderFloatingToolbar()}
+                <Image
+                    source={{ uri: edit.imageUri }}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="contain"
+                />
+                {isSelected && renderResizeHandles()}
+            </Pressable>
+        );
+    }
 
     // 1. WHITEOUT / GOMME
     if (edit.type === 'whiteout') {

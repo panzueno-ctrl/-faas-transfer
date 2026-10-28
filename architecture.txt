@@ -17576,3 +17576,36 @@ Date : Mercredi, 28 Octobre 2026 à 15h50 et 00 secondes
   - Facteur d'échelle automatique `scale = sheetDimensions.width / block.pageWidth`.
   - Calcul de la taille de police et d'interlignage à l'écran (`effectiveFontSize = Math.round(block.fontSize * scale)`, `lineHeight: effectiveFontSize * 1.32`).
   - Saisie directe in-situ masquant l'arrière-plan sans dédoublement visuel, désélection fluide sans blocage au clic extérieur, et enregistrement fidèle via `pdf-lib`.
+
+================================================================================
+Date : Mercredi, 28 Octobre 2026 à 17h05 et 00 secondes
+
+### 1. Contexte & Demande Utilisateur
+- **Constat :** L'utilisateur a réitéré son exigence fondamentale :
+  1. Présence de tous les outils indispensables dans la barre supérieure comme sur iLovePDF (Édition de texte, Ajout de texte libre, Insertion d'image, Formes vectorielles, Crayon, Surligneur, Signature électronique, Masquage / Gomme).
+  2. Expérience de frappe directe strictement identique à Microsoft Word et iLovePDF : le clic sur n'importe quel texte doit placer immédiatement le curseur de frappe à l'endroit précis cliqué sans décalage, sans latence de re-render et sans boîte flottante déconnectée.
+- **Diagnostic Technique Approfondi :**
+  - Dans la version précédente, le composant non sélectionné était un simple conteneur transparent; le clic déclenchait un re-render complet pour monter un nouveau `TextInput` avec `autoFocus`. En conséquence, le navigateur ne pouvait pas positionner le curseur au niveau du clic de souris, le focus sautait en fin de texte, et l'utilisateur percevait un décalage d'interaction.
+  - De plus, les outils d'annotation (Formes, Image, Crayon, Surligneur, Signature) étaient masqués dans un onglet secondaire au lieu d'être immédiatement accessibles dans la barre d'outils principale.
+
+### 2. Architecture & Réalisations Techniques
+- **1. Barre d'Outils Unifiée Studio (PdfEditor.tsx) :**
+  - Regroupement des 8 outils essentiels dans un bandeau supérieur déroulant fluide et élégant :
+    1. `Éditer texte` (activation du mode sélection/frappe directe Word).
+    2. `+ Texte` (insertion d'un nouveau bloc textuel libre).
+    3. `+ Image` (sélecteur de fichier image natif et insertion sur le canevas).
+    4. `Formes` (Rectangle, Cercle, Flèche, Ligne vectoriels).
+    5. `Crayon` (dessin manuscrit vectoriel SVG).
+    6. `Surligneur` (surlignage translucide de documents).
+    7. `Signer` (ouverture du pad de signature électronique).
+    8. `Gomme / Masquer` (masquage opaque blanc de zones confidentielles).
+
+- **2. Blocs de Texte Vivants et Unifiés en Place (PdfEditor.tsx) :**
+  - Éradication de la rupture entre mode statique et mode édition : chaque bloc de paragraphe détecté sur la diapositive est désormais un conteneur textuel direct, monté aux coordonnées exactes en pourcentage.
+  - Fond blanc pur opaque `#FFFFFF` qui masque à 100% le texte matriciel sous-jacent : le document apparaît net, propre et vectoriel dès le chargement.
+  - Le clic de la souris pénètre instantanément dans le champ de frappe : le curseur clignotant s'affiche exactement à la lettre cliquée, exactement comme dans Microsoft Word ou Google Docs.
+  - Poignées de redimensionnement et contour cyan activés dès le focus, désélection fluide sans blocage lors d'un clic extérieur.
+
+- **3. Prise en Charge Totale de l'Insertion d'Image (PdfEditItemView.tsx & usePdfEngine.ts) :**
+  - Rendu dynamique de l'élément `image` avec déplacement et redimensionnement proportionnel.
+  - Intégration dans le moteur d'exportation `pdf-lib` : encodage et incrustation via `embedPng` / `embedJpg` aux coordonnées exactes de la page.
