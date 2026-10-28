@@ -124,6 +124,19 @@ export default function PdfEditor({
         }
     }, [initialTextBlocks, pdfOriginalBuffer]);
 
+    // Escape key to deselect active block on web
+    useEffect(() => {
+        if (Platform.OS !== 'web') return;
+        const handleGlobalKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setSelectedBlockId(null);
+                setSelectedEditId(null);
+            }
+        };
+        window.addEventListener('keydown', handleGlobalKeyDown);
+        return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+    }, []);
+
     const extractTextDirectly = async () => {
         if (!pdfOriginalBuffer) return;
         try {
@@ -726,12 +739,17 @@ export default function PdfEditor({
                         ]}
                     >
                         {/* Realistic White Sheet Document with drop shadow */}
-                        <View
+                        <Pressable
                             onLayout={e => {
                                 const { width, height } = e.nativeEvent.layout;
                                 if (width > 0 && height > 0) {
                                     setCanvasDimensions({ width, height });
                                 }
+                            }}
+                            onPress={() => {
+                                // Smooth click outside: deselect active text block or edit item without blocking
+                                if (selectedBlockId !== null) setSelectedBlockId(null);
+                                if (selectedEditId !== null) setSelectedEditId(null);
                             }}
                             style={styles.pageSheet}
                             {...(Platform.OS === 'web' && masterMode === 'annotate'
@@ -789,6 +807,14 @@ export default function PdfEditor({
                                         return (
                                             <View
                                                 key={block.id}
+                                                onStartShouldSetResponder={() => true}
+                                                {...(Platform.OS === 'web'
+                                                    ? {
+                                                          onClick: (e: any) => e.stopPropagation(),
+                                                          onMouseDown: (e: any) => e.stopPropagation(),
+                                                          onTouchStart: (e: any) => e.stopPropagation()
+                                                      }
+                                                    : {})}
                                                 style={{
                                                     position: 'absolute',
                                                     left: `${Math.max(0, block.x - 0.5)}%`,
@@ -852,11 +878,12 @@ export default function PdfEditor({
                                         );
                                     }
 
-                                    // UNSELECTED BLOCK: Clean presentation
+                                    // UNSELECTED BLOCK: Clean presentation, visible border on hover
                                     return (
                                         <Pressable
                                             key={block.id}
-                                            onPress={() => {
+                                            onPress={(e: any) => {
+                                                if (e && e.stopPropagation) e.stopPropagation();
                                                 setSelectedBlockId(block.id);
                                                 setSelectedEditId(null);
                                             }}
@@ -871,7 +898,7 @@ export default function PdfEditor({
                                                     ? '#00D2FF'
                                                     : block.isEdited
                                                     ? '#00D2FF'
-                                                    : 'rgba(0, 180, 255, 0.4)',
+                                                    : 'rgba(0, 180, 255, 0.35)',
                                                 borderStyle: block.isEdited ? 'solid' : 'dashed',
                                                 borderRadius: 2,
                                                 backgroundColor: block.isEdited
@@ -998,7 +1025,7 @@ export default function PdfEditor({
                                     </Svg>
                                 </View>
                             )}
-                        </View>
+                        </Pressable>
                     </View>
 
                     {/* FLOATING BOTTOM TOOLBAR (iLovePDF Ergonomics) */}

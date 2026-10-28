@@ -17520,3 +17520,32 @@ Date : Mercredi, 28 Octobre 2026 à 14h20 et 00 secondes
   - **Masquage Blanc Opaque Instantané :**
     - Dès qu'un paragraphe est sélectionné pour édition, un fond blanc opaque avec halo cyan #00D2FF recouvre intégralement les glyphes originaux du PDF sans bavure.
     - Lors de la validation ou de la perte de focus, le texte personnalisé reste net et affiché en place jusqu'à l'export vectoriel final avec pdf-lib.
+
+
+================================================================================
+CHAPITRE 47 : FLUIDITÉ INTÉGRALE DES BLOCS DE TEXTE & DÉSÉLECTION SANS BLOCAGE (STYLE WORD / DOCS)
+================================================================================
+Date : Mercredi, 28 Octobre 2026 à 15h05 et 00 secondes
+
+### 1. Contexte & Demande Utilisateur
+- **Constat :** L'utilisateur a testé l'application en conditions réelles et a relevé deux points bloquants cruciaux d'expérience utilisateur :
+  1. Édition partielle au lieu du bloc entier : Lorsqu'un encadré englobait une section entière (titre, sous-titre, puces, exemples), le clic n'ouvrait en édition qu'une seule ligne extraite (ex. « • scrivete un file composto da una sequenza di 6 ») avec une police démesurée (33pt au lieu de la taille du corps), laissant le reste du texte figé en arrière-plan.
+  2. Blocage lors du clic hors du bloc : Une fois le texte modifié, cliquer en dehors du bloc sur le document ou le fond ne désélectionnait pas l'élément et bloquait l'interface, piégeant le focus utilisateur au lieu d'enregistrer la modification et de revenir à un affichage net.
+- **Objectif :** Rendre l'expérience 100% fluide et transparente comme sous Microsoft Word ou Google Docs : modification intégrale de tout le bloc textuel sélectionné d'un seul tenant, désélection instantanée lors d'un clic en dehors avec prise en compte immédiate des modifications, et éradication totale des boîtes fantômes de modèle (espaces insécables / zero-width).
+
+### 2. Architecture & Réalisations Techniques
+- **1. Regroupement Contextuel Global & Typographie Médiane (usePdfEngine.ts) :**
+  - **Éradication Totale des Boîtes Fantômes :** Remplacement du simple trim() par une regex exhaustive item.str.replace(/[\s\u00A0\u200B-\u200D\uFEFF]/g, '') éliminant tous les caractères invisibles, espaces insécables et métadonnées de gabarit PowerPoint.
+  - **Fusion Intelligente de Section / Paragraphe :**
+    - Prise en compte du chevauchement horizontal (horizOverlap) pour lier les lignes d'une même colonne ou zone textuelle.
+    - Élargissement de la tolérance d'interlignage jusqu'à 2.8 * fontSize pour intégrer naturellement les listes à puces et interlignes de présentation.
+    - Règle de compatibilité typographique élargie (fontRatio <= 2.2 ou delta <= 16pt) unifiant titres, sous-titres et listes en un bloc éditable complet.
+  - **Taille Typographique Médiane :** Calcul de la médiane des tailles de police du bloc afin d'éviter qu'une police de titre ne gonfle démesurément le texte du corps lors de l'édition.
+
+- **2. Désélection Fluide Sans Blocage & Événements (PdfEditor.tsx) :**
+  - **Clic Extérieur Débloquant :**
+    - Transformation du conteneur de feuille pageSheet en Pressable actif doté d'un gestionnaire onPress dédié : cliquer sur n'importe quel espace blanc du document ou en dehors valide immédiatement le texte et désactive les poignées de sélection (setSelectedBlockId(null)).
+    - Ajout d'un écouteur global de la touche Échap (Escape) sur le web pour fermer instantanément le mode édition.
+    - Ajout de stopPropagation() sur le bloc de texte actif et les clics d'édition pour isoler la frappe et la sélection textuelle.
+  - **Affichage Naturel & Intégré Post-Édition :**
+    - Dès la désélection, les 8 poignées disparaissent et le texte modifié reste parfaitement gravé sur fond blanc opaque aux coordonnées exactes, prêt pour l'exportation finale pdf-lib.

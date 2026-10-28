@@ -84,9 +84,9 @@ export function extractBlocksFromTextContent(
 
     for (const item of textContent.items) {
         if (!('str' in item) || !item.str) continue;
-        const trimmed = item.str.trim();
-        // Skip empty or whitespace-only items
-        if (trimmed.length === 0) continue;
+        // Strictly remove zero-width, non-breaking and empty spaces to eliminate ghost boxes
+        const cleanText = item.str.replace(/[\s\u00A0\u200B-\u200D\uFEFF]/g, '');
+        if (cleanText.length === 0) continue;
         if (!item.transform || item.transform.length < 6) continue;
 
         const scaleX = item.transform[0];
@@ -125,7 +125,7 @@ export function extractBlocksFromTextContent(
         return yDiff;
     });
 
-    // 1. Group into clean single lines
+    // 1. Group into clean single horizontal lines
     interface ClusteredLine {
         text: string;
         x: number;
@@ -143,11 +143,11 @@ export function extractBlocksFromTextContent(
         const lastLine = lines[lines.length - 1];
         const isSameLine = lastLine &&
             Math.abs(it.baselineY - lastLine.baselineY) < Math.min(it.fontSize, lastLine.fontSize) * 0.45 &&
-            (it.x - (lastLine.x + lastLine.width)) < it.fontSize * 1.8 &&
+            (it.x - (lastLine.x + lastLine.width)) < it.fontSize * 2.0 &&
             it.x >= (lastLine.x - 4); // allow small kerning overlap
 
         if (isSameLine) {
-            const needsSpace = !lastLine.text.endsWith(' ') && !it.str.startsWith(' ') && !it.str.startsWith(',') && !it.str.startsWith('.');
+            const needsSpace = !lastLine.text.endsWith(' ') && !it.str.startsWith(' ') && !it.str.startsWith(',') && !it.str.startsWith('.') && !it.str.startsWith(':');
             lastLine.text += (needsSpace ? ' ' : '') + it.str;
             lastLine.width = Math.max(lastLine.width, (it.x + it.width) - lastLine.x);
             lastLine.height = Math.max(lastLine.height, it.height);
@@ -167,7 +167,7 @@ export function extractBlocksFromTextContent(
         }
     }
 
-    const validLines = lines.filter(l => l.text.trim().length > 0);
+    const validLines = lines.filter(l => l.text.replace(/[\s\u00A0\u200B-\u200D\uFEFF]/g, '').length > 0);
     if (validLines.length === 0) return [];
 
     // 2. Group lines into Paragraphs / Blocks (Word & iLovePDF behavior)
@@ -178,6 +178,7 @@ export function extractBlocksFromTextContent(
         width: number;
         height: number;
         fontSize: number;
+        fontSizes: number[];
         fontName: string;
     }
 
@@ -185,24 +186,61 @@ export function extractBlocksFromTextContent(
 
     for (const line of validLines) {
         if (paragraphs.length === 0) {
-            paragraphs.push({ ...line });
+            paragraphs.push({
+                text: line.text,
+                x: line.x,
+                y: line.y,
+                width: line.width,
+                height: line.height,
+                fontSize: line.fontSize,
+                fontSizes: [line.fontSize],
+                fontName: line.fontName
+            });
             continue;
         }
 
         const last = paragraphs[paragraphs.length - 1];
         const vGap = line.y - (last.y + last.height);
-        const sameFont = Math.abs(line.fontSize - last.fontSize) <= 4;
 
-        // Merge adjacent lines in normal paragraph spacing
-        if (vGap >= -6 && vGap <= (line.fontSize * 1.6) && sameFont) {
+        // Lines in the same column/text block share horizontal overlap
+        const horizOverlap = Math.max(last.x, line.x) < Math.min(last.x + last.width, line.x + line.width) + 80;
+
+        // Allow normal paragraph & bullet spacing up to 2.8 * fontSize
+        const maxGap = Math.max(last.fontSize, line.fontSize) * 2.8;
+
+        // Font compatibility within same section/block (title + body or bullet + subtext)
+        const fontRatio = Math.max(last.fontSize, line.fontSize) / Math.min(last.fontSize, line.fontSize);
+        const fontCompatible = fontRatio <= 2.2 || Math.abs(last.fontSize - line.fontSize) <= 16;
+
+        const shouldMerge = horizOverlap && vGap >= -10 && vGap <= maxGap && fontCompatible;
+
+        if (shouldMerge) {
             last.text += '\n' + line.text;
             const newX = Math.min(last.x, line.x);
             const newRight = Math.max(last.x + last.width, line.x + line.width);
             last.x = newX;
             last.width = newRight - newX;
             last.height = (line.y + line.height) - last.y;
+            last.fontSizes.push(line.fontSize);
         } else {
-            paragraphs.push({ ...line });
+            paragraphs.push({
+                text: line.text,
+                x: line.x,
+                y: line.y,
+                width: line.width,
+                height: line.height,
+                fontSize: line.fontSize,
+                fontSizes: [line.fontSize],
+                fontName: line.fontName
+            });
+        }
+    }
+
+    // Determine representative font size for each paragraph (median so body isn't ballooned)
+    for (const p of paragraphs) {
+        if (p.fontSizes && p.fontSizes.length > 1) {
+            const sorted = [...p.fontSizes].sort((a, b) => a - b);
+            p.fontSize = sorted[Math.floor(sorted.length / 2)];
         }
     }
 
