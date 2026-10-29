@@ -17667,3 +17667,37 @@ Date : Mercredi, 28 Octobre 2026 à 18h05 et 00 secondes
   - Centralisation de la sélection d'outils de la barre d'en-tête (`activeStudioTool`).
   - Réinitialisation systématique de la sélection active (`setSelectedBlockId(null)`, `setSelectedEditId(null)`) dès qu'un nouvel outil est choisi (`Formes`, `Crayon`, `Surligneur`, `+ Image`, etc.).
   - Élimination garantie de tout effet de halo résiduel ("brillance") sur d'anciens éléments.
+
+================================================================================
+Date : Jeudi, 29 Octobre 2026 à 07h35 et 00 secondes
+
+### 1. Contexte & Demande Utilisateur
+- **Analyse des Enregistrements Vidéo Référence (iLovePDF vs Fast Transfer) :**
+  L'utilisateur a fourni deux vidéos d'enregistrement d'écran (`Registrazione 2026-10-28 151807.mp4` et `152405.mp4`) comparant le flux de travail entre iLovePDF et Fast Transfer :
+  1. **Décalage vertical de 200px (Root Cause résolue) :** La feuille de travail (`pageSheet`) était précédemment figée aux dimensions portrait A4 (620x870px), alors que le document utilisateur est une présentation diapositive au format paysage (16:9 ou 4:3). L'image de la page PDF s'affichait avec des bandes noires/blanches au milieu (`resizeMode: "contain"`), décalant tous les cadres de texte de plus de 200px vers le haut dans la marge vide.
+  2. **Sur-segmentation des blocs de texte :** Les puces et lignes d'un même paragraphe se retrouvaient éclatées en petites bribes isolées au lieu de former un bloc homogène et fluide comme sous Word ou iLovePDF.
+  3. **Blocage et impossibilité de désélection :** Le clic en dehors ne désactivait pas l'élément actif, donnant une impression de blocage à l'utilisateur.
+  4. **Comportement des outils "+ Texte" et "Formes" :** L'outil "+ Texte" laissait un encadré résiduel parasite s'il était cliqué sans écrire, et l'outil "Formes" insérait immédiatement un grand carré noir sans laisser le choix de la forme ni proposer de moyen intuitif de suppression.
+
+### 2. Architecture & Réalisations Techniques
+- **1. Calcul Dynamique du Ratio d'Aspect de la Feuille (`sheetDimensions`) :**
+  - Mesure en temps réel du ratio naturel (`naturalWidth / naturalHeight`) de l'image de la page PDF active (`PdfEditor.tsx`).
+  - Détection automatique du format paysage (`aspect > 1.1` => largeur cible 780px, hauteur proportionnelle calculée) vs portrait (`aspect <= 1.1` => largeur cible 620px, hauteur proportionnelle).
+  - Rendu de l'image d'arrière-plan en `resizeMode: "fill"` (100% largeur et 100% hauteur du `pageSheet`).
+  - **Résultat :** Élimination totale des bandes parasites et alignement absolu au pixel près entre les blocs de texte vectoriels et la page originale.
+
+- **2. Fusion Sémantique et Naturelle des Paragraphes (`usePdfEngine.ts`) :**
+  - Implémentation d'un algorithme de regroupement à 2 passes calqué sur le comportement d'iLovePDF :
+    - Regroupement des lignes consécutives avec tolérance de taille de police (`Math.abs(line.fontSize - last.fontSize) <= 6`) et d'écart vertical (`vGap <= 2.2 * fontSize`).
+    - Préservation de la distinction stricte entre Titres (ex: 33pt) et Corps de texte / Listes à puces (18-20pt).
+  - L'utilisateur peut ainsi cliquer directement sur un paragraphe pour modifier l'ensemble du bloc en continu avec retours à la ligne naturels.
+
+- **3. Fluidité d'Édition In-Situ & Nettoyage Automatique des Blocs Vides :**
+  - **Zone d'édition directe :** Dès le clic sur un bloc, celui-ci passe en mode édition in-situ avec une micro-barre d'outils flottante (`-`, taille en `pt`, `+`, icône Corbeille rouge).
+  - **Outil "+ Texte" propre :** Démarre vide avec un texte indicatif discret (`placeholder="Tapez votre texte ici..."`). Si l'utilisateur clique en dehors sans saisir de texte, ou change d'outil, le bloc est automatiquement éliminé du DOM sans laisser de cadre fantôme (`cleanEmptyNewTextBlocks`).
+  - **Sauvegarde assainie (`handleSave`) :** Filtrage strict garantissant qu'aucun bloc vide ou résidu n'est jamais injecté dans le PDF final exporté.
+
+- **4. Expérience Formes et Objets Annotés (`PdfEditItemView.tsx`) :**
+  - La sélection de l'outil "Formes" n'injecte plus immédiatement un rectangle noir inopiné. Elle ouvre le panneau de configuration (choix entre Rectangle, Cercle, Ligne, sélection d'épaisseur 2/4/6/8px, palette de couleurs néon/sombre) et propose le bouton d'ajout explicite `+ Placer la forme sur la page`.
+  - Intégration d'un bouton de suppression rouge dédié dans l'inspecteur latéral et sur la barre flottante, complété par la gestion native des touches `Suppr` / `Retour arrière` et `Échap`.
+  - Clic sur n'importe quel espace extérieur pour valider et désélectionner instantanément.

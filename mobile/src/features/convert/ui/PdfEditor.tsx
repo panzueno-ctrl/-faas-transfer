@@ -129,8 +129,30 @@ export default function PdfEditor({
         }
     };
 
+    // Clean up phantom / empty newly added text blocks that user abandoned
+    const cleanEmptyNewTextBlocks = () => {
+        setTextBlocks(prev =>
+            prev.filter(b => {
+                if (b.id.startsWith('new-text-') || b.originalText === '') {
+                    const trimmed = (b.currentText || '').trim();
+                    if (!trimmed || trimmed === 'Nouveau paragraphe de texte' || trimmed === 'Tapez votre texte ici...') {
+                        return false;
+                    }
+                }
+                return true;
+            })
+        );
+    };
+
+    const deselectAll = () => {
+        cleanEmptyNewTextBlocks();
+        setSelectedBlockId(null);
+        setSelectedEditId(null);
+    };
+
     const selectStudioTool = (tool: string) => {
-        // Clear any active selection immediately so nothing shines or stays stuck
+        // Clean empty abandoned text blocks and clear selection immediately
+        cleanEmptyNewTextBlocks();
         setSelectedBlockId(null);
         setSelectedEditId(null);
         setActiveStudioTool(tool);
@@ -146,7 +168,7 @@ export default function PdfEditor({
         } else if (tool === 'shape') {
             setMasterMode('annotate');
             setActiveAnnotateTool('shape');
-            handleAddShape(shapeType);
+            // Do NOT automatically create a shape! The user can configure and place it via inspector.
         } else if (tool === 'draw') {
             setMasterMode('annotate');
             setActiveAnnotateTool('draw');
@@ -158,7 +180,8 @@ export default function PdfEditor({
         } else if (tool === 'signature') {
             setSignatureModalOpen(true);
         } else if (tool === 'whiteout') {
-            handleAddWhiteout();
+            setMasterMode('annotate');
+            setActiveAnnotateTool('whiteout');
         }
     };
 
@@ -237,18 +260,33 @@ export default function PdfEditor({
         }
     }, [initialTextBlocks, pdfOriginalBuffer]);
 
-    // Escape key to deselect active block on web
+    // Escape and Delete keys handling on web
     useEffect(() => {
         if (Platform.OS !== 'web') return;
         const handleGlobalKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                setSelectedBlockId(null);
-                setSelectedEditId(null);
+                deselectAll();
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                const target = e.target as HTMLElement;
+                const isTyping = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || (target as any).isContentEditable);
+                
+                if (selectedEditId) {
+                    if (!isTyping) {
+                        e.preventDefault();
+                        const next = edits.filter(ed => ed.id !== selectedEditId);
+                        setEdits(next);
+                        setSelectedEditId(null);
+                        pushHistory(textBlocks, next);
+                    }
+                } else if (selectedBlockId && !isTyping) {
+                    e.preventDefault();
+                    handleDeleteTextBlock(selectedBlockId);
+                }
             }
         };
         window.addEventListener('keydown', handleGlobalKeyDown);
         return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-    }, []);
+    }, [selectedBlockId, selectedEditId, edits, textBlocks]);
 
     const extractTextDirectly = async () => {
         if (!pdfOriginalBuffer) return;
@@ -318,12 +356,19 @@ export default function PdfEditor({
     };
 
     const handleDeleteTextBlock = (id: string) => {
-        const updated = textBlocks.map(b => {
-            if (b.id === id) {
-                return { ...b, isDeleted: true, isEdited: true };
-            }
-            return b;
-        });
+        let updated: PdfTextBlock[];
+        if (id.startsWith('new-text-')) {
+            // Newly added free text: completely delete from array!
+            updated = textBlocks.filter(b => b.id !== id);
+        } else {
+            // Original PDF block: mask it with whiteout
+            updated = textBlocks.map(b => {
+                if (b.id === id) {
+                    return { ...b, isDeleted: true, isEdited: true };
+                }
+                return b;
+            });
+        }
         setTextBlocks(updated);
         pushHistory(updated, edits);
         setSelectedBlockId(null);
@@ -349,16 +394,18 @@ export default function PdfEditor({
         pushHistory(updated, edits);
     };
 
-    // Add new text element
+    // Add new text element (starts clean and empty, auto-discards on blur if untouched)
     const handleAddNewText = () => {
+        cleanEmptyNewTextBlocks();
+
         const newBlock: PdfTextBlock = {
             id: `new-text-${Date.now()}`,
             pageIndex: currentPage,
             originalText: '',
-            currentText: 'Nouveau paragraphe de texte',
-            x: 20,
-            y: 30,
-            width: 60,
+            currentText: '', // Start EMPTY!
+            x: 25,
+            y: 35,
+            width: 50,
             height: 6,
             fontSize: 16,
             fontFamily: 'Helvetica',
@@ -367,13 +414,19 @@ export default function PdfEditor({
             color: '#000000',
             textAlign: 'left',
             isUnderline: false,
-            isEdited: true,
+            isEdited: false, // NOT marked edited until user actually types
             isDeleted: false
         };
-        const updated = [...textBlocks, newBlock];
+
+        const updated = [
+            ...textBlocks.filter(b => !b.id.startsWith('new-text-') || (b.currentText || '').trim().length > 0),
+            newBlock
+        ];
         setTextBlocks(updated);
         setSelectedBlockId(newBlock.id);
-        pushHistory(updated, edits);
+        setSelectedEditId(null);
+        setActiveStudioTool('text_edit');
+        setMasterMode('modify');
     };
 
     // Add whiteout box (masquage opaque)
@@ -480,10 +533,23 @@ export default function PdfEditor({
         setCurrentPath('');
     };
 
-    // Finish and Save
+    // Finish and Save (with strict sanitization against ghost/empty blocks)
     const handleSave = () => {
         setIsSaving(true);
-        const replaceEdits: PdfEditItem[] = textBlocks
+
+        // Filter out any newly added text blocks that are empty or dummy placeholders
+        const validBlocks = textBlocks.filter(b => {
+            if (b.isDeleted) return true;
+            if (b.id.startsWith('new-text-') || b.originalText === '') {
+                const trimmed = (b.currentText || '').trim();
+                return trimmed.length > 0 &&
+                       trimmed !== 'Nouveau paragraphe de texte' &&
+                       trimmed !== 'Tapez votre texte ici...';
+            }
+            return b.isEdited;
+        });
+
+        const replaceEdits: PdfEditItem[] = validBlocks
             .filter(b => b.isEdited || b.isDeleted)
             .map(b => ({
                 id: b.id,
@@ -495,7 +561,7 @@ export default function PdfEditor({
                 y: b.y,
                 width: b.width,
                 height: b.height,
-                text: b.currentText,
+                text: b.isDeleted ? '' : b.currentText,
                 size: b.fontSize,
                 fontFamily: b.fontFamily,
                 fontWeight: b.fontWeight,
@@ -926,9 +992,8 @@ export default function PdfEditor({
                     >
                         <Pressable
                             onPress={() => {
-                                // Global click on canvas background / margins: deselect active frames
-                                setSelectedBlockId(null);
-                                setSelectedEditId(null);
+                                // Global click on canvas background / margins: deselect and clean empty blocks
+                                deselectAll();
                             }}
                             style={{ width: '100%', alignItems: 'center' }}
                         >
@@ -949,9 +1014,8 @@ export default function PdfEditor({
                                         {/* Realistic Document Sheet */}
                                         <Pressable
                                             onPress={(e: any) => {
-                                                // Click outside on sheet white space: deselect
-                                                setSelectedBlockId(null);
-                                                setSelectedEditId(null);
+                                                // Click outside on sheet white space: deselect and clean empty blocks
+                                                deselectAll();
                                                 setCurrentPage(pageIdx);
                                             }}
                                             style={[
@@ -1045,10 +1109,59 @@ export default function PdfEditor({
                                                             >
                                                                 {render8Handles()}
 
+                                                                {/* Floating mini action bar with delete button */}
+                                                                <View
+                                                                    style={{
+                                                                        position: 'absolute',
+                                                                        top: -34,
+                                                                        left: 0,
+                                                                        flexDirection: 'row',
+                                                                        alignItems: 'center',
+                                                                        backgroundColor: '#0F131D',
+                                                                        borderRadius: 6,
+                                                                        paddingHorizontal: 6,
+                                                                        paddingVertical: 3,
+                                                                        gap: 6,
+                                                                        borderWidth: 1,
+                                                                        borderColor: 'rgba(0, 210, 255, 0.4)',
+                                                                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                                                                        zIndex: 150
+                                                                    }}
+                                                                >
+                                                                    <Pressable
+                                                                        onPress={() => updateTextBlock(block.id, { fontSize: Math.max(8, block.fontSize - 2) })}
+                                                                        style={{ paddingHorizontal: 4, paddingVertical: 2 }}
+                                                                        accessibilityLabel="Diminuer police"
+                                                                    >
+                                                                        <Ionicons name="remove" size={13} color="#FFFFFF" />
+                                                                    </Pressable>
+                                                                    <Text style={{ fontSize: 11, color: '#00D2FF', fontWeight: 'bold' }}>
+                                                                        {block.fontSize}pt
+                                                                    </Text>
+                                                                    <Pressable
+                                                                        onPress={() => updateTextBlock(block.id, { fontSize: Math.min(72, block.fontSize + 2) })}
+                                                                        style={{ paddingHorizontal: 4, paddingVertical: 2 }}
+                                                                        accessibilityLabel="Augmenter police"
+                                                                    >
+                                                                        <Ionicons name="add" size={13} color="#FFFFFF" />
+                                                                    </Pressable>
+                                                                    <View style={{ width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.2)' }} />
+                                                                    <Pressable
+                                                                        onPress={() => handleDeleteTextBlock(block.id)}
+                                                                        style={{ paddingHorizontal: 5, paddingVertical: 2, backgroundColor: 'rgba(239, 68, 68, 0.2)', borderRadius: 4 }}
+                                                                        accessibilityLabel="Supprimer ce texte"
+                                                                    >
+                                                                        <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                                                                    </Pressable>
+                                                                </View>
+
                                                                 <TextInput
                                                                     value={block.currentText}
+                                                                    placeholder="Tapez votre texte ici..."
+                                                                    placeholderTextColor="#94A3B8"
+                                                                    onBlur={() => cleanEmptyNewTextBlocks()}
                                                                     onChangeText={txt =>
-                                                                        updateTextBlock(block.id, { currentText: txt, isEdited: true })
+                                                                        updateTextBlock(block.id, { currentText: txt, isEdited: txt.trim().length > 0 })
                                                                     }
                                                                     multiline={true}
                                                                     autoFocus={true}
@@ -1138,7 +1251,7 @@ export default function PdfEditor({
                                                                         color: block.color,
                                                                         textAlign: block.textAlign,
                                                                         whiteSpace: (Platform.OS === 'web' ? 'pre-wrap' : undefined) as any
-                                                                    }}
+                                                                    } as any}
                                                                 >
                                                                     {block.currentText}
                                                                 </Text>
@@ -1215,7 +1328,7 @@ export default function PdfEditor({
                                                             setSelectedEditId(null);
                                                             pushHistory(textBlocks, next);
                                                         }}
-                                                        onUpdate={updatedProps => {
+                                                        onUpdate={(updatedProps: any) => {
                                                             const next = edits.map(e =>
                                                                 e.id === edit.id ? { ...e, ...updatedProps } : e
                                                             );
@@ -1523,8 +1636,173 @@ export default function PdfEditor({
                             </View>
                         )}
 
-                        {/* CASE 2: No block selected in Modifier mode */}
-                        {masterMode === 'modify' && !selectedBlock && (
+                        {/* CASE 2: Selected custom edit item (Shape, Whiteout, Image, Signature) */}
+                        {selectedEdit && (
+                            <View style={styles.inspectorSection}>
+                                <Text style={styles.sectionSubtitle}>
+                                    Page {currentPage + 1} • {
+                                        selectedEdit.type === 'shape'
+                                            ? `Forme (${selectedEdit.shapeType === 'circle' ? 'Cercle' : selectedEdit.shapeType === 'line' ? 'Ligne' : 'Rectangle'})`
+                                            : selectedEdit.type === 'whiteout'
+                                            ? 'Masquage (Gomme)'
+                                            : selectedEdit.type === 'image'
+                                            ? 'Image'
+                                            : 'Signature'
+                                    }
+                                </Text>
+
+                                {selectedEdit.type === 'shape' && (
+                                    <>
+                                        <Text style={styles.label}>Couleur du contour</Text>
+                                        <View style={styles.colorPalette}>
+                                            {PRESET_COLORS.map(c => (
+                                                <Pressable
+                                                    key={c}
+                                                    style={[
+                                                        styles.colorSwatch,
+                                                        { backgroundColor: c },
+                                                        selectedEdit.color === c && styles.colorSwatchActive
+                                                    ]}
+                                                    onPress={() => {
+                                                        const next = edits.map(e => e.id === selectedEdit.id ? { ...e, color: c } : e);
+                                                        setEdits(next);
+                                                        pushHistory(textBlocks, next);
+                                                    }}
+                                                />
+                                            ))}
+                                        </View>
+                                    </>
+                                )}
+
+                                <Pressable
+                                    style={styles.deleteBlockBtn}
+                                    onPress={() => {
+                                        const next = edits.filter(e => e.id !== selectedEdit.id);
+                                        setEdits(next);
+                                        setSelectedEditId(null);
+                                        pushHistory(textBlocks, next);
+                                    }}
+                                >
+                                    <Ionicons name="trash-outline" size={15} color="#EF4444" />
+                                    <Text style={styles.deleteBlockText}>Supprimer cet élément</Text>
+                                </Pressable>
+                            </View>
+                        )}
+
+                        {/* CASE 3: Active Studio Tool is Shape (no shape selected yet) */}
+                        {!selectedEdit && !selectedBlock && activeStudioTool === 'shape' && (
+                            <View style={styles.inspectorSection}>
+                                <Text style={styles.sectionSubtitle}>
+                                    Page {currentPage + 1} • Insérer une forme
+                                </Text>
+
+                                <Text style={styles.label}>Type de forme</Text>
+                                <View style={styles.segmentRow}>
+                                    {(['rectangle', 'circle', 'line'] as const).map(t => (
+                                        <Pressable
+                                            key={t}
+                                            style={[
+                                                styles.segmentBtn,
+                                                shapeType === t && styles.segmentBtnActive
+                                            ]}
+                                            onPress={() => setShapeType(t)}
+                                        >
+                                            <Ionicons
+                                                name={
+                                                    t === 'rectangle'
+                                                        ? 'square-outline'
+                                                        : t === 'circle'
+                                                        ? 'ellipse-outline'
+                                                        : 'remove-outline'
+                                                }
+                                                size={16}
+                                                color={shapeType === t ? '#00D2FF' : '#94A3B8'}
+                                            />
+                                            <Text
+                                                style={[
+                                                    styles.segmentBtnText,
+                                                    shapeType === t && styles.segmentBtnTextActive
+                                                ]}
+                                            >
+                                                {t === 'rectangle' ? 'Rectangle' : t === 'circle' ? 'Cercle' : 'Ligne'}
+                                            </Text>
+                                        </Pressable>
+                                    ))}
+                                </View>
+
+                                <Text style={styles.label}>Épaisseur du trait</Text>
+                                <View style={styles.segmentRow}>
+                                    {[2, 4, 6, 8].map(size => (
+                                        <Pressable
+                                            key={size}
+                                            style={[
+                                                styles.segmentBtn,
+                                                drawStrokeWidth === size && styles.segmentBtnActive
+                                            ]}
+                                            onPress={() => setDrawStrokeWidth(size)}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.segmentBtnText,
+                                                    drawStrokeWidth === size && styles.segmentBtnTextActive
+                                                ]}
+                                            >
+                                                {size}px
+                                            </Text>
+                                        </Pressable>
+                                    ))}
+                                </View>
+
+                                <Text style={styles.label}>Couleur du contour</Text>
+                                <View style={styles.colorPalette}>
+                                    {PRESET_COLORS.map(c => (
+                                        <Pressable
+                                            key={c}
+                                            style={[
+                                                styles.colorSwatch,
+                                                { backgroundColor: c },
+                                                drawColor === c && styles.colorSwatchActive
+                                            ]}
+                                            onPress={() => setDrawColor(c)}
+                                        />
+                                    ))}
+                                </View>
+
+                                <Pressable
+                                    style={styles.quickAddBtn}
+                                    onPress={() => handleAddShape(shapeType)}
+                                >
+                                    <Ionicons name="add-circle" size={18} color="#00D2FF" />
+                                    <Text style={styles.quickAddText}>
+                                        + Placer la forme sur la page
+                                    </Text>
+                                </Pressable>
+                            </View>
+                        )}
+
+                        {/* CASE 4: Active Studio Tool is Whiteout / Masquer */}
+                        {!selectedEdit && !selectedBlock && activeStudioTool === 'whiteout' && (
+                            <View style={styles.inspectorSection}>
+                                <Text style={styles.sectionSubtitle}>
+                                    Page {currentPage + 1} • Masquage (Gomme)
+                                </Text>
+
+                                <View style={styles.infoBox}>
+                                    <Ionicons name="shield-checkmark-outline" size={20} color="#00D2FF" />
+                                    <Text style={styles.infoBoxText}>
+                                        Le masquage permet de recouvrir de manière permanente et opaque du texte ou des zones confidentielles par un rectangle blanc.
+                                    </Text>
+                                </View>
+
+                                <Pressable style={styles.quickAddBtn} onPress={handleAddWhiteout}>
+                                    <Ionicons name="square" size={18} color="#00D2FF" />
+                                    <Text style={styles.quickAddText}>+ Placer un masque blanc sur la page</Text>
+                                </Pressable>
+                            </View>
+                        )}
+
+                        {/* CASE 5: No block selected in Modifier mode */}
+                        {!selectedEdit && masterMode === 'modify' && !selectedBlock && (
                             <View style={styles.inspectorSection}>
                                 <View style={styles.infoBox}>
                                     <Ionicons name="information-circle-outline" size={20} color="#00D2FF" />
@@ -1545,8 +1823,8 @@ export default function PdfEditor({
                             </View>
                         )}
 
-                        {/* CASE 3: Annotate Mode styles */}
-                        {masterMode === 'annotate' && (
+                        {/* CASE 6: Annotate Mode styles (Draw / Highlighter) */}
+                        {!selectedEdit && masterMode === 'annotate' && activeStudioTool !== 'shape' && activeStudioTool !== 'whiteout' && (
                             <View style={styles.inspectorSection}>
                                 <Text style={styles.label}>Mode de dessin</Text>
                                 <View style={styles.segmentRow}>

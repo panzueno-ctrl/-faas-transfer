@@ -10,10 +10,11 @@ interface Props {
     canvasSize: { width: number; height: number };
     onSelect: () => void;
     onRemove: () => void;
-    onChangeText: (text: string) => void;
-    onResize: (newWidth: number, newHeight: number) => void;
+    onChangeText?: (text: string) => void;
+    onResize?: (newWidth: number, newHeight: number) => void;
     onDuplicate?: () => void;
-    panHandlers: any;
+    panHandlers?: any;
+    onUpdate?: (updatedProps: any) => void;
 }
 
 export default function PdfEditItemView({
@@ -25,7 +26,8 @@ export default function PdfEditItemView({
     onChangeText,
     onResize,
     onDuplicate,
-    panHandlers
+    panHandlers,
+    onUpdate
 }: Props) {
     // PanResponder for corner resizing
     const resizePanResponder = useRef(
@@ -37,10 +39,13 @@ export default function PdfEditItemView({
                 const percentDy = (gestureState.dy / canvasSize.height) * 100;
                 const currentWidth = edit.width || 18;
                 const currentHeight = edit.height || 6;
-                onResize(
-                    Math.max(4, currentWidth + percentDx),
-                    Math.max(2, currentHeight + percentDy)
-                );
+                const nw = Math.max(4, currentWidth + percentDx);
+                const nh = Math.max(2, currentHeight + percentDy);
+                if (onResize) {
+                    onResize(nw, nh);
+                } else if (onUpdate) {
+                    onUpdate({ width: nw, height: nh });
+                }
             },
             onPanResponderRelease: () => {}
         })
@@ -50,7 +55,7 @@ export default function PdfEditItemView({
     const renderFloatingToolbar = () => (
         <View style={styles.floatingToolbar}>
             <View
-                {...panHandlers}
+                {...(panHandlers || {})}
                 style={[
                     styles.toolbarActionBtn,
                     { cursor: Platform.OS === 'web' ? 'grab' : 'default' } as any
@@ -217,7 +222,10 @@ export default function PdfEditItemView({
             {isSelected && renderFloatingToolbar()}
             <TextInput
                 value={edit.text || ''}
-                onChangeText={onChangeText}
+                onChangeText={t => {
+                        if (onChangeText) onChangeText(t);
+                        else if (onUpdate) onUpdate({ text: t });
+                    }}
                 style={[
                     baseStyle as any,
                     {
